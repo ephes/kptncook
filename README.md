@@ -4,6 +4,8 @@ A small command line client for downloading [KptnCook](https://www.kptncook.com/
 recipes for today. If you know how to get the data for other days/oids
 of recipes, please let me know :).
 
+Thanks to [this blogpost](https://medium.com/analytics-vidhya/reversing-and-analyzing-the-cooking-app-kptncook-my-recipe-collection-5b5b04e5a085) for the url to get the json for todays recipes.
+
 It's in pre alpha status.
 
 # Installation
