@@ -1,0 +1,20 @@
+# virtualfish
+.venv
+
+# build
+dist/
+
+# PyCharm
+.idea
+
+# python
+__pycache__
+
+# notebooks
+.ipynb_checkpoints
+
+# pytest-cov
+.coverage
+
+# environment
+.env

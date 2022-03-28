@@ -1,0 +1,31 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.1.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v2.31.0
+    hooks:
+      - id: pyupgrade
+        args: [--py310-plus]
+  - repo: https://github.com/psf/black
+    rev: 22.1.0
+    hooks:
+      - id: black
+        language_version: python3.10
+
+  - repo: https://github.com/timothycrosley/isort
+    # isort config is in setup.cfg
+    rev: 5.10.1
+    hooks:
+      - id: isort
+        language_version: python3
+  - repo: https://gitlab.com/pycqa/flake8
+    # flake8 config is in setup.cfg
+    rev: 4.0.1
+    hooks:
+      - id: flake8
+        language_version: python3
