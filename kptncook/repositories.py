@@ -7,6 +7,7 @@ remote api, maybe mealie... hmm.
 from datetime import date
 from pathlib import Path
 from time import time
+from typing import List  # noqa F401
 
 import httpx
 from pydantic import BaseModel, parse_file_as
