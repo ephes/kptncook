@@ -1,5 +1,3 @@
-# from rich.pretty import pprint
-
 from kptncook.models import Recipe, to_camel
 
 
@@ -27,5 +25,7 @@ def test_parse_image_url(minimal):
 def test_parse_full_recipe(full_recipe):
     recipe = Recipe.parse_obj(full_recipe)
     assert recipe is not None
+    # from rich.pretty import pprint
+
     # pprint(full_recipe)
     # assert False
