@@ -57,9 +57,6 @@ class RecipeRepository:
         except FileNotFoundError:
             return []
 
-    def list(self):
-        return self._fetch_all()
-
     def list_by_id(self):
         by_id = {}
         for recipe in self.list():
@@ -82,6 +79,9 @@ class RecipeRepository:
         for recipe in recipes:
             locked[recipe.id] = recipe
         self._write_models(locked)
+
+    def list(self):
+        return self._fetch_all()
 
 
 class HttpRepository:
