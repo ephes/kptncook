@@ -230,3 +230,8 @@ class MealieApiClient:
         r = self.delete(f"/recipes/{slug}")
         r.raise_for_status()
         return r.json()
+
+    def get_via_slug(self, slug):
+        r = self.get(f"/recipes/{slug}")
+        r.raise_for_status()
+        return Recipe.parse_obj(r.json())
