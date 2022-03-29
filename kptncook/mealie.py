@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 from pydantic import UUID4, BaseModel, Field
 
+from .config import settings
 from .models import Recipe as KptnCookRecipe
 
 
@@ -38,8 +39,8 @@ class RecipeIngredient(BaseModel):
 class RecipeSummary(BaseModel):
     id: UUID4 | None
 
-    user_id: UUID4 | None = None
-    group_id: UUID4 | None = None
+    user_id: UUID4 | None = Field(None, alias="userId")
+    group_id: UUID4 | None = Field(None, alias="groupId")
 
     name: str | None
     slug: str = ""
@@ -113,7 +114,13 @@ class Recipe(RecipeSummary):
     extras: dict | None = {}
 
 
-def kptncook_to_mealie(kcin: KptnCookRecipe):
+class RecipeWithImage(Recipe):
+    image_url: str
+
+
+def kptncook_to_mealie(
+    kcin: KptnCookRecipe, api_key: str = settings.api_key
+) -> RecipeWithImage:
     kwargs = {
         "name": kcin.localized_title.de,
         "notes": [
@@ -134,12 +141,9 @@ def kptncook_to_mealie(kcin: KptnCookRecipe):
             RecipeIngredient(title=ig.ingredient.localized_title.de)  # type: ignore
             for ig in kcin.ingredients
         ],
+        "image_url": kcin.get_image_url(api_key),
     }
-    return Recipe(**kwargs)
-
-
-class RecipeWithImage(Recipe):
-    image_url: str
+    return RecipeWithImage(**kwargs)
 
 
 class MealieApiClient:
