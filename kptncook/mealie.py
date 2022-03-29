@@ -143,6 +143,7 @@ def kptncook_to_mealie(
         ],
         "image_url": kcin.get_image_url(api_key),
         "tags": [{"name": "kptncook"}],
+        "extras": {"kptncook_id": kcin.id.oid},
     }
     return RecipeWithImage(**kwargs)
 
