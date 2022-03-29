@@ -53,8 +53,9 @@ class RecipeSummary(BaseModel):
     perform_time: str | None = None
 
     description: str | None = ""
-    recipe_category: list[RecipeCategory] | None = []
-    tags: list[RecipeTag] | None = []
+    recipe_category: list[str] | None = []
+    # tags: list[RecipeTag] | None = []
+    tags: list[str] | None = []
     tools: list[RecipeTool] = []
     rating: int | None
     org_url: str | None = Field(None, alias="orgURL")
@@ -142,8 +143,8 @@ def kptncook_to_mealie(
             for ig in kcin.ingredients
         ],
         "image_url": kcin.get_image_url(api_key),
-        "tags": [{"name": "kptncook"}],
-        "extras": {"kptncook_id": kcin.id.oid},
+        # "tags": ["kptncook"],  # tags do not work atm
+        "extras": {"kptncook_id": kcin.id.oid, "source": "kptncook"},
     }
     return RecipeWithImage(**kwargs)
 
