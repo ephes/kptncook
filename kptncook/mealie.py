@@ -1,6 +1,9 @@
 import datetime
+import json
+from getpass import getpass
 from typing import Any
 
+import httpx
 from pydantic import UUID4, BaseModel, Field
 
 from .models import Recipe as KptnCookRecipe
@@ -133,3 +136,90 @@ def kptncook_to_mealie(kcin: KptnCookRecipe):
         ],
     }
     return Recipe(**kwargs)
+
+
+class RecipeWithImage(Recipe):
+    image_url: str
+
+
+class MealieApiClient:
+    def __init__(self, base_url):
+        self.base_url = base_url
+        self.headers = {}
+
+    @property
+    def logged_in(self):
+        return "access_token" in self.headers
+
+    def to_url(self, path):
+        return f"{self.base_url}{path}"
+
+    def __getattr__(self, name):
+        """
+        Return proxy for httpx, joining base_url with path and
+        providing authentication headers automatically.
+        """
+
+        def proxy(path, **kwargs):
+            url = self.to_url(path)
+            set_headers = kwargs.get("headers", {})
+            kwargs["headers"] = set_headers | self.headers
+            return getattr(httpx, name)(url, **kwargs)
+
+        return proxy
+
+    def fetch_api_token(self, username, password):
+        login_data = {"username": username, "password": password}
+        r = self.post("/auth/token", data=login_data)
+        r.raise_for_status()
+        return r.json()["access_token"]
+
+    def login(self, username: str = "admin", password: str = ""):
+        if password == "":
+            password = getpass()
+        access_token = self.fetch_api_token(username, password)
+        self.headers = {"authorization": f"Bearer {access_token}"}
+
+    def _post_recipe_and_get_slug(self, recipe):
+        r = self.post("/recipes", data=recipe.json())
+        r.raise_for_status()
+        slug = r.json()
+        return slug
+
+    def _scrape_image_for_recipe(self, recipe, slug):
+        json_image_url = json.dumps({"url": recipe.image_url})
+        scrape_image_path = f"/recipes/{slug}/image"
+        r = self.post(scrape_image_path, data=json_image_url)
+        r.raise_for_status()
+
+    def _update_user_and_group_id(self, recipe, slug):
+        recipe_detail_path = f"/recipes/{slug}"
+        r = self.get(recipe_detail_path)
+        r.raise_for_status()
+        recipe_details = r.json()
+        update_attributes = ["id", "userId", "groupId"]
+        updated_details = {k: recipe_details[k] for k in update_attributes}
+        recipe = RecipeWithImage(**(recipe.dict() | updated_details))
+        return recipe
+
+    def _update_recipe(self, recipe, slug):
+        recipe_detail_path = f"/recipes/{slug}"
+        r = self.put(recipe_detail_path, data=recipe.json())
+        r.raise_for_status()
+        return Recipe.parse_obj(r.json())
+
+    def create_recipe(self, recipe):
+        slug = self._post_recipe_and_get_slug(recipe)
+        self._scrape_image_for_recipe(recipe, slug)
+        recipe = self._update_user_and_group_id(recipe, slug)
+        return self._update_recipe(recipe, slug)
+
+    def get_all_recipes(self):
+        r = self.get("/recipes")
+        r.raise_for_status()
+        return [Recipe.parse_obj(recipe) for recipe in r.json()]
+
+    def delete_via_slug(self, slug):
+        r = self.delete(f"/recipes/{slug}")
+        r.raise_for_status()
+        return r.json()
