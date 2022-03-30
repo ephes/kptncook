@@ -1,3 +1,14 @@
-# 2022-03-28 v.0.0.1
+# 2022-03-28 v.0.0.2
 
-* initial commit
+0.0.2 - 2022-03-30
+==================
+
+### Features
+ - make kptncook installable via pip (flit)
+    - #1 issue by @ephes
+
+0.0.1 - 2022-03-28
+==================
+
+### Features
+ - initial commit by @ephes
