@@ -44,7 +44,8 @@ class RecipeRepository:
         return self.base_dir / f"{self.name}.backup"
 
     def create_backup(self):
-        shutil.copyfile(self.path, self.backup_path)
+        if self.path.exists():
+            shutil.copyfile(self.path, self.backup_path)
 
     def _write_models(self, locked):
         self.create_backup()
