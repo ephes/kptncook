@@ -91,5 +91,15 @@ def sync_with_mealie():
     rprint(f"Created {len(created_slugs)} recipes")
 
 
+@cli.command(name="sync")
+def sync():
+    """
+    Fetch recipes for today from api, save them to disk and sync with mealie
+    afterwards.
+    """
+    save_todays_recipes()
+    sync_with_mealie()
+
+
 if __name__ == "__main__":
     cli()

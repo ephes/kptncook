@@ -4,6 +4,7 @@ Repositories to store recipes.
 Atm only uses json. But this could also be a sqlite or a
 remote api, maybe mealie... hmm.
 """
+import shutil
 from datetime import date
 from pathlib import Path
 from time import time
@@ -38,7 +39,16 @@ class RecipeRepository:
     def path(self) -> Path:
         return self.base_dir / self.name
 
+    @property
+    def backup_path(self) -> Path:
+        return self.base_dir / f"{self.name}.backup"
+
+    def create_backup(self):
+        if self.path.exists():
+            shutil.copyfile(self.path, self.backup_path)
+
     def _write_models(self, locked):
+        self.create_backup()
         try:
             self.path.parent.mkdir(exist_ok=True)
         except AttributeError:

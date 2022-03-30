@@ -1,9 +1,18 @@
 """
 Base settings for kptncook.
 """
+import sys
 from pathlib import Path
 
-from pydantic import AnyHttpUrl, BaseSettings, DirectoryPath, Field, validator
+from pydantic import (
+    AnyHttpUrl,
+    BaseSettings,
+    DirectoryPath,
+    Field,
+    ValidationError,
+    validator,
+)
+from rich import print as rprint
 
 ROOT_DIR = Path(__file__).resolve(strict=True).parent.parent
 
@@ -21,7 +30,11 @@ class Settings(BaseSettings):
         return path
 
     class Config:
-        env_file = ROOT_DIR / ".env"
+        env_file = Path.home() / ".kptncook" / ".env"
 
 
-settings = Settings()  # type: ignore
+try:
+    settings = Settings()  # type: ignore
+except ValidationError as e:
+    rprint("validation error: ", e)
+    sys.exit(1)
