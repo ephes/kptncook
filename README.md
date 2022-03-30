@@ -31,8 +31,23 @@ Options:
   --help                          Show this message and exit.
 
 Commands:
-  http  List all recipes for today the kptncook site.
-  sync  Sync recipes for today from kptncook site.
+  http                 List all recipes for today the kptncook site.
+  save_todays_recipes  Save recipes for today from kptncook site.
+  sync                 Fetch recipes for today from api, save them to...
+  sync_with_mealie     Sync recipes from KptnCook with mealie.
+```
+
+## Environment
+
+Set environment variables via `~/.kptncook/.env` dotenv file or directly in your shell. You'll
+need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie,
+you also have to set some additional variables. Here's an example:
+
+```shell
+KPTNCOOK_API_KEY=6q7QNKy-oIgk-IMuWisJ-jfN7s6
+MEALIE_URL=https://mealie.staging.django-cast.com/api
+MEALIE_USERNAME=jochen
+MEALIE_PASSWORD=password  # this is wrong
 ```
 
 # Contribute
