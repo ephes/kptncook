@@ -16,7 +16,7 @@ from .repositories import HttpRepository, RecipeRepository
 
 __all__ = ["list_all_recipes"]
 
-__version__ = "0.0.01"
+__version__ = "0.0.2"
 cli = typer.Typer()
 
 
