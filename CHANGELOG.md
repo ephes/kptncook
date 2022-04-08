@@ -3,6 +3,8 @@
 ### Fixes
  - Ignore exception when recipe already exists in mealie
     - #7 issue by @ephes
+ - Removed explicit dependency on click < 8.1 (fixed in typer 0.4.1)
+    - #9 issue by @ephes
 
 0.0.3 - 2022-03-30
 ==================
