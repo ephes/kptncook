@@ -5,6 +5,7 @@ new recipes.
 
 from datetime import date
 
+import httpx
 import typer
 from rich import print as rprint
 from rich.pretty import pprint
@@ -14,7 +15,7 @@ from .mealie import MealieApiClient, kptncook_to_mealie
 from .models import Recipe
 from .repositories import HttpRepository, RecipeRepository
 
-__all__ = ["list_all_recipes"]
+__all__ = ["list_http"]
 
 __version__ = "0.0.3"
 cli = typer.Typer()
@@ -86,8 +87,15 @@ def sync_with_mealie():
             recipes_to_add.append(recipe)
     created_slugs = []
     for recipe in recipes_to_add:
-        created = client.create_recipe(recipe)
-        created_slugs.append(created.slug)
+        try:
+            created = client.create_recipe(recipe)
+            created_slugs.append(created.slug)
+        except httpx.HTTPStatusError as e:
+            if (
+                e.response.json().get("detail", {}).get("message")
+                == "Recipe already exists"
+            ):
+                continue
     rprint(f"Created {len(created_slugs)} recipes")
 
 
