@@ -1,3 +1,9 @@
+0.0.4 - 2022-04-08
+==================
+### Fixes
+ - Ignore exception when recipe already exists in mealie
+    - #7 issue by @ephes
+
 0.0.3 - 2022-03-30
 ==================
 ### Fixes
