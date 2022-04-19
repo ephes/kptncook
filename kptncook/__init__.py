@@ -10,6 +10,7 @@ import typer
 from rich import print as rprint
 from rich.pretty import pprint
 
+from .api import KptnCookClient
 from .config import settings
 from .mealie import MealieApiClient, kptncook_to_mealie
 from .models import Recipe
@@ -39,8 +40,8 @@ def save_todays_recipes():
     """
     fs_repo = RecipeRepository(settings.root)
     if fs_repo.needs_to_be_synced(date.today()):
-        http_repo = HttpRepository()
-        fs_repo.add_list(http_repo.list_today())
+        client = KptnCookClient()
+        fs_repo.add_list(client.list_today())
 
 
 def get_client() -> MealieApiClient:
