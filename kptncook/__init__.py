@@ -3,6 +3,7 @@ kptncook is a little command line utility to download
 new recipes.
 """
 
+import sys
 from datetime import date
 
 import httpx
@@ -14,7 +15,7 @@ from .api import KptnCookClient
 from .config import settings
 from .mealie import MealieApiClient, kptncook_to_mealie
 from .models import Recipe
-from .repositories import HttpRepository, RecipeRepository
+from .repositories import RecipeRepository
 
 __all__ = ["list_http"]
 
@@ -27,8 +28,8 @@ def list_http():
     """
     List all recipes for today the kptncook site.
     """
-    repo = HttpRepository()
-    all_recipes = repo.list_today()
+    client = KptnCookClient()
+    all_recipes = client.list_today()
     for recipe in all_recipes:
         pprint(recipe)
 
@@ -108,6 +109,21 @@ def sync():
     """
     save_todays_recipes()
     sync_with_mealie()
+
+
+@cli.command(name="favsync")
+def favsync():
+    """
+    Sync favorite recipes from kptncook with mealie.
+    """
+    if settings.kptncook_access_token is None:
+        print("Please set KPTNCOOK_ACCESS_TOKEN in your environment or .env file")
+        sys.exit(1)
+    client = KptnCookClient()
+    favorites = client.list_favorites()
+    rprint(favorites)
+    favorites = client.get_by_oids(favorites)
+    print(len(favorites))
 
 
 if __name__ == "__main__":
