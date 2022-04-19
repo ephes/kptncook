@@ -19,7 +19,7 @@ from .repositories import RecipeRepository
 
 __all__ = ["list_http"]
 
-__version__ = "0.0.4"
+__version__ = "0.0.5"
 cli = typer.Typer()
 
 
