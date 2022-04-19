@@ -51,7 +51,7 @@ class KptnCookClient:
 
         return proxy
 
-    def list_today(self):
+    def list_today(self) -> list[RecipeFromApi]:
         time_str = str(time())
         response = self.get(f"/recipes/de/{time_str}?kptnkey={self.api_key}")
         response.raise_for_status()
