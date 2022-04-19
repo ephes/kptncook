@@ -68,8 +68,8 @@ class KptnCookClient:
         """
         Get access token for kptncook api.
         """
-        response = httpx.post(
-            "https://mobile.kptncook.com/login/userpass",
+        response = self.post(
+            "/login/userpass",
             json={"email": username, "password": password},
         )
         response.raise_for_status()
