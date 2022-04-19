@@ -1,3 +1,10 @@
+0.0.5 - 2022-04-19
+==================
+### Refactoring
+ - use kptncook api client instead of repository like mealie
+    - #11 issue by @ephes / @gloriousDan
+
+
 0.0.4 - 2022-04-08
 ==================
 ### Fixes
