@@ -63,3 +63,15 @@ class KptnCookClient:
         for data in response.json():
             recipes.append(RecipeFromApi(date=today, data=data))
         return recipes
+
+    def get_access_token(self, username: str, password: str) -> str:
+        """
+        Get access token for kptncook api.
+        """
+        response = httpx.post(
+            "https://mobile.kptncook.com/login/userpass",
+            json={"email": username, "password": password},
+        )
+        response.raise_for_status()
+        token_data = response.json()
+        return token_data["accessToken"]
