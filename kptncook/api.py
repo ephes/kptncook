@@ -75,3 +75,11 @@ class KptnCookClient:
         response.raise_for_status()
         token_data = response.json()
         return token_data["accessToken"]
+
+    def list_favorites(self) -> list[str]:
+        """
+        Get list of favorite recipes.
+        """
+        response = self.get("/favorites")
+        response.raise_for_status()
+        return response.json()["favorites"]
