@@ -83,3 +83,12 @@ class KptnCookClient:
         response = self.get("/favorites")
         response.raise_for_status()
         return response.json()["favorites"]
+
+    def get_by_oids(self, oids: list[str]) -> list[RecipeFromApi]:
+        """
+        Get recipes from list of oids.
+        """
+        payload = [{"identifier": oid} for oid in oids]
+        response = self.post(f"/recipes/search?kptnkey={self.api_key}", json=payload)
+        response.raise_for_status()
+        return response.json()
