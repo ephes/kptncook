@@ -112,7 +112,7 @@ class Recipe(RecipeSummary):
     settings: RecipeSettings | None = RecipeSettings()
     assets: list[RecipeAsset] | None = []
     notes: list[RecipeNote] | None = []
-    extras: dict | None = {}
+    extras: dict = {}
 
 
 class RecipeWithImage(Recipe):
@@ -120,7 +120,7 @@ class RecipeWithImage(Recipe):
 
 
 def kptncook_to_mealie(
-    kcin: KptnCookRecipe, api_key: str = settings.api_key
+    kcin: KptnCookRecipe, api_key: str = settings.kptncook_api_key
 ) -> RecipeWithImage:
     kwargs = {
         "name": kcin.localized_title.de,

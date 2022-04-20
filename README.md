@@ -31,23 +31,31 @@ Options:
   --help                          Show this message and exit.
 
 Commands:
-  http                 List all recipes for today the kptncook site.
-  save_todays_recipes  Save recipes for today from kptncook site.
-  sync                 Fetch recipes for today from api, save them to...
-  sync_with_mealie     Sync recipes from KptnCook with mealie.
+  backup-favorites       Store kptncook favorites in local repository.
+  http                   List all recipes for today the kptncook site.
+  kptncook-access-token  Get access token for kptncook.
+  list-recipes           List all locally saved recipes.
+  save-todays-recipes    Save recipes for today from kptncook site.
+  search-by-id           Search for a recipe by id in kptncook api, id...
+  sync                   Fetch recipes for today from api, save them to...
+  sync-with-mealie       Sync locally saced recipes with mealie.
 ```
 
 ## Environment
 
-Set environment variables via `~/.kptncook/.env` dotenv file or directly in your shell. You'll
-need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie,
-you also have to set some additional variables. Here's an example:
+Set environment variables via `~/.kptncook/.env` dotenv file or directly in your shell. You'll need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie, you also have to set some additional variables.
+
+If you want to backup your favorite receipts from KptnCook, you have to set the `KPTNCOOK_ACCESS_TOKEN` variable as well. You can obtain the access token by running the `kptncook kptncook-access_token` command. But you need a kptncook account to do that.
+Beware: If you don't have a kptncook account, you'll lose all your favorites by creating a new one.
+
+Here's an example:
 
 ```shell
 KPTNCOOK_API_KEY=6q7QNKy-oIgk-IMuWisJ-jfN7s6
+KPTNCOOK_ACCESS_TOKEN=9353xxxx-xxxx-4fe1-xxxx-xxx4a173805  # replace with correct token
 MEALIE_URL=https://mealie.staging.django-cast.com/api
 MEALIE_USERNAME=jochen
-MEALIE_PASSWORD=password  # this is wrong
+MEALIE_PASSWORD=password  # replace with correct password
 ```
 
 # Contribute

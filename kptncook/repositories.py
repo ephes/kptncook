@@ -7,13 +7,9 @@ remote api, maybe mealie... hmm.
 import shutil
 from datetime import date
 from pathlib import Path
-from time import time
 from typing import List  # noqa F401
 
-import httpx
 from pydantic import BaseModel, parse_file_as
-
-from .config import settings
 
 
 class RecipeInDb(BaseModel):
@@ -92,23 +88,3 @@ class RecipeRepository:
 
     def list(self):
         return self._fetch_all()
-
-
-class HttpRepository:
-    """
-    Fetch recipes for today from kptncook site.
-    """
-
-    @property
-    def today_url(self):
-        time_str = str(time())
-        return f"https://mobile.kptncook.com/recipes/de/{time_str}?kptnkey={settings.api_key}"
-
-    def list_today(self):
-        response = httpx.get(self.today_url)
-        response.raise_for_status()
-        recipes = []
-        today = date.today()
-        for data in response.json():
-            recipes.append(RecipeInDb(date=today, data=data))
-        return recipes
