@@ -148,8 +148,8 @@ def list_recipes():
     List all locally saved recipes.
     """
     recipes = get_kptncook_recipes_from_repository()
-    for recipe in recipes:
-        rprint(recipe.localized_title.de, recipe.id.oid)
+    for num, recipe in enumerate(recipes):
+        rprint(num, recipe.localized_title.de, recipe.id.oid)
 
 
 if __name__ == "__main__":
