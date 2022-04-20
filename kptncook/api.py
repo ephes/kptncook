@@ -9,6 +9,20 @@ from .config import settings
 from .repositories import RecipeInDb
 
 
+def ids_to_payload(ids: list[tuple[Literal["oid", "uid"], str]]) -> list[dict]:
+    """
+    Convert a list of (type, id) tuples to a list of dicts that
+    can be used as payload for the kptncook api.
+    """
+    payload = []
+    for id_type, id_value in ids:
+        if id_type == "oid":
+            payload.append({"identifier": id_value})
+        elif id_type == "uid":
+            payload.append({"uid": id_value})
+    return payload
+
+
 class KptnCookClient:
     """
     Client for the kptncook api.
@@ -77,14 +91,20 @@ class KptnCookClient:
         response.raise_for_status()
         return response.json()["favorites"]
 
-    def get_by_oids(self, oids: list[str]) -> list[RecipeInDb]:
+    def get_by_ids(
+        self, ids: list[tuple[Literal["oid", "uid"], str]]
+    ) -> list[RecipeInDb]:
         """
-        Get recipes from list of oids.
+        Get recipes from list of ids.
         """
-        payload = [{"identifier": oid} for oid in oids]
+        payload = ids_to_payload(ids)
         response = self.post(f"/recipes/search?kptnkey={self.api_key}", json=payload)
         response.raise_for_status()
-        return response.json()
+        results = response.json()
+        if results is None:
+            results = []
+        results = [RecipeInDb(date=date.today(), data=data) for data in results]
+        return results
 
 
 def looks_like_uid(token: str) -> bool:

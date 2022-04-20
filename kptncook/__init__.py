@@ -12,7 +12,7 @@ from rich import print as rprint
 from rich.pretty import pprint
 from rich.prompt import Prompt
 
-from .api import KptnCookClient
+from .api import KptnCookClient, parse_id
 from .config import settings
 from .mealie import MealieApiClient, kptncook_to_mealie
 from .models import Recipe
@@ -126,7 +126,8 @@ def backup_kptncook_favorites():
     client = KptnCookClient()
     favorites = client.list_favorites()
     rprint(favorites)
-    favorites = client.get_by_oids(favorites)
+    ids = [("oid", oid) for oid in favorites]
+    favorites = client.get_by_ids(ids)
     print(len(favorites))
 
 
@@ -150,6 +151,29 @@ def list_recipes():
     recipes = get_kptncook_recipes_from_repository()
     for num, recipe in enumerate(recipes):
         rprint(num, recipe.localized_title.de, recipe.id.oid)
+
+
+@cli.command(name="search-by-id")
+def search_kptncook_recipe_by_id(id: str):
+    """
+    Search for a recipe by id in kptncook api, id can be a sharing
+    url or an oid for example, and add it to the local repository.
+    """
+    parsed = parse_id(id)
+    if parsed is None:
+        rprint("Could not parse id")
+        sys.exit(1)
+    id_type, id_value = parsed
+    rprint(id_type, id_value)
+    client = KptnCookClient()
+    recipes = client.get_by_ids([(id_type, id_value)])
+    if len(recipes) == 0:
+        rprint("Could not find recipe")
+        sys.exit(1)
+    recipe = recipes[0]
+    fs_repo = RecipeRepository(settings.root)
+    fs_repo.add_list([recipe])
+    rprint(f"Added recipe {id_type} {id_value} to local repository")
 
 
 if __name__ == "__main__":
