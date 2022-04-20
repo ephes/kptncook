@@ -115,10 +115,10 @@ def sync():
     sync_with_mealie()
 
 
-@cli.command(name="favsync")
-def favsync():
+@cli.command(name="backup-favorites")
+def backup_kptncook_favorites():
     """
-    Sync favorite recipes from kptncook with mealie.
+    Store kptncook favorites in local repository.
     """
     if settings.kptncook_access_token is None:
         print("Please set KPTNCOOK_ACCESS_TOKEN in your environment or .env file")
