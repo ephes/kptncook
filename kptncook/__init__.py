@@ -10,6 +10,7 @@ import httpx
 import typer
 from rich import print as rprint
 from rich.pretty import pprint
+from rich.prompt import Prompt
 
 from .api import KptnCookClient
 from .config import settings
@@ -45,7 +46,7 @@ def save_todays_recipes():
         fs_repo.add_list(client.list_today())
 
 
-def get_client() -> MealieApiClient:
+def get_mealie_client() -> MealieApiClient:
     client = MealieApiClient(settings.mealie_url)
     client.login(settings.mealie_username, settings.mealie_password)
     return client
@@ -77,7 +78,11 @@ def sync_with_mealie():
     """
     Sync recipes from KptnCook with mealie.
     """
-    client = get_client()
+    try:
+        client = get_mealie_client()
+    except Exception as e:
+        rprint(f"Could not login to mealie: {e}")
+        sys.exit(1)
     kptncook_recipes_from_mealie = get_kptncook_recipes_from_mealie(client)
     kptncook_recipes_from_repository = get_kptncook_recipes_from_repository()
     ids_in_mealie = {r.extras["kptncook_id"] for r in kptncook_recipes_from_mealie}
@@ -124,6 +129,18 @@ def favsync():
     rprint(favorites)
     favorites = client.get_by_oids(favorites)
     print(len(favorites))
+
+
+@cli.command(name="kptncook_access_token")
+def get_access_token():
+    """
+    Get access token for kptncook.
+    """
+    username = Prompt.ask("Enter your kptncook email address")
+    password = Prompt.ask("Enter your kptncook password", password=True)
+    client = KptnCookClient()
+    access_token = client.get_access_token(username, password)
+    rprint("your access token: ", access_token)
 
 
 if __name__ == "__main__":
