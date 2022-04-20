@@ -35,7 +35,7 @@ def list_http():
         pprint(recipe)
 
 
-@cli.command(name="save_todays_recipes")
+@cli.command(name="save-todays-recipes")
 def save_todays_recipes():
     """
     Save recipes for today from kptncook site.
@@ -130,8 +130,8 @@ def favsync():
     print(len(favorites))
 
 
-@cli.command(name="kptncook_access_token")
-def get_access_token():
+@cli.command(name="kptncook-access-token")
+def get_kptncook_access_token():
     """
     Get access token for kptncook.
     """
@@ -142,7 +142,7 @@ def get_access_token():
     rprint("your access token: ", access_token)
 
 
-@cli.command(name="list_recipes")
+@cli.command(name="list-recipes")
 def list_recipes():
     """
     List all locally saved recipes.
