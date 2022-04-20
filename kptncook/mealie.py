@@ -112,7 +112,7 @@ class Recipe(RecipeSummary):
     settings: RecipeSettings | None = RecipeSettings()
     assets: list[RecipeAsset] | None = []
     notes: list[RecipeNote] | None = []
-    extras: dict | None = {}
+    extras: dict = {}
 
 
 class RecipeWithImage(Recipe):

@@ -63,14 +63,12 @@ def get_kptncook_recipes_from_mealie(client):
     return kptncook_recipes
 
 
-def get_kptncook_recipes_from_repository():
+def get_kptncook_recipes_from_repository() -> list[Recipe]:
     fs_repo = RecipeRepository(settings.root)
-    api_recipes = []
+    recipes = []
     for repo_recipe in fs_repo.list():
-        recipe = Recipe.parse_obj(repo_recipe.data)
-        mealie_recipe = kptncook_to_mealie(recipe)
-        api_recipes.append(mealie_recipe)
-    return api_recipes
+        recipes.append(Recipe.parse_obj(repo_recipe.data))
+    return recipes
 
 
 @cli.command(name="sync_with_mealie")
@@ -84,7 +82,8 @@ def sync_with_mealie():
         rprint(f"Could not login to mealie: {e}")
         sys.exit(1)
     kptncook_recipes_from_mealie = get_kptncook_recipes_from_mealie(client)
-    kptncook_recipes_from_repository = get_kptncook_recipes_from_repository()
+    recipes = get_kptncook_recipes_from_repository()
+    kptncook_recipes_from_repository = [kptncook_to_mealie(r) for r in recipes]
     ids_in_mealie = {r.extras["kptncook_id"] for r in kptncook_recipes_from_mealie}
     ids_from_api = {r.extras["kptncook_id"] for r in kptncook_recipes_from_repository}
     ids_to_add = ids_from_api - ids_in_mealie
@@ -141,6 +140,16 @@ def get_access_token():
     client = KptnCookClient()
     access_token = client.get_access_token(username, password)
     rprint("your access token: ", access_token)
+
+
+@cli.command(name="list_recipes")
+def list_recipes():
+    """
+    List all locally saved recipes.
+    """
+    recipes = get_kptncook_recipes_from_repository()
+    for recipe in recipes:
+        rprint(recipe.localized_title.de, recipe.id.oid)
 
 
 if __name__ == "__main__":
