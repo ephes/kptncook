@@ -3,7 +3,9 @@
 ### Refactoring
  - use kptncook api client instead of repository like mealie
     - #11 issue by @ephes / @gloriousDan
-
+### Features
+ - new cli command `kptncook kptncook_access_token` fetches the access token from the kptncook api
+    - #11 issue by @ephes / @gloriousDan
 
 0.0.4 - 2022-04-08
 ==================
