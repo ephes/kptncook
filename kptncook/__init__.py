@@ -125,10 +125,16 @@ def backup_kptncook_favorites():
         sys.exit(1)
     client = KptnCookClient()
     favorites = client.list_favorites()
-    rprint(favorites)
+    rprint(f"Found {len(favorites)} favorites")
     ids = [("oid", oid) for oid in favorites]
-    favorites = client.get_by_ids(ids)
-    print(len(favorites))
+    recipes = client.get_by_ids(ids)
+    if len(recipes) == 0:
+        rprint("Could not find any favorites")
+        sys.exit(1)
+
+    fs_repo = RecipeRepository(settings.root)
+    fs_repo.add_list(recipes)
+    rprint(f"Added {len(recipes)} recipes to local repository")
 
 
 @cli.command(name="kptncook-access-token")

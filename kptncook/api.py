@@ -9,7 +9,7 @@ from .config import settings
 from .repositories import RecipeInDb
 
 
-def ids_to_payload(ids: list[tuple[Literal["oid", "uid"], str]]) -> list[dict]:
+def ids_to_payload(ids: list[tuple[str, str]]) -> list[dict]:
     """
     Convert a list of (type, id) tuples to a list of dicts that
     can be used as payload for the kptncook api.
@@ -91,9 +91,7 @@ class KptnCookClient:
         response.raise_for_status()
         return response.json()["favorites"]
 
-    def get_by_ids(
-        self, ids: list[tuple[Literal["oid", "uid"], str]]
-    ) -> list[RecipeInDb]:
+    def get_by_ids(self, ids: list[tuple[str, str]]) -> list[RecipeInDb]:
         """
         Get recipes from list of ids.
         """
