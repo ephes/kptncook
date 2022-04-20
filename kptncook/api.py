@@ -1,5 +1,7 @@
+import re
 from datetime import date
 from time import time
+from typing import Literal
 
 import httpx
 
@@ -83,3 +85,31 @@ class KptnCookClient:
         response = self.post(f"/recipes/search?kptnkey={self.api_key}", json=payload)
         response.raise_for_status()
         return response.json()
+
+
+def looks_like_uid(token: str) -> bool:
+    correct_len = len(token) == 8
+    is_alnum = token.isalnum()
+    return correct_len and is_alnum
+
+
+def looks_like_oid(token: str) -> bool:
+    correct_len = len(token) == 24
+    is_hex = token.isalnum()
+    return correct_len and is_hex
+
+
+def parse_id(text: str) -> tuple[Literal["oid", "uid"], str] | None:
+    """
+    Parse recipe id (uid or uid) from url/text.
+    """
+    try:
+        uid = next(part for part in re.split(r"/|\?", text) if looks_like_uid(part))
+        return ("uid", uid)
+    except StopIteration:
+        pass
+    try:
+        oid = next(part for part in re.split(r" |,|/", text) if looks_like_oid(part))
+        return ("oid", oid)
+    except StopIteration:
+        pass
