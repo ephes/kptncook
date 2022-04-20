@@ -2,18 +2,9 @@ from datetime import date
 from time import time
 
 import httpx
-from pydantic import BaseModel
 
 from .config import settings
-
-
-class RecipeFromApi(BaseModel):
-    date: date
-    data: dict
-
-    @property
-    def id(self):
-        return self.data["_id"]["$oid"]
+from .repositories import RecipeInDb
 
 
 class KptnCookClient:
@@ -51,7 +42,7 @@ class KptnCookClient:
 
         return proxy
 
-    def list_today(self) -> list[RecipeFromApi]:
+    def list_today(self) -> list[RecipeInDb]:
         """
         Get all recipes for today from kptncook api.
         """
@@ -61,7 +52,7 @@ class KptnCookClient:
         recipes = []
         today = date.today()
         for data in response.json():
-            recipes.append(RecipeFromApi(date=today, data=data))
+            recipes.append(RecipeInDb(date=today, data=data))
         return recipes
 
     def get_access_token(self, username: str, password: str) -> str:
@@ -84,7 +75,7 @@ class KptnCookClient:
         response.raise_for_status()
         return response.json()["favorites"]
 
-    def get_by_oids(self, oids: list[str]) -> list[RecipeFromApi]:
+    def get_by_oids(self, oids: list[str]) -> list[RecipeInDb]:
         """
         Get recipes from list of oids.
         """
