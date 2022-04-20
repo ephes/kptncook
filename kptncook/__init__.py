@@ -76,7 +76,7 @@ def get_kptncook_recipes_from_repository():
 @cli.command(name="sync_with_mealie")
 def sync_with_mealie():
     """
-    Sync recipes from KptnCook with mealie.
+    Sync locally saced recipes with mealie.
     """
     try:
         client = get_mealie_client()
