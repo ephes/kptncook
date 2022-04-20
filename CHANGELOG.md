@@ -1,10 +1,12 @@
-0.0.5 - 2022-04-19
+0.0.5 - 2022-04-20
 ==================
 ### Refactoring
  - use kptncook api client instead of repository like mealie
     - #11 issue by @ephes / @gloriousDan
 ### Features
  - new cli command `kptncook kptncook_access_token` fetches the access token from the kptncook api
+    - #11 issue by @ephes / @gloriousDan
+ - new cli command `kptncook list_recipes` lists all locally stored recipes
     - #11 issue by @ephes / @gloriousDan
 
 0.0.4 - 2022-04-08
