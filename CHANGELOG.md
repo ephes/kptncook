@@ -3,6 +3,8 @@
 ### Fixes
  - Better name "kptncook-today" for the command fetching the 3 kptncook recipes for today
     - #14 issue by @ephes
+ - Fixed __all__ exports
+    - #14 issue by @ephes
 
 0.0.5 - 2022-04-20
 ==================

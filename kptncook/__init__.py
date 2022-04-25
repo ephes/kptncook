@@ -18,7 +18,16 @@ from .mealie import MealieApiClient, kptncook_to_mealie
 from .models import Recipe
 from .repositories import RecipeRepository
 
-__all__ = ["list_http"]
+__all__ = [
+    "list_kptncook_today",
+    "save_todays_recipes",
+    "sync_with_mealie",
+    "sync",
+    "backup_kptncook_favorites",
+    "get_kptncook_access_token",
+    "list_recipes",
+    "search_kptncook_recipe_by_id",
+]
 
 __version__ = "0.0.6"
 cli = typer.Typer()
