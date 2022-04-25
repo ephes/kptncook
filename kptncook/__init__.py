@@ -20,14 +20,14 @@ from .repositories import RecipeRepository
 
 __all__ = ["list_http"]
 
-__version__ = "0.0.5"
+__version__ = "0.0.6"
 cli = typer.Typer()
 
 
-@cli.command(name="http")
-def list_http():
+@cli.command(name="kptncook-today")
+def list_kptncook_today():
     """
-    List all recipes for today the kptncook site.
+    List all recipes for today from the kptncook site.
     """
     client = KptnCookClient()
     all_recipes = client.list_today()
