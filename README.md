@@ -81,3 +81,11 @@ Flit should have already installed pytest:
 ```shell
 $ pytest
 ```
+
+## Publish a Release
+
+After running the tests, run `flit publish` to publish the package to PyPI.
+
+```shell
+$ flit publish
+```
