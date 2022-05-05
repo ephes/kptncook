@@ -1,3 +1,9 @@
+0.0.7 - 2022-05-05
+==================
+### Fixes
+ - Increased fetch access token timeout to 60 seconds
+    - #16 issue by @ephes
+
 0.0.6 - 2022-04-25
 ==================
 ### Fixes
