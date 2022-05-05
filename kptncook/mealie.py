@@ -177,7 +177,7 @@ class MealieApiClient:
 
     def fetch_api_token(self, username, password):
         login_data = {"username": username, "password": password}
-        r = self.post("/auth/token", data=login_data)
+        r = self.post("/auth/token", data=login_data, timeout=60)
         r.raise_for_status()
         return r.json()["access_token"]
 
