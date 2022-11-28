@@ -56,7 +56,7 @@ def save_todays_recipes():
 
 
 def get_mealie_client() -> MealieApiClient:
-    client = MealieApiClient(settings.mealie_url)
+    client = MealieApiClient(settings.mealie_url, settings.kptncook_api_key)
     client.login(settings.mealie_username, settings.mealie_password)
     return client
 
@@ -92,7 +92,7 @@ def sync_with_mealie():
         sys.exit(1)
     kptncook_recipes_from_mealie = get_kptncook_recipes_from_mealie(client)
     recipes = get_kptncook_recipes_from_repository()
-    kptncook_recipes_from_repository = [kptncook_to_mealie(r) for r in recipes]
+    kptncook_recipes_from_repository = [kptncook_to_mealie(r, client) for r in recipes]
     ids_in_mealie = {r.extras["kptncook_id"] for r in kptncook_recipes_from_mealie}
     ids_from_api = {r.extras["kptncook_id"] for r in kptncook_recipes_from_repository}
     ids_to_add = ids_from_api - ids_in_mealie
@@ -135,7 +135,7 @@ def backup_kptncook_favorites():
     client = KptnCookClient()
     favorites = client.list_favorites()
     rprint(f"Found {len(favorites)} favorites")
-    ids = [("oid", oid) for oid in favorites]
+    ids = [("oid", oid["identifier"]) for oid in favorites]
     recipes = client.get_by_ids(ids)
     if len(recipes) == 0:
         rprint("Could not find any favorites")

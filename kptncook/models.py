@@ -39,7 +39,7 @@ class Image(BaseModel):
 class IngredientDetails(BaseModel):
     typ: str
     localized_title: LocalizedString
-    number_title: LocalizedString
+    uncountableTitle: LocalizedString
     category: str
 
     class Config:
@@ -47,12 +47,18 @@ class IngredientDetails(BaseModel):
 
 
 class Ingredient(BaseModel):
-    quantity: float
+    quantity: float | None
+    measure: str | None
     ingredient: IngredientDetails
 
 
 class RecipeId(BaseModel):
     oid: str = Field(..., alias="$oid")
+
+class RecipeStep(BaseModel):
+    title: LocalizedString
+    image: Image
+
 
 
 class Recipe(BaseModel):
@@ -63,8 +69,8 @@ class Recipe(BaseModel):
     preparation_time: int
     cooking_time: int | None
     recipe_nutrition: Nutrition
-    steps_en: list[str] = Field(..., alias="stepsEN")
-    steps_de: list[str] = Field(..., alias="stepsDE")
+    #steps_en: list[str] = Field(..., alias="stepsEN")
+    steps: list[RecipeStep] = Field(..., alias="steps")
     image_list: list[Image]
     ingredients: list[Ingredient]
 
