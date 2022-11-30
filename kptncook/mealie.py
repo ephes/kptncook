@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 from pydantic import UUID4, BaseModel, Field
 
-# from .config import settings
+from .config import settings
 from .models import Image
 from .models import Recipe as KptnCookRecipe
 
@@ -125,8 +125,7 @@ class Recipe(RecipeSummary):
 
 
 class RecipeWithImage(Recipe):
-    ...
-    # imageUrl: str  # FIXME
+    image_url: str
 
 
 class MealieApiClient:
@@ -424,7 +423,9 @@ class MealieApiClient:
 
 # def kptncook_to_mealie(kcin: KptnCookRecipe,
 # mealie_client: MealieApiClient, api_key: str = settings.kptncook_api_key) -> RecipeWithImage:
-def kptncook_to_mealie(kcin: KptnCookRecipe) -> RecipeWithImage:
+def kptncook_to_mealie(
+    kcin: KptnCookRecipe, api_key: str = settings.kptncook_api_key
+) -> RecipeWithImage:
     kwargs = {
         "name": kcin.localized_title.de,
         "notes": [
@@ -452,7 +453,7 @@ def kptncook_to_mealie(kcin: KptnCookRecipe) -> RecipeWithImage:
         #     if len(ig.ingredient.localized_title.de.split(","))>1 else None)  # type: ignore
         #     for ig in kcin.ingredients
         # ],  # FIXME only to avoid passing mealie_client
-        # "imageUrl": kcin.get_image_url(api_key), FIXME only to avoid passing api_key
+        "image_url": kcin.get_image_url(api_key),
         # "tags": ["kptncook"],  # tags do not work atm
         # "tags": [RecipeTag(name="kptncook")],
         # "tags": [mealie_client.get_tag_by_name(tag) for tag in ["kptncook"]],  # FIXME avoid passing mealie_client
