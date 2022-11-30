@@ -55,10 +55,10 @@ class Ingredient(BaseModel):
 class RecipeId(BaseModel):
     oid: str = Field(..., alias="$oid")
 
+
 class RecipeStep(BaseModel):
     title: LocalizedString
     image: Image
-
 
 
 class Recipe(BaseModel):
@@ -69,7 +69,6 @@ class Recipe(BaseModel):
     preparation_time: int
     cooking_time: int | None
     recipe_nutrition: Nutrition
-    #steps_en: list[str] = Field(..., alias="stepsEN")
     steps: list[RecipeStep] = Field(..., alias="steps")
     image_list: list[Image]
     ingredients: list[Ingredient]

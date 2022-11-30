@@ -26,8 +26,17 @@ def minimal():
             "carbohydrate": 20,
             "protein": 30,
         },
-        "stepsEN": ["Step 1", "Step 2"],
-        "stepsDE": ["Schritt 1", "Schritt 2"],
+        "steps": [
+            {
+                "title": {"de": "Alles parat?"},
+                "ingredients": [],
+                "image": {
+                    "name": "REZ_6666_11.jpg",
+                    "url": "https://d2am1qai33sroc.cloudfront.net/image/63652er8d4b00007500b0c51d",
+                    "type": "step",
+                },
+            }
+        ],
         "imageList": [
             {
                 "name": "REZ_1837_Cover.jpg",
