@@ -166,7 +166,9 @@ class MealieApiClient:
             url = self.to_url(path)
             set_headers = kwargs.get("headers", {})
             kwargs["headers"] = set_headers | self.headers
-            return getattr(httpx, name)(url, **kwargs)
+            with httpx.Client() as client:
+                response = getattr(client, name)(url, **kwargs)
+            return response
 
         return proxy
 
