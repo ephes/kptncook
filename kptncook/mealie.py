@@ -43,7 +43,7 @@ class RecipeTool(RecipeTag):
     on_hand: bool = False
 
 
-class Unit(NameIsIdModel):
+class RecipeUnit(NameIsIdModel):
     id: UUID4 | None
     name: str
     description: str = ""
@@ -54,8 +54,8 @@ class Unit(NameIsIdModel):
 class RecipeIngredient(BaseModel):
     title: str | None
     note: str | None
-    unit: Unit | None
-    food: Unit | None
+    unit: RecipeUnit | None
+    food: RecipeUnit | None
     disable_amount: bool = True
     quantity: float | None = 1
 
@@ -281,7 +281,7 @@ class MealieApiClient:
             return recipe
 
         name_to_unit_with_id = self._create_item_name_to_item_lookup(
-            "units", Unit, recipe_units
+            "units", RecipeUnit, recipe_units
         )
         for ingredient in recipe.recipe_ingredient:
             if ingredient.unit is not None:
