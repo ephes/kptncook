@@ -7,7 +7,7 @@ from getpass import getpass
 from typing import Any
 
 import httpx
-from pydantic import UUID4, BaseModel, Field
+from pydantic import UUID4, BaseModel, Field, parse_obj_as
 
 from .config import settings
 from .models import Image
@@ -29,19 +29,32 @@ class RecipeTool(RecipeTag):
     on_hand: bool = False
 
 
-class UnitFoodBase(BaseModel):
+class Unit(BaseModel):
     id: UUID4 | None
     name: str
     description: str = ""
+    fraction: bool = True
+    abbreviation: str = ""
+
+    def __hash__(self):
+        """Hash on name to be able to have sets of units."""
+        return hash(self.name)
+
+    def __eq__(self, other):
+        """Compare on name to be able to subtract sets of units."""
+        return self.name == other.name
+
+    class Config:
+        frozen = True  # make it hashable
 
 
 class RecipeIngredient(BaseModel):
     title: str | None
     note: str | None
-    unit: UnitFoodBase | None
-    food: UnitFoodBase | None
-    disableAmount: bool = True
-    quantity: float | None
+    unit: Unit | None
+    food: Unit | None
+    disable_amount: bool = True
+    quantity: float | None = 1
 
 
 class RecipeSummary(BaseModel):
@@ -209,7 +222,7 @@ class MealieApiClient:
         all_foods_parsed = {}
         for food in all_foods:
             # all_foods_parsed.extend(UnitFoodBase.parse_obj(food))
-            all_foods_parsed[food["name"]] = UnitFoodBase.parse_obj(food)
+            all_foods_parsed[food["name"]] = Unit.parse_obj(food)
 
         return all_foods_parsed
 
@@ -231,7 +244,7 @@ class MealieApiClient:
         all_units_parsed = {}
         for unit in all_units:
             # all_units_parsed.extend(UnitFoodBase.parse_obj(unit))
-            all_units_parsed[unit["name"]] = UnitFoodBase.parse_obj(unit)
+            all_units_parsed[unit["name"]] = Unit.parse_obj(unit)
 
         return all_units_parsed
 
@@ -245,7 +258,7 @@ class MealieApiClient:
         food_json = {"id": "", "name": food, "description": ""}
         r = self.post("/foods", data=json.dumps(food_json))
         r.raise_for_status()
-        return UnitFoodBase.parse_obj(r.json())
+        return Unit.parse_obj(r.json())
 
     def create_unit(self, unit):
         unit_json = {
@@ -257,7 +270,7 @@ class MealieApiClient:
         }
         r = self.post("/units", data=json.dumps(unit_json))
         r.raise_for_status()
-        return UnitFoodBase.parse_obj(r.json())
+        return Unit.parse_obj(r.json())
 
     def get_tag_by_name(self, name):
         if len(self.tags_cache) == 0:
@@ -356,6 +369,50 @@ class MealieApiClient:
         #    tag.groupId = recipe_details["groupId"]
         return recipe
 
+    def _get_page(self, endpoint_name, page_num, per_page=50):
+        r = self.get(f"/{endpoint_name}?page={page_num}&perPage={per_page}")
+        r.raise_for_status()
+        return r.json()
+
+    def _get_all_items(self, endpoint_name):
+        all_items = []
+        response_data = self._get_page(endpoint_name, 1)
+        all_items.extend(response_data["items"])
+
+        # 1 was already fetched, start page_num at 2 and add 1 to the
+        # number of total pages, because we start counting at 1 instead of 0
+        for page_num in range(2, response_data["total_pages"] + 1):
+            response_data = self._get_page(endpoint_name, page_num)
+            all_items.extend(response_data["items"])
+
+        return all_items
+
+    def _create_item(self, endpoint_name, item):
+        r = self.post(f"/{endpoint_name}", data=item.json())
+        r.raise_for_status()
+        return r.json()
+
+    def _create_unit_name_to_unit_lookup(self, recipe_units):
+        existing_units = parse_obj_as(set[Unit], self._get_all_items("units"))
+        units_to_create = recipe_units - existing_units
+        for unit in units_to_create:
+            existing_units.add(Unit(**self._create_item("units", unit)))
+        return {u.name: u for u in existing_units}
+
+    def _update_unit_ids(self, recipe):
+        recipe_units = {
+            ig.unit for ig in recipe.recipe_ingredient if ig.unit is not None
+        }
+        if len(recipe_units) == 0:
+            # return early if there's nothing to do
+            return recipe
+
+        name_to_unit_with_id = self._create_unit_name_to_unit_lookup(recipe_units)
+        for ingredient in recipe.recipe_ingredient:
+            if ingredient.unit is not None:
+                ingredient.unit = name_to_unit_with_id[ingredient.unit.name]
+        return recipe
+
     def _update_recipe(self, recipe, slug):
         recipe_detail_path = f"/recipes/{slug}"
         r = self.put(recipe_detail_path, data=recipe.json())
@@ -369,7 +426,8 @@ class MealieApiClient:
         recipe.slug = slug
         self._scrape_image_for_recipe(recipe, slug)
         recipe = self._update_user_and_group_id(recipe, slug)
-        recipe = self.enrich_recipe_with_step_images(recipe)
+        recipe = self._update_unit_ids(recipe)
+        # recipe = self.enrich_recipe_with_step_images(recipe)
         return self._update_recipe(recipe, slug)
 
     def get_all_recipes(self):
@@ -401,6 +459,24 @@ class MealieApiClient:
         return Recipe.parse_obj(r.json())
 
 
+def kptncook_to_mealie_ingredients(kptncook_ingredients):
+    mealie_ingredients = []
+    for ingredient in kptncook_ingredients:
+        title = ingredient.ingredient.localized_title.de
+        quantity = ingredient.quantity
+        if quantity is not None:
+            quantity /= 2
+        measure = None
+        if hasattr(ingredient, "measure"):
+            if ingredient.measure is not None:
+                measure = {"name": ingredient.measure}
+        mealie_ingredient = RecipeIngredient(
+            title=title, quantity=quantity, unit=measure
+        )
+        mealie_ingredients.append(mealie_ingredient)
+    return mealie_ingredients
+
+
 # def kptncook_to_mealie(kcin: KptnCookRecipe,
 # mealie_client: MealieApiClient, api_key: str = settings.kptncook_api_key) -> RecipeWithImage:
 def kptncook_to_mealie(
@@ -424,6 +500,7 @@ def kptncook_to_mealie(
             RecipeStep(title=None, text=step.title.de, image=step.image)
             for step in kcin.steps
         ],
+        "recipe_ingredient": kptncook_to_mealie_ingredients(kcin.ingredients),
         # "recipeIngredient": [
         #     RecipeIngredient(food=mealie_client.get_food_by_name(
         #     ig.ingredient.localized_title.de.split(",")[0]), quantity=(ig.quantity/2.0)
@@ -433,6 +510,10 @@ def kptncook_to_mealie(
         #     if len(ig.ingredient.localized_title.de.split(","))>1 else None)  # type: ignore
         #     for ig in kcin.ingredients
         # ],  # FIXME only to avoid passing mealie_client
+        # "recipe_ingredient": [
+        #     RecipeIngredient(title=ig.ingredient.localized_title.de)  # type: ignore
+        #     for ig in kcin.ingredients
+        # ],
         "image_url": kcin.get_image_url(api_key),
         # "tags": ["kptncook"],  # tags do not work atm
         # "tags": [RecipeTag(name="kptncook")],
