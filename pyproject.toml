@@ -46,6 +46,7 @@ doc = [
 ]
 dev = [
     "jupyterlab >= 3.2.9",
+    "mypy",
 ]
 
 [project.urls]

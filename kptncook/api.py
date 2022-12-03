@@ -128,11 +128,12 @@ def parse_id(text: str) -> tuple[Literal["oid", "uid"], str] | None:
     """
     try:
         uid = next(part for part in re.split(r"/|\?", text) if looks_like_uid(part))
-        return ("uid", uid)
+        return "uid", uid
     except StopIteration:
         pass
     try:
         oid = next(part for part in re.split(r" |,|/", text) if looks_like_oid(part))
-        return ("oid", oid)
+        return "oid", oid
     except StopIteration:
         pass
+    return None
