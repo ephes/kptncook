@@ -352,7 +352,7 @@ class MealieApiClient:
         return slug
 
     def _scrape_image_for_recipe(self, recipe, slug):
-        json_image_url = json.dumps({"url": recipe.imageUrl})
+        json_image_url = json.dumps({"url": recipe.image_url})
         scrape_image_path = f"/recipes/{slug}/image"
         r = self.post(scrape_image_path, data=json_image_url)
         r.raise_for_status()
