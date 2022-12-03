@@ -324,7 +324,6 @@ class MealieApiClient:
         r = self.post(
             f"/recipes/{recipe_slug}/assets", data=data, files={"file": download_file}
         )
-        r.close()
         download_file.close()
         r.raise_for_status()
 
@@ -347,7 +346,6 @@ class MealieApiClient:
     def _post_recipe_trunk_and_get_slug(self, recipe_name):
         data = {"name": recipe_name}
         r = self.post("/recipes", data=json.dumps(data))
-        r.close()
         r.raise_for_status()
         slug = r.json()
         return slug
@@ -356,13 +354,11 @@ class MealieApiClient:
         json_image_url = json.dumps({"url": recipe.imageUrl})
         scrape_image_path = f"/recipes/{slug}/image"
         r = self.post(scrape_image_path, data=json_image_url)
-        r.close()
         r.raise_for_status()
 
     def _update_user_and_group_id(self, recipe, slug):
         recipe_detail_path = f"/recipes/{slug}"
         r = self.get(recipe_detail_path)
-        r.close()
         r.raise_for_status()
         recipe_details = r.json()
         update_attributes = ["id", "userId", "groupId"]
@@ -375,7 +371,7 @@ class MealieApiClient:
     def _update_recipe(self, recipe, slug):
         recipe_detail_path = f"/recipes/{slug}"
         r = self.put(recipe_detail_path, data=recipe.json())
-        r.close()
+        print(r.text)
         r.raise_for_status()
         return Recipe.parse_obj(r.json())
 
@@ -392,14 +388,12 @@ class MealieApiClient:
         all_recipes = []
 
         r = self.get("/recipes?page=1&perPage=50")
-        r.close()
         r.raise_for_status()
         all_recipes.extend([Recipe.parse_obj(recipe) for recipe in r.json()["items"]])
 
         page = 2
         while page <= r.json()["total_pages"]:
             r = self.get(f"/recipes?page={page}&perPage=50")
-            r.close()
             r.raise_for_status()
             all_recipes.extend(
                 [Recipe.parse_obj(recipe) for recipe in r.json()["items"]]
@@ -410,13 +404,11 @@ class MealieApiClient:
 
     def delete_via_slug(self, slug):
         r = self.delete(f"/recipes/{slug}")
-        r.close()
         r.raise_for_status()
         return r.json()
 
     def get_via_slug(self, slug):
         r = self.get(f"/recipes/{slug}")
-        r.close()
         r.raise_for_status()
         return Recipe.parse_obj(r.json())
 
