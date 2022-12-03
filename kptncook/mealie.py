@@ -129,9 +129,8 @@ class RecipeWithImage(Recipe):
 
 
 class MealieApiClient:
-    def __init__(self, base_url, kptncook_api_key):
+    def __init__(self, base_url):
         self.base_url = base_url
-        self.kptncook_api_key = kptncook_api_key
         self.headers = {}
         self.foods_cache = {}
         self.units_cache = {}
