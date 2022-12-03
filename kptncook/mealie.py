@@ -173,7 +173,6 @@ class MealieApiClient:
         all_tags = []
 
         r = self.get("/organizers/tags?page=1&perPage=50")
-        r.close()
         r.raise_for_status()
         all_tags.extend(r.json()["items"])
 
