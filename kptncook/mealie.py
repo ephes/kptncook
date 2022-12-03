@@ -148,9 +148,6 @@ class MealieApiClient:
     def __init__(self, base_url):
         self.base_url = base_url
         self.headers = {}
-        self.foods_cache = {}
-        self.units_cache = {}
-        self.tags_cache = {}
 
     @property
     def logged_in(self):
