@@ -477,8 +477,6 @@ def kptncook_to_mealie_ingredients(kptncook_ingredients):
     return mealie_ingredients
 
 
-# def kptncook_to_mealie(kcin: KptnCookRecipe,
-# mealie_client: MealieApiClient, api_key: str = settings.kptncook_api_key) -> RecipeWithImage:
 def kptncook_to_mealie(
     kcin: KptnCookRecipe, api_key: str = settings.kptncook_api_key
 ) -> RecipeWithImage:
