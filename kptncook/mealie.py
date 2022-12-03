@@ -161,7 +161,6 @@ class MealieApiClient:
     def fetch_api_token(self, username, password):
         login_data = {"username": username, "password": password}
         r = self.post("/auth/token", data=login_data, timeout=60)
-        r.close()
         r.raise_for_status()
         return r.json()["access_token"]
 
@@ -182,7 +181,6 @@ class MealieApiClient:
         page = 2
         while page <= r.json()["total_pages"]:
             r = self.get(f"/organizers/tags?page={page}&perPage=50")
-            r.close()
             r.raise_for_status()
             all_tags.extend(r.json()["items"])
             page += 1
@@ -199,14 +197,12 @@ class MealieApiClient:
         all_foods = []
 
         r = self.get("/foods?page=1&perPage=50")
-        r.close()
         r.raise_for_status()
         all_foods.extend(r.json()["items"])
 
         page = 2
         while page <= r.json()["total_pages"]:
             r = self.get(f"/foods?page={page}&perPage=50")
-            r.close()
             r.raise_for_status()
             all_foods.extend(r.json()["items"])
             page += 1
@@ -223,14 +219,12 @@ class MealieApiClient:
         all_units = []
 
         r = self.get("/units?page=1&perPage=50")
-        r.close()
         r.raise_for_status()
         all_units.extend(r.json()["items"])
 
         page = 2
         while page <= r.json()["total_pages"]:
             r = self.get(f"/units?page={page}&perPage=50")
-            r.close()
             r.raise_for_status()
             all_units.extend(r.json()["items"])
             page += 1
@@ -246,14 +240,12 @@ class MealieApiClient:
     def create_tag(self, tag):
         tag_json = {"name": tag}
         r = self.post("/organizers/tags", data=json.dumps(tag_json))
-        r.close()
         r.raise_for_status()
         return RecipeTag.parse_obj(r.json())
 
     def create_food(self, food):
         food_json = {"id": "", "name": food, "description": ""}
         r = self.post("/foods", data=json.dumps(food_json))
-        r.close()
         r.raise_for_status()
         return UnitFoodBase.parse_obj(r.json())
 
@@ -266,7 +258,6 @@ class MealieApiClient:
             "abbreviation": "",
         }
         r = self.post("/units", data=json.dumps(unit_json))
-        r.close()
         r.raise_for_status()
         return UnitFoodBase.parse_obj(r.json())
 
@@ -311,7 +302,6 @@ class MealieApiClient:
 
         # download from kptncook
         r = httpx.get(f"{image.url}?kptnkey={self.kptncook_api_key}")
-        r.close()
         r.raise_for_status()
         download_file.write(r.content)
 
