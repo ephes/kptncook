@@ -83,7 +83,7 @@ def get_kptncook_recipes_from_repository() -> list[Recipe]:
 @cli.command(name="sync-with-mealie")
 def sync_with_mealie():
     """
-    Sync locally saced recipes with mealie.
+    Sync locally saved recipes with mealie.
     """
     try:
         client = get_mealie_client()
@@ -169,12 +169,12 @@ def list_recipes():
 
 
 @cli.command(name="search-by-id")
-def search_kptncook_recipe_by_id(id: str):
+def search_kptncook_recipe_by_id(_id: str):
     """
     Search for a recipe by id in kptncook api, id can be a sharing
     url or an oid for example, and add it to the local repository.
     """
-    parsed = parse_id(id)
+    parsed = parse_id(_id)
     if parsed is None:
         rprint("Could not parse id")
         sys.exit(1)
