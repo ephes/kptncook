@@ -35,6 +35,11 @@ class Image(BaseModel):
     type: str | None
     url: str
 
+    def get_image_with_api_key_url(self, api_key: str) -> "Image":
+        url_with_key = f"{self.url}?kptnkey={api_key}"
+        kwargs = self.dict() | {"url": url_with_key}
+        return Image(**kwargs)
+
 
 class IngredientDetails(BaseModel):
     typ: str

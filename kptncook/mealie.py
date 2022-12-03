@@ -1,9 +1,8 @@
 import datetime
+import io
 import json
-
-# import os
-import tempfile
 from getpass import getpass
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -313,39 +312,38 @@ class MealieApiClient:
             return unit
 
     def upload_asset(self, recipe_slug, image: Image):
-        download_file = tempfile.NamedTemporaryFile()
-
-        # download from kptncook
-        r = httpx.get(f"{image.url}?kptnkey={self.kptncook_api_key}")
+        # download image
+        r = httpx.get(image.url)
         r.raise_for_status()
-        download_file.write(r.content)
+
+        download = io.BytesIO(r.content)
 
         # upload to mealie
+        name = Path(image.name)
+        extension = name.suffix.lstrip(".")
+        stem = name.stem
         data = {
-            "name": image.name.split(".")[0],
+            "name": stem,
             "icon": "mdi-file-image",
-            "extension": image.name.split(".")[-1],
+            "extension": extension,
         }
         r = self.post(
-            f"/recipes/{recipe_slug}/assets", data=data, files={"file": download_file}
+            f"/recipes/{recipe_slug}/assets", data=data, files={"file": download}
         )
-        download_file.close()
         r.raise_for_status()
 
         return r.json()["fileName"]
 
-    def _build_recipestep_text(self, recipe_uuid, text, image_name):
+    @staticmethod
+    def _build_recipestep_text(recipe_uuid, text, image_name):
         return f'{text} <img src="/api/media/recipes/{recipe_uuid}/assets/{image_name}" height="100%" width="100%"/>'
 
     def enrich_recipe_with_step_images(self, recipe):
-        for i in range(len(recipe.recipeInstructions)):
-            uploaded_image_name = self.upload_asset(
-                recipe.slug, recipe.recipeInstructions[i].image
+        for instruction in recipe.recipe_instructions:
+            uploaded_image_name = self.upload_asset(recipe.slug, instruction.image)
+            instruction.text = self._build_recipestep_text(
+                recipe.id, instruction.text, uploaded_image_name
             )
-            recipe.recipeInstructions[i].text = self._build_recipestep_text(
-                recipe.id, recipe.recipeInstructions[i].text, uploaded_image_name
-            )
-
         return recipe
 
     def _post_recipe_trunk_and_get_slug(self, recipe_name):
@@ -446,7 +444,7 @@ class MealieApiClient:
         recipe = self._update_user_and_group_id(recipe, slug)
         recipe = self._update_unit_ids(recipe)
         recipe = self._update_tag_ids(recipe)
-        # recipe = self.enrich_recipe_with_step_images(recipe)
+        recipe = self.enrich_recipe_with_step_images(recipe)
         return self._update_recipe(recipe, slug)
 
     def get_all_recipes(self):
@@ -499,6 +497,16 @@ def kptncook_to_mealie_ingredients(kptncook_ingredients):
     return mealie_ingredients
 
 
+def kptncook_to_mealie_steps(steps, api_key):
+    mealie_instructions = []
+    for step in steps:
+        image = step.image.get_image_with_api_key_url(api_key)
+        mealie_instructions.append(
+            RecipeStep(title=None, text=step.title.de, image=image)
+        )
+    return mealie_instructions
+
+
 def kptncook_to_mealie(
     kcin: KptnCookRecipe, api_key: str = settings.kptncook_api_key
 ) -> RecipeWithImage:
@@ -516,10 +524,7 @@ def kptncook_to_mealie(
         "prep_time": kcin.preparation_time,
         "cook_time": kcin.cooking_time,
         "recipe_yield": "1 Portionen",  # kptncook serves for default 2 portions, but we want it more granular
-        "recipe_instructions": [
-            RecipeStep(title=None, text=step.title.de, image=step.image)
-            for step in kcin.steps
-        ],
+        "recipe_instructions": kptncook_to_mealie_steps(kcin.steps, api_key),
         "recipe_ingredient": kptncook_to_mealie_ingredients(kcin.ingredients),
         "image_url": kcin.get_image_url(api_key),
         "tags": [RecipeTag(name="kptncook")],
