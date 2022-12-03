@@ -463,6 +463,9 @@ def kptncook_to_mealie_ingredients(kptncook_ingredients):
     mealie_ingredients = []
     for ingredient in kptncook_ingredients:
         title = ingredient.ingredient.localized_title.de
+        note = None
+        if "," in title:
+            title, note, *parts = (p.strip() for p in title.split(","))
         quantity = ingredient.quantity
         if quantity is not None:
             quantity /= 2
@@ -471,7 +474,7 @@ def kptncook_to_mealie_ingredients(kptncook_ingredients):
             if ingredient.measure is not None:
                 measure = {"name": ingredient.measure}
         mealie_ingredient = RecipeIngredient(
-            title=title, quantity=quantity, unit=measure
+            title=title, quantity=quantity, unit=measure, note=note
         )
         mealie_ingredients.append(mealie_ingredient)
     return mealie_ingredients
@@ -499,19 +502,6 @@ def kptncook_to_mealie(
             for step in kcin.steps
         ],
         "recipe_ingredient": kptncook_to_mealie_ingredients(kcin.ingredients),
-        # "recipeIngredient": [
-        #     RecipeIngredient(food=mealie_client.get_food_by_name(
-        #     ig.ingredient.localized_title.de.split(",")[0]), quantity=(ig.quantity/2.0)
-        #     if ig.quantity is not None else None,
-        #     unit=mealie_client.get_unit_by_name(ig.measure if hasattr(ig, "measure") else None),
-        #     note=ig.ingredient.localized_title.de.split(",")[1]
-        #     if len(ig.ingredient.localized_title.de.split(","))>1 else None)  # type: ignore
-        #     for ig in kcin.ingredients
-        # ],  # FIXME only to avoid passing mealie_client
-        # "recipe_ingredient": [
-        #     RecipeIngredient(title=ig.ingredient.localized_title.de)  # type: ignore
-        #     for ig in kcin.ingredients
-        # ],
         "image_url": kcin.get_image_url(api_key),
         # "tags": ["kptncook"],  # tags do not work atm
         # "tags": [RecipeTag(name="kptncook")],
