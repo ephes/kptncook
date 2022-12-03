@@ -32,7 +32,12 @@ class KptnCookClient:
         self, base_url=settings.kptncook_api_url, api_key=settings.kptncook_api_key
     ):
         self.base_url = base_url
-        self.headers = {"content-type": "application/json"}
+        self.headers = {
+            "content-type": "application/json",
+            "Accept": "application/vnd.kptncook.mobile-v8+json",
+            "User-Agent": "Platform/Android/12.0.1 App/7.10.1",
+            "hasIngredients": "yes",
+        }
         self.api_key = api_key
         if settings.kptncook_access_token is not None:
             self.headers["Token"] = settings.kptncook_access_token

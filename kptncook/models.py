@@ -35,11 +35,16 @@ class Image(BaseModel):
     type: str | None
     url: str
 
+    def get_image_with_api_key_url(self, api_key: str) -> "Image":
+        url_with_key = f"{self.url}?kptnkey={api_key}"
+        kwargs = self.dict() | {"url": url_with_key}
+        return Image(**kwargs)
+
 
 class IngredientDetails(BaseModel):
     typ: str
     localized_title: LocalizedString
-    number_title: LocalizedString
+    uncountableTitle: LocalizedString
     category: str
 
     class Config:
@@ -47,12 +52,18 @@ class IngredientDetails(BaseModel):
 
 
 class Ingredient(BaseModel):
-    quantity: float
+    quantity: float | None
+    measure: str | None
     ingredient: IngredientDetails
 
 
 class RecipeId(BaseModel):
     oid: str = Field(..., alias="$oid")
+
+
+class RecipeStep(BaseModel):
+    title: LocalizedString
+    image: Image
 
 
 class Recipe(BaseModel):
@@ -63,8 +74,7 @@ class Recipe(BaseModel):
     preparation_time: int
     cooking_time: int | None
     recipe_nutrition: Nutrition
-    steps_en: list[str] = Field(..., alias="stepsEN")
-    steps_de: list[str] = Field(..., alias="stepsDE")
+    steps: list[RecipeStep] = Field(..., alias="steps")
     image_list: list[Image]
     ingredients: list[Ingredient]
 

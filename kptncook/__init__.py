@@ -135,7 +135,7 @@ def backup_kptncook_favorites():
     client = KptnCookClient()
     favorites = client.list_favorites()
     rprint(f"Found {len(favorites)} favorites")
-    ids = [("oid", oid) for oid in favorites]
+    ids = [("oid", oid["identifier"]) for oid in favorites]
     recipes = client.get_by_ids(ids)
     if len(recipes) == 0:
         rprint("Could not find any favorites")
