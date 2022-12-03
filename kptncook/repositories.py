@@ -69,11 +69,11 @@ class RecipeRepository:
             by_id[recipe.id] = recipe
         return by_id
 
-    def needs_to_be_synced(self, date: date):
+    def needs_to_be_synced(self, _date: date):
         """
         Return True if there are no recipes for date.
         """
-        return not any(recipe.date == date for recipe in self.list())
+        return not any(recipe.date == _date for recipe in self.list())
 
     def add(self, recipe: RecipeInDb):
         locked = self.list_by_id()
