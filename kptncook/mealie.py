@@ -17,7 +17,7 @@ from .models import Recipe as KptnCookRecipe
 class RecipeTag(BaseModel):
     slug: str | None
     name: str
-    groupId: UUID4 | None = Field(None, alias="groupId")
+    group_id: UUID4 | None = Field(None, alias="groupId")
     id: UUID4 | None
 
 
@@ -47,31 +47,31 @@ class RecipeIngredient(BaseModel):
 class RecipeSummary(BaseModel):
     id: UUID4 | None
 
-    userId: UUID4 | None = Field(None, alias="userId")
-    groupId: UUID4 | None = Field(None, alias="groupId")
+    user_id: UUID4 | None = Field(None, alias="userId")
+    group_id: UUID4 | None = Field(None, alias="groupId")
 
     name: str | None
     slug: str = ""
     image: Any | None
-    recipeYield: str | None
+    recipe_yield: str | None
 
-    totalTime: str | None = None
-    prepTime: str | None = None
-    cookTime: str | None = None
-    performTime: str | None = None
+    total_time: str | None = None
+    prep_time: str | None = None
+    cook_time: str | None = None
+    perform_time: str | None = None
 
     description: str | None = ""
-    recipeCategory: list[str] | None = []
+    recipe_category: list[str] | None = []
     tags: list[RecipeTag] | None = []
     # tags: list[RecipeTag | str] | None = []
     tools: list[RecipeTool] = []
     rating: int | None
-    orgURL: str | None = Field(None, alias="orgURL")
+    org_url: str | None = Field(None, alias="orgURL")
 
-    recipeIngredient: list[RecipeIngredient] | None = []
+    recipe_ingredient: list[RecipeIngredient] | None = []
 
-    dateAdded: datetime.date | None
-    dateUpdated: datetime.datetime | None
+    date_added: datetime.date | None
+    date_updated: datetime.datetime | None
 
 
 class RecipeStep(BaseModel):
@@ -83,28 +83,28 @@ class RecipeStep(BaseModel):
 
 class Nutrition(BaseModel):
     calories: str | None
-    fatContent: str | None
-    proteinContent: str | None
-    carbohydrateContent: str | None
-    fiberContent: str | None
-    sodiumContent: str | None
-    sugarContent: str | None
+    fat_content: str | None
+    protein_content: str | None
+    carbohydrate_content: str | None
+    fiber_content: str | None
+    sodium_content: str | None
+    sugar_content: str | None
 
 
 class RecipeSettings(BaseModel):
     public: bool = True
-    showNutrition: bool = True
-    showAssets: bool = False
-    landscapeView: bool = False
-    disableComments: bool = False
-    disableAmount: bool = False
+    show_nutrition: bool = True
+    show_assets: bool = False
+    landscape_view: bool = False
+    disable_comments: bool = False
+    disable_amount: bool = False
     locked: bool = False
 
 
 class RecipeAsset(BaseModel):
     name: str
     icon: str
-    fileName: str | None
+    file_name: str | None
 
 
 class RecipeNote(BaseModel):
@@ -113,8 +113,8 @@ class RecipeNote(BaseModel):
 
 
 class Recipe(RecipeSummary):
-    recipeIngredient: list[RecipeIngredient] = []
-    recipeInstructions: list[RecipeStep] | None = []
+    recipe_ingredient: list[RecipeIngredient] = []
+    recipe_instructions: list[RecipeStep] | None = []
     nutrition: Nutrition | None
 
     # Mealie Specific
@@ -437,10 +437,10 @@ def kptncook_to_mealie(
             fatContent=kcin.recipe_nutrition.fat,
             carbohydrateContent=kcin.recipe_nutrition.carbohydrate,
         ),  # type: ignore
-        "prepTime": kcin.preparation_time,
-        "cookTime": kcin.cooking_time,
-        "recipeYield": "1 Portionen",  # kptncook serves for default 2 portions, but we want it more granular
-        "recipeInstructions": [
+        "prep_time": kcin.preparation_time,
+        "cook_time": kcin.cooking_time,
+        "recipe_yield": "1 Portionen",  # kptncook serves for default 2 portions, but we want it more granular
+        "recipe_instructions": [
             RecipeStep(title=None, text=step.title.de, image=step.image)
             for step in kcin.steps
         ],
