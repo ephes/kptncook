@@ -14,7 +14,22 @@ from .models import Image
 from .models import Recipe as KptnCookRecipe
 
 
-class RecipeTag(BaseModel):
+class NameIsIdModel(BaseModel):
+    name: str
+
+    def __hash__(self):
+        """Hash on name to be able to have sets of models."""
+        return hash(self.name)
+
+    def __eq__(self, other):
+        """Compare on name to be able to subtract sets of models."""
+        return self.name == other.name
+
+    class Config:
+        frozen = True  # make it hashable
+
+
+class RecipeTag(NameIsIdModel):
     slug: str | None
     name: str
     group_id: UUID4 | None = Field(None, alias="groupId")
@@ -29,23 +44,12 @@ class RecipeTool(RecipeTag):
     on_hand: bool = False
 
 
-class Unit(BaseModel):
+class Unit(NameIsIdModel):
     id: UUID4 | None
     name: str
     description: str = ""
     fraction: bool = True
     abbreviation: str = ""
-
-    def __hash__(self):
-        """Hash on name to be able to have sets of units."""
-        return hash(self.name)
-
-    def __eq__(self, other):
-        """Compare on name to be able to subtract sets of units."""
-        return self.name == other.name
-
-    class Config:
-        frozen = True  # make it hashable
 
 
 class RecipeIngredient(BaseModel):
@@ -392,12 +396,14 @@ class MealieApiClient:
         r.raise_for_status()
         return r.json()
 
-    def _create_unit_name_to_unit_lookup(self, recipe_units):
-        existing_units = parse_obj_as(set[Unit], self._get_all_items("units"))
-        units_to_create = recipe_units - existing_units
-        for unit in units_to_create:
-            existing_units.add(Unit(**self._create_item("units", unit)))
-        return {u.name: u for u in existing_units}
+    def _create_item_name_to_item_lookup(self, endpoint_name, model_class, items):
+        existing_items = parse_obj_as(
+            set[model_class], self._get_all_items(endpoint_name)
+        )
+        items_to_create = items - existing_items
+        for item in items_to_create:
+            existing_items.add(model_class(**self._create_item(endpoint_name, item)))
+        return {i.name: i for i in existing_items}
 
     def _update_unit_ids(self, recipe):
         recipe_units = {
@@ -407,10 +413,24 @@ class MealieApiClient:
             # return early if there's nothing to do
             return recipe
 
-        name_to_unit_with_id = self._create_unit_name_to_unit_lookup(recipe_units)
+        name_to_unit_with_id = self._create_item_name_to_item_lookup(
+            "units", Unit, recipe_units
+        )
         for ingredient in recipe.recipe_ingredient:
             if ingredient.unit is not None:
                 ingredient.unit = name_to_unit_with_id[ingredient.unit.name]
+        return recipe
+
+    def _update_tag_ids(self, recipe):
+        recipe_tags = {tag for tag in recipe.tags}
+        if len(recipe_tags) == 0:
+            # return early if there's nothing to do
+            return recipe
+
+        name_to_tag_with_id = self._create_item_name_to_item_lookup(
+            "organizers/tags", RecipeTag, recipe_tags
+        )
+        recipe.tags = [name_to_tag_with_id[tag.name] for tag in recipe_tags]
         return recipe
 
     def _update_recipe(self, recipe, slug):
@@ -427,6 +447,7 @@ class MealieApiClient:
         self._scrape_image_for_recipe(recipe, slug)
         recipe = self._update_user_and_group_id(recipe, slug)
         recipe = self._update_unit_ids(recipe)
+        recipe = self._update_tag_ids(recipe)
         # recipe = self.enrich_recipe_with_step_images(recipe)
         return self._update_recipe(recipe, slug)
 
@@ -503,9 +524,7 @@ def kptncook_to_mealie(
         ],
         "recipe_ingredient": kptncook_to_mealie_ingredients(kcin.ingredients),
         "image_url": kcin.get_image_url(api_key),
-        # "tags": ["kptncook"],  # tags do not work atm
-        # "tags": [RecipeTag(name="kptncook")],
-        # "tags": [mealie_client.get_tag_by_name(tag) for tag in ["kptncook"]],  # FIXME avoid passing mealie_client
+        "tags": [RecipeTag(name="kptncook")],
         "extras": {"kptncook_id": kcin.id.oid, "source": "kptncook"},
     }
     return RecipeWithImage(**kwargs)
