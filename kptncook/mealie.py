@@ -369,8 +369,6 @@ class MealieApiClient:
         update_attributes = ["id", "userId", "groupId"]
         updated_details = {k: recipe_details[k] for k in update_attributes}
         recipe = RecipeWithImage(**(recipe.dict() | updated_details))
-        # for tag in recipe.tags:
-        #    tag.groupId = recipe_details["groupId"]
         return recipe
 
     def _get_page(self, endpoint_name, page_num, per_page=50):
