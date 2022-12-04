@@ -29,7 +29,7 @@ __all__ = [
     "search_kptncook_recipe_by_id",
 ]
 
-__version__ = "0.0.7"
+__version__ = "0.0.8"
 cli = typer.Typer()
 
 
