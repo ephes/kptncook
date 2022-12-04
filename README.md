@@ -4,7 +4,7 @@ A small command line client for downloading [KptnCook](https://www.kptncook.com/
 recipes for today. If you know how to get the data for other days/oids
 of recipes, please let me know :).
 
-Thanks to [this blogpost](https://medium.com/analytics-vidhya/reversing-and-analyzing-the-cooking-app-kptncook-my-recipe-collection-5b5b04e5a085) for the url to get the json for todays recipes.
+Thanks to [this blogpost](https://medium.com/analytics-vidhya/reversing-and-analyzing-the-cooking-app-kptncook-my-recipe-collection-5b5b04e5a085) for the url to get the json for today's recipes.
 
 It's in pre alpha status.
 
@@ -49,7 +49,7 @@ Commands:
 
 Set environment variables via `~/.kptncook/.env` dotenv file or directly in your shell. You'll need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie, you also have to set some additional variables.
 
-If you want to backup your favorite receipts from KptnCook, you have to set the `KPTNCOOK_ACCESS_TOKEN` variable as well. You can obtain the access token by running the `kptncook kptncook-access_token` command. But you need a kptncook account to do that.
+If you want to back up your favorite receipts from KptnCook, you have to set the `KPTNCOOK_ACCESS_TOKEN` variable as well. You can obtain the access token by running the `kptncook kptncook-access_token` command. But you need a kptncook account to do that.
 Beware: If you don't have a kptncook account, you'll lose all your favorites by creating a new one.
 
 Here's an example:
