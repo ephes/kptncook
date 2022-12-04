@@ -43,10 +43,17 @@ class RecipeTool(RecipeTag):
     on_hand: bool = False
 
 
-class RecipeUnit(NameIsIdModel):
+class UnitFoodBase(NameIsIdModel):
     id: UUID4 | None
     name: str
     description: str = ""
+
+
+class RecipeFood(UnitFoodBase):
+    ...
+
+
+class RecipeUnit(UnitFoodBase):
     fraction: bool = True
     abbreviation: str = ""
 
@@ -274,20 +281,26 @@ class MealieApiClient:
             existing_items.add(model_class(**self._create_item(endpoint_name, item)))
         return {i.name: i for i in existing_items}
 
-    def _update_unit_ids(self, recipe):
-        recipe_units = {
-            ig.unit for ig in recipe.recipe_ingredient if ig.unit is not None
+    def _update_item_ids(self, recipe, endpoint_name, model_class, attr_name):
+        items = {
+            getattr(ig, attr_name)
+            for ig in recipe.recipe_ingredient
+            if getattr(ig, attr_name) is not None
         }
-        if len(recipe_units) == 0:
+        if len(items) == 0:
             # return early if there's nothing to do
             return recipe
 
-        name_to_unit_with_id = self._create_item_name_to_item_lookup(
-            "units", RecipeUnit, recipe_units
+        name_to_item_with_id = self._create_item_name_to_item_lookup(
+            endpoint_name, model_class, items
         )
         for ingredient in recipe.recipe_ingredient:
-            if ingredient.unit is not None:
-                ingredient.unit = name_to_unit_with_id[ingredient.unit.name]
+            if getattr(ingredient, attr_name) is not None:
+                setattr(
+                    ingredient,
+                    attr_name,
+                    name_to_item_with_id[getattr(ingredient, attr_name).name],
+                )
         return recipe
 
     def _update_tag_ids(self, recipe):
@@ -315,7 +328,8 @@ class MealieApiClient:
         recipe.slug = slug
         self._scrape_image_for_recipe(recipe, slug)
         recipe = self._update_user_and_group_id(recipe, slug)
-        recipe = self._update_unit_ids(recipe)
+        recipe = self._update_item_ids(recipe, "units", RecipeUnit, "unit")
+        recipe = self._update_item_ids(recipe, "foods", RecipeFood, "food")
         recipe = self._update_tag_ids(recipe)
         recipe = self.enrich_recipe_with_step_images(recipe)
         return self._update_recipe(recipe, slug)
@@ -356,6 +370,7 @@ def kptncook_to_mealie_ingredients(kptncook_ingredients):
         note = None
         if "," in title:
             title, note, *parts = (p.strip() for p in title.split(","))
+        food = {"name": title}
         quantity = ingredient.quantity
         if quantity is not None:
             quantity /= 2
@@ -364,7 +379,7 @@ def kptncook_to_mealie_ingredients(kptncook_ingredients):
             if ingredient.measure is not None:
                 measure = {"name": ingredient.measure}
         mealie_ingredient = RecipeIngredient(
-            title=title, quantity=quantity, unit=measure, note=note
+            title=title, quantity=quantity, unit=measure, note=note, food=food
         )
         mealie_ingredients.append(mealie_ingredient)
     return mealie_ingredients
