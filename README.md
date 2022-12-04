@@ -9,8 +9,8 @@ Thanks to [this blogpost](https://medium.com/analytics-vidhya/reversing-and-anal
 It's in pre alpha status.
 
 # Dependencies
-* Python >3.10
-* Mealie >v1.0
+* Python >=3.10
+* Mealie >=v1.0
 
 # Installation
 
