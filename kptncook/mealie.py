@@ -372,8 +372,6 @@ def kptncook_to_mealie_ingredients(kptncook_ingredients):
             title, note, *parts = (p.strip() for p in title.split(","))
         food = {"name": title}
         quantity = ingredient.quantity
-        if quantity is not None:
-            quantity /= 2
         measure = None
         if hasattr(ingredient, "measure"):
             if ingredient.measure is not None:
@@ -411,7 +409,7 @@ def kptncook_to_mealie(
         ),  # type: ignore
         "prep_time": kcin.preparation_time,
         "cook_time": kcin.cooking_time,
-        "recipe_yield": "1 Portionen",  # kptncook serves for default 2 portions, but we want it more granular
+        "recipe_yield": "1 Portionen",
         "recipe_instructions": kptncook_to_mealie_steps(kcin.steps, api_key),
         "recipe_ingredient": kptncook_to_mealie_ingredients(kcin.ingredients),
         "image_url": kcin.get_image_url(api_key),
