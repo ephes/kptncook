@@ -34,6 +34,8 @@ dependencies = [
     "pydantic[dotenv] >= 1.9",
     "typer >= 0.4",
     "click",
+    "unidecode",
+    "jinja2"
 ]
 
 [project.optional-dependencies]

@@ -17,6 +17,7 @@ from .config import settings
 from .mealie import MealieApiClient, kptncook_to_mealie
 from .models import Recipe
 from .repositories import RecipeRepository
+from .paprika import PaprikaExporter
 
 __all__ = [
     "list_kptncook_today",
@@ -27,9 +28,10 @@ __all__ = [
     "get_kptncook_access_token",
     "list_recipes",
     "search_kptncook_recipe_by_id",
+    "export_recipe_to_paprika",
 ]
 
-__version__ = "0.0.9"
+__version__ = "0.0.10"
 cli = typer.Typer()
 
 
@@ -78,6 +80,16 @@ def get_kptncook_recipes_from_repository() -> list[Recipe]:
     for repo_recipe in fs_repo.list():
         recipes.append(Recipe.parse_obj(repo_recipe.data))
     return recipes
+
+
+def get_recipe_from_repository_by_oid(oid: str) -> list[Recipe]:
+    """
+    get one single recipe from local repository
+    :param oid: oid of recipe
+    :return: list
+    """
+    recipes = get_kptncook_recipes_from_repository()
+    return [(recipe) for num, recipe in enumerate(recipes) if recipe.id.oid == oid]
 
 
 @cli.command(name="sync-with-mealie")
@@ -189,6 +201,33 @@ def search_kptncook_recipe_by_id(_id: str):
     fs_repo = RecipeRepository(settings.root)
     fs_repo.add_list([recipe])
     rprint(f"Added recipe {id_type} {id_value} to local repository")
+
+
+@cli.command(name="export-recipe-to-paprika")
+def export_recipe_to_paprika(_id: str):
+    """
+    Export a recipe to Paprika app
+
+    Example usage:  kptncook  export-recipe-to-paprika 635a68635100007500061cd7
+    """
+    parsed = parse_id(_id)
+    if parsed is None:
+        rprint("Could not parse id")
+        sys.exit(1)
+    # we can expect always an oid here - correct?
+    id_type, id_value = parsed
+    found_recipes = get_recipe_from_repository_by_oid(oid=id_value)
+    if len(found_recipes) == 0:
+        rprint("Recipe not found.")
+        sys.exit(1)
+    if len(found_recipes) > 1:
+        rprint("More than one recipe found with that ID.")
+        sys.exit(1)
+
+    exporter = PaprikaExporter()
+    recipe = found_recipes[0]
+    filename = exporter.export(recipe=recipe)
+    rprint("\n The recipe was exported to '%s'. Open this file with the Paprika App.\n" % filename)
 
 
 if __name__ == "__main__":
