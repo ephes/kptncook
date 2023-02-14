@@ -16,8 +16,8 @@ from .api import KptnCookClient, parse_id
 from .config import settings
 from .mealie import MealieApiClient, kptncook_to_mealie
 from .models import Recipe
-from .repositories import RecipeRepository
 from .paprika import PaprikaExporter
+from .repositories import RecipeRepository
 
 __all__ = [
     "list_kptncook_today",
@@ -227,7 +227,10 @@ def export_recipe_to_paprika(_id: str):
     exporter = PaprikaExporter()
     recipe = found_recipes[0]
     filename = exporter.export(recipe=recipe)
-    rprint("\n The recipe was exported to '%s'. Open this file with the Paprika App.\n" % filename)
+    rprint(
+        "\n The recipe was exported to '%s'. Open this file with the Paprika App.\n"
+        % filename
+    )
 
 
 if __name__ == "__main__":
