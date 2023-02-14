@@ -13,22 +13,24 @@ def test_asciify_string():
     assert p.asciify_string("Ölige_Ähren") == "Olige_Ahren"
 
 
-def test_get_cover_img_as_base64_string(full_recipe):
+def test_get_cover_img_as_base64_string(full_recipe, mocker):
     p = PaprikaExporter()
     recipe = Recipe.parse_obj(full_recipe)
+    mocker.patch("kptncook.paprika.httpx.get", return_value=mocker.Mock(content=b"foobar", status_code=200))
     cover_info = p.get_cover_img_as_base64_string(recipe=recipe)
     assert isinstance(cover_info, tuple) is True
     assert len(cover_info) == 2
 
-    # no images availlable for some reason
+    # no images available for some reason
     recipe.image_list = list()
     cover_info = p.get_cover_img_as_base64_string(recipe=recipe)
     assert cover_info is None
 
 
-def test_export(full_recipe):
+def test_export(full_recipe, mocker):
     p = PaprikaExporter()
     recipe = Recipe.parse_obj(full_recipe)
+    mocker.patch("kptncook.paprika.httpx.get", return_value=mocker.Mock(content=b"foobar", status_code=200))
     p.export(recipe=recipe)
     expected_file = "Uberbackene_Muschelnudeln_mit_Lachs___Senf_Dill_Sauce.paprikarecipes"
     assert os.path.isfile(expected_file) is True
@@ -45,10 +47,10 @@ def test_get_cover(minimal):
     assert cover.name == 'REZ_1837_Cover.jpg'
 
     with pytest.raises(ValueError):
-        cover = p.get_cover(image_list=None)
+        p.get_cover(image_list=None)
 
     with pytest.raises(ValueError):
-        cover = p.get_cover(image_list=dict())
+        p.get_cover(image_list=dict())
 
 
 def test_get_template_dir():
@@ -88,4 +90,4 @@ def test_render(minimal):
                     '}')
     # invalid
     with pytest.raises(TemplateNotFound):
-        json = r.render(template_name="invalid_template.jinja2.json", recipe=recipe)
+        r.render(template_name="invalid_template.jinja2.json", recipe=recipe)
