@@ -29,8 +29,8 @@ def test_get_cover_img_as_base64_string(full_recipe, mocker):
 
     # no images available for some reason
     recipe.image_list = list()
-    cover_info = p.get_cover_img_as_base64_string(recipe=recipe)
-    assert cover_info is None
+    with pytest.raises(ValueError):
+        p.get_cover_img_as_base64_string(recipe=recipe)
 
 
 def test_export(full_recipe, mocker):
