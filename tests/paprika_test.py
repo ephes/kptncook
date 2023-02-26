@@ -1,5 +1,6 @@
 import os
 
+import httpx
 import pytest
 from jinja2.exceptions import TemplateNotFound
 
@@ -33,17 +34,51 @@ def test_get_cover_img_as_base64_string(full_recipe, mocker):
         p.get_cover_img_as_base64_string(recipe=recipe)
 
 
-def test_export(full_recipe, mocker):
+def test_get_cover_img_as_base64_string_can_handle_404(full_recipe, mocker):
+    p = PaprikaExporter()
+    recipe = Recipe.parse_obj(full_recipe)
+    mocker.patch(
+        "kptncook.paprika.httpx.get",
+        return_value=mocker.Mock(content=b"foobar", status_code=404),
+    )
+    # hm, looks weird, but works.
+    m = mocker.patch("kptncook.paprika.httpx.get")
+    mock_response = mocker.Mock()
+    mock_response.raise_for_status = mocker.Mock(
+        side_effect=httpx.HTTPStatusError(
+            message="404 File not found", response=mock_response, request=mocker.Mock()
+        )
+    )
+    m.return_value = mock_response
+    assert p.get_cover_img_as_base64_string(recipe=recipe) == (None, None)
+
+
+def test_export_single_recipe(full_recipe, mocker):
     p = PaprikaExporter()
     recipe = Recipe.parse_obj(full_recipe)
     mocker.patch(
         "kptncook.paprika.httpx.get",
         return_value=mocker.Mock(content=b"foobar", status_code=200),
     )
-    p.export(recipe=recipe)
+    p.export(recipes=[recipe])
     expected_file = (
         "Uberbackene_Muschelnudeln_mit_Lachs___Senf_Dill_Sauce.paprikarecipes"
     )
+    assert os.path.isfile(expected_file) is True
+    if os.path.isfile(expected_file):
+        os.unlink(expected_file)
+
+
+def test_export_all_recipes(full_recipe, minimal, mocker):
+    p = PaprikaExporter()
+    recipe1 = Recipe.parse_obj(full_recipe)
+    recipe2 = Recipe.parse_obj(minimal)
+    mocker.patch(
+        "kptncook.paprika.httpx.get",
+        return_value=mocker.Mock(content=b"foobar", status_code=200),
+    )
+    p.export(recipes=[recipe1, recipe2])
+    expected_file = "allrecipes.paprikarecipes"
     assert os.path.isfile(expected_file) is True
     if os.path.isfile(expected_file):
         os.unlink(expected_file)
@@ -76,7 +111,7 @@ def test_render(minimal):
     json = r.render(template_name="paprika.jinja2.json", recipe=recipe)
     assert json == (
         "{\n"
-        '   "uid":"",\n'
+        '   "uid":"5e5390e2740000cdf1381c64",\n'
         '   "name":"Minimal Recipe",\n'
         '   "directions": "Alles parat?\\n",\n'
         '   "servings":"2",\n'

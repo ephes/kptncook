@@ -28,7 +28,7 @@ __all__ = [
     "get_kptncook_access_token",
     "list_recipes",
     "search_kptncook_recipe_by_id",
-    "export_recipe_to_paprika",
+    "export_recipes_to_paprika",
 ]
 
 __version__ = "0.0.10"
@@ -203,13 +203,27 @@ def search_kptncook_recipe_by_id(_id: str):
     rprint(f"Added recipe {id_type} {id_value} to local repository")
 
 
-@cli.command(name="export-recipe-to-paprika")
-def export_recipe_to_paprika(_id: str):
+@cli.command(name="export-recipes-to-paprika")
+def export_recipes_to_paprika(_id: str | None = typer.Argument(None)):
     """
-    Export a recipe to Paprika app
+    Export one recipe or all recipes to Paprika app
 
-    Example usage:  kptncook  export-recipe-to-paprika 635a68635100007500061cd7
+    Example usage 1:  kptncook  export-recipes-to-paprika 635a68635100007500061cd7
+    Example usage 2:  kptncook  export-recipes-to-paprika
     """
+    if _id:
+        recipes = get_recipe_by_id(_id)
+    else:
+        recipes = get_kptncook_recipes_from_repository()
+    exporter = PaprikaExporter()
+    filename = exporter.export(recipes=recipes)
+    rprint(
+        "\n The data was exported to '%s'. Open the export file with the Paprika App.\n"
+        % filename
+    )
+
+
+def get_recipe_by_id(_id: str):
     parsed = parse_id(_id)
     if parsed is None:
         rprint("Could not parse id")
@@ -223,14 +237,7 @@ def export_recipe_to_paprika(_id: str):
     if len(found_recipes) > 1:
         rprint("More than one recipe found with that ID.")
         sys.exit(1)
-
-    exporter = PaprikaExporter()
-    recipe = found_recipes[0]
-    filename = exporter.export(recipe=recipe)
-    rprint(
-        "\n The recipe was exported to '%s'. Open this file with the Paprika App.\n"
-        % filename
-    )
+    return found_recipes
 
 
 if __name__ == "__main__":

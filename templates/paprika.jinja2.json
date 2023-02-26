@@ -1,5 +1,5 @@
 {
-   "uid":"{{uid}}",
+   "uid":"{{recipe.id.oid}}",
    "name":"{{recipe.localized_title.de}}",
    "directions": "{% for step in recipe.steps %}{{step.title.de}}\n{% endfor %}",
    "servings":"2",
