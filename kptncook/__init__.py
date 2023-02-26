@@ -5,6 +5,7 @@ new recipes.
 
 import sys
 from datetime import date
+from typing import Optional
 
 import httpx
 import typer
@@ -203,8 +204,12 @@ def search_kptncook_recipe_by_id(_id: str):
     rprint(f"Added recipe {id_type} {id_value} to local repository")
 
 
+# Optional needed by typer, standalone to trick pyupgrade to not change it
+OptionalId = Optional[str]
+
+
 @cli.command(name="export-recipes-to-paprika")
-def export_recipes_to_paprika(_id: str | None = typer.Argument(None)):
+def export_recipes_to_paprika(_id: OptionalId = typer.Argument(None)):
     """
     Export one recipe or all recipes to Paprika app
 
