@@ -34,12 +34,15 @@ dependencies = [
     "pydantic[dotenv] >= 1.9",
     "typer >= 0.4",
     "click",
+    "unidecode",
+    "jinja2"
 ]
 
 [project.optional-dependencies]
 test = [
     "pytest >= 6",
     "pytest-cov >= 3",
+    "pytest-mock",
 ]
 doc = [
     "mkdocs >= 1.2",
@@ -47,6 +50,7 @@ doc = [
 dev = [
     "jupyterlab >= 3.2.9",
     "mypy",
+    "pre-commit"
 ]
 
 [project.urls]

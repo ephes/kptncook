@@ -18,3 +18,10 @@ __pycache__
 
 # environment
 .env
+
+# export files for Paprika app accidently create in source code directory
+*.paprikarecipes
+
+# vim
+.*swp
+.*swo
