@@ -1,3 +1,35 @@
+0.0.9 - 2022-12-12
+==================
+No soup for you!
+
+### Fixes
+- removed wrongfully added recipe yield reduction
+    - #21  PR by @alexdetsch
+
+
+0.0.8 - 2022-12-04
+==================
+Added units, foods, tags and step images
+
+### Features
+- Added units and food types  to recipe ingredients
+    - #20  PR by @alexdetsch
+- Added tags to recipes (only adds `kptncook` at the moment
+   - #20 PR by @alexdetsch
+- Added step images to recipe instructions
+   - #20 PR by @alexdetsch
+
+### Refactoring
+- Review and refactoring
+   - #20  PR by @ephes
+- Updated pre-commit hooks
+   - by @ephes
+
+### Fixes
+- Documented python / mealie version requirements
+    - #20 PR by @alexdetsch
+
+
 0.0.7 - 2022-05-05
 ==================
 ### Fixes
