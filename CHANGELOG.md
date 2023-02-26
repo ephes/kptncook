@@ -1,3 +1,11 @@
+0.0.10 - 2023-02-26
+===================
+Export recipes to [Paprika Recipe Manager](https://www.paprikaapp.com/)
+
+### Features
+- Export recipes to Paprika Recipe Manager
+    - #22 PR by @luebbert42
+
 0.0.9 - 2022-12-12
 ==================
 No soup for you!
