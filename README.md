@@ -79,6 +79,12 @@ Install a symlinked development version of the package:
 ```
 $ flit install -s
 ```
+
+Install the git pre-commit hooks:
+```
+$ pre-commit install
+```
+
 ## Run Tests
 
 Flit should have already installed pytest:
