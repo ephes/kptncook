@@ -35,14 +35,15 @@ Options:
   --help                          Show this message and exit.
 
 Commands:
-  backup-favorites       Store kptncook favorites in local repository.
-  kptncook-access-token  Get access token for kptncook.
-  kptncook-today         List all recipes for today from the kptncook...
-  list-recipes           List all locally saved recipes.
-  save-todays-recipes    Save recipes for today from kptncook site.
-  search-by-id           Search for a recipe by id in kptncook api, id...
-  sync                   Fetch recipes for today from api, save them to...
-  sync-with-mealie       Sync locally saced recipes with mealie.
+  backup-favorites          Store kptncook favorites in local repository.
+  kptncook-access-token     Get access token for kptncook.
+  kptncook-today            List all recipes for today from the kptncook...
+  list-recipes              List all locally saved recipes.
+  save-todays-recipes       Save recipes for today from kptncook site.
+  search-by-id              Search for a recipe by id in kptncook api, id...
+  sync                      Fetch recipes for today from api, save them to...
+  sync-with-mealie          Sync locally saced recipes with mealie.
+  export-recipes-to-paprika  Export a recipe by id or all recipes to Paprika app
 ```
 
 ## Environment
@@ -78,6 +79,12 @@ Install a symlinked development version of the package:
 ```
 $ flit install -s
 ```
+
+Install the git pre-commit hooks:
+```
+$ pre-commit install
+```
+
 ## Run Tests
 
 Flit should have already installed pytest:

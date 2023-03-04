@@ -5,6 +5,7 @@ new recipes.
 
 import sys
 from datetime import date
+from typing import Optional
 
 import httpx
 import typer
@@ -16,6 +17,7 @@ from .api import KptnCookClient, parse_id
 from .config import settings
 from .mealie import MealieApiClient, kptncook_to_mealie
 from .models import Recipe
+from .paprika import PaprikaExporter
 from .repositories import RecipeRepository
 
 __all__ = [
@@ -27,9 +29,10 @@ __all__ = [
     "get_kptncook_access_token",
     "list_recipes",
     "search_kptncook_recipe_by_id",
+    "export_recipes_to_paprika",
 ]
 
-__version__ = "0.0.8"
+__version__ = "0.0.10"
 cli = typer.Typer()
 
 
@@ -78,6 +81,16 @@ def get_kptncook_recipes_from_repository() -> list[Recipe]:
     for repo_recipe in fs_repo.list():
         recipes.append(Recipe.parse_obj(repo_recipe.data))
     return recipes
+
+
+def get_recipe_from_repository_by_oid(oid: str) -> list[Recipe]:
+    """
+    get one single recipe from local repository
+    :param oid: oid of recipe
+    :return: list
+    """
+    recipes = get_kptncook_recipes_from_repository()
+    return [(recipe) for num, recipe in enumerate(recipes) if recipe.id.oid == oid]
 
 
 @cli.command(name="sync-with-mealie")
@@ -189,6 +202,47 @@ def search_kptncook_recipe_by_id(_id: str):
     fs_repo = RecipeRepository(settings.root)
     fs_repo.add_list([recipe])
     rprint(f"Added recipe {id_type} {id_value} to local repository")
+
+
+# Optional needed by typer, standalone to trick pyupgrade to not change it
+OptionalId = Optional[str]
+
+
+@cli.command(name="export-recipes-to-paprika")
+def export_recipes_to_paprika(_id: OptionalId = typer.Argument(None)):
+    """
+    Export one recipe or all recipes to Paprika app
+
+    Example usage 1:  kptncook  export-recipes-to-paprika 635a68635100007500061cd7
+    Example usage 2:  kptncook  export-recipes-to-paprika
+    """
+    if _id:
+        recipes = get_recipe_by_id(_id)
+    else:
+        recipes = get_kptncook_recipes_from_repository()
+    exporter = PaprikaExporter()
+    filename = exporter.export(recipes=recipes)
+    rprint(
+        "\n The data was exported to '%s'. Open the export file with the Paprika App.\n"
+        % filename
+    )
+
+
+def get_recipe_by_id(_id: str):
+    parsed = parse_id(_id)
+    if parsed is None:
+        rprint("Could not parse id")
+        sys.exit(1)
+    # we can expect always an oid here - correct?
+    id_type, id_value = parsed
+    found_recipes = get_recipe_from_repository_by_oid(oid=id_value)
+    if len(found_recipes) == 0:
+        rprint("Recipe not found.")
+        sys.exit(1)
+    if len(found_recipes) > 1:
+        rprint("More than one recipe found with that ID.")
+        sys.exit(1)
+    return found_recipes
 
 
 if __name__ == "__main__":
