@@ -90,7 +90,7 @@ def get_recipe_from_repository_by_oid(oid: str) -> list[Recipe]:
     :return: list
     """
     recipes = get_kptncook_recipes_from_repository()
-    return [(recipe) for num, recipe in enumerate(recipes) if recipe.id.oid == oid]
+    return [recipe for num, recipe in enumerate(recipes) if recipe.id.oid == oid]
 
 
 @cli.command(name="sync-with-mealie")

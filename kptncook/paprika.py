@@ -17,6 +17,7 @@ import tempfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import httpx
 from jinja2 import Environment, FileSystemLoader
@@ -77,7 +78,7 @@ class PaprikaExporter:
         return s
 
     def save_recipes(
-        self, export_data: dict[str], filename: str, directory: str
+        self, export_data: dict[str, Any], filename: str, directory: str
     ) -> str:
         for id, recipe_as_json in export_data.items():
             recipe_as_gz = os.path.join(directory, "recipe_" + id + ".paprikarecipe")
@@ -93,7 +94,9 @@ class PaprikaExporter:
                 zip_file.write(gz_file, arcname=os.path.basename(gz_file))
         return filename_full_path
 
-    def get_cover_img_as_base64_string(self, recipe: Recipe) -> tuple[str, str]:
+    def get_cover_img_as_base64_string(
+        self, recipe: Recipe
+    ) -> tuple[str | None, str | None]:
         cover = self.get_cover(image_list=recipe.image_list)
         if cover is None:
             raise ValueError("No cover image found")
@@ -110,7 +113,7 @@ class PaprikaExporter:
                 )
             else:
                 print(
-                    f"While trying to fetch the cover img a HTTP error occured: {exc.response.status_code}: {exc}"
+                    f"While trying to fetch the cover img a HTTP error occurred: {exc.response.status_code}: {exc}"
                 )
             return None, None
         return cover.name, base64.b64encode(response.content).decode("utf-8")
