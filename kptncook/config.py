@@ -4,37 +4,27 @@ Base settings for kptncook.
 import sys
 from pathlib import Path
 
-from pydantic import (
-    AnyHttpUrl,
-    BaseSettings,
-    DirectoryPath,
-    Field,
-    ValidationError,
-    validator,
-)
+from pydantic import AnyHttpUrl, DirectoryPath, Field, ValidationError, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from rich import print as rprint
-
-ROOT_DIR = Path(__file__).resolve(strict=True).parent.parent
 
 
 class Settings(BaseSettings):
-    root: DirectoryPath = Field(Path.home() / ".kptncook", env="KPTNCOOK_HOME")
-    kptncook_api_key: str = Field(..., env="KPTNCOOK_API_KEY")
-    kptncook_access_token: str = Field(None, env="KPTNCOOK_ACCESS_TOKEN")
-    kptncook_api_url: AnyHttpUrl = Field(
-        "https://mobile.kptncook.com", env="KPTNCOOK_API_URL"
+    model_config = SettingsConfigDict(
+        env_file=(Path.home() / ".kptncook" / ".env"), extra="ignore"
     )
-    mealie_url: AnyHttpUrl = Field("http://localhost:9000/api", env="MEALIE_URL")
-    mealie_username: str = Field(..., env="MEALIE_USERNAME")
-    mealie_password: str = Field(..., env="MEALIE_PASSWORD")
+    root: DirectoryPath = Field(Path.home() / ".kptncook", env="KPTNCOOK_HOME")
+    kptncook_api_key: str
+    kptncook_access_token: str | None = None
+    kptncook_api_url: AnyHttpUrl = "https://mobile.kptncook.com"
+    mealie_url: AnyHttpUrl = "http://localhost:9000/api"
+    mealie_username: str
+    mealie_password: str
 
-    @validator("root", pre=True)
+    @field_validator("root", mode="before")
     def root_must_exist(cls, path: Path) -> Path:
         path.mkdir(parents=True, exist_ok=True)
         return path
-
-    class Config:
-        env_file = Path.home() / ".kptncook" / ".env"
 
 
 try:

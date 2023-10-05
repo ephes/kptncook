@@ -26,12 +26,14 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
     "httpx >= 0.22",
     "feedparser >= 6",
     "rich >= 11.1.0",
-    "pydantic[dotenv] >= 1.9",
+    "pydantic > 2",
+    "pydantic-settings",
     "typer >= 0.4",
     "click",
     "unidecode",

@@ -19,7 +19,7 @@ def test_asciify_string():
 
 def test_get_cover_img_as_base64_string(full_recipe, mocker):
     p = PaprikaExporter()
-    recipe = Recipe.parse_obj(full_recipe)
+    recipe = Recipe.model_validate(full_recipe)
     mocker.patch(
         "kptncook.paprika.httpx.get",
         return_value=mocker.Mock(content=b"foobar", status_code=200),
@@ -36,7 +36,7 @@ def test_get_cover_img_as_base64_string(full_recipe, mocker):
 
 def test_get_cover_img_as_base64_string_can_handle_404(full_recipe, mocker):
     p = PaprikaExporter()
-    recipe = Recipe.parse_obj(full_recipe)
+    recipe = Recipe.model_validate(full_recipe)
     mocker.patch(
         "kptncook.paprika.httpx.get",
         return_value=mocker.Mock(content=b"foobar", status_code=404),
@@ -55,7 +55,7 @@ def test_get_cover_img_as_base64_string_can_handle_404(full_recipe, mocker):
 
 def test_export_single_recipe(full_recipe, mocker):
     p = PaprikaExporter()
-    recipe = Recipe.parse_obj(full_recipe)
+    recipe = Recipe.model_validate(full_recipe)
     mocker.patch(
         "kptncook.paprika.httpx.get",
         return_value=mocker.Mock(content=b"foobar", status_code=200),
@@ -71,8 +71,8 @@ def test_export_single_recipe(full_recipe, mocker):
 
 def test_export_all_recipes(full_recipe, minimal, mocker):
     p = PaprikaExporter()
-    recipe1 = Recipe.parse_obj(full_recipe)
-    recipe2 = Recipe.parse_obj(minimal)
+    recipe1 = Recipe.model_validate(full_recipe)
+    recipe2 = Recipe.model_validate(minimal)
     mocker.patch(
         "kptncook.paprika.httpx.get",
         return_value=mocker.Mock(content=b"foobar", status_code=200),
@@ -86,7 +86,7 @@ def test_export_all_recipes(full_recipe, minimal, mocker):
 
 def test_get_cover(minimal):
     p = PaprikaExporter()
-    recipe = Recipe.parse_obj(minimal)
+    recipe = Recipe.model_validate(minimal)
     assert p.get_cover(image_list=list()) is None
 
     cover = p.get_cover(image_list=recipe.image_list)
@@ -106,7 +106,7 @@ def test_get_template_dir():
 
 def test_render(minimal):
     # happy path
-    recipe = Recipe.parse_obj(minimal)
+    recipe = Recipe.model_validate(minimal)
     r = ExportRenderer()
     json = r.render(template_name="paprika.jinja2.json", recipe=recipe)
     assert json == (

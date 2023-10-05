@@ -9,7 +9,7 @@ from datetime import date
 from pathlib import Path
 from typing import List  # noqa F401
 
-from pydantic import BaseModel, parse_file_as
+from pydantic import BaseModel, RootModel
 
 
 class RecipeInDb(BaseModel):
@@ -21,8 +21,14 @@ class RecipeInDb(BaseModel):
         return self.data["_id"]["$oid"]
 
 
-class RecipeListInDb(BaseModel):
-    __root__: list[RecipeInDb]
+class RecipeListInDb(RootModel):
+    root: list[RecipeInDb]
+
+    def __iter__(self):
+        return iter(self.root)
+
+    def __getitem__(self, item):
+        return self.root[item]
 
 
 class RecipeRepository:
@@ -50,16 +56,20 @@ class RecipeRepository:
         except AttributeError:
             # LocalPath in tests
             pass
-        models = RecipeListInDb(__root__=list(locked.values()))
+        models = RecipeListInDb.model_validate(locked.values())
         with self.path.open("w") as f:
-            f.write(models.json())
+            f.write(models.model_dump_json())
 
     def _fetch_all(self):
         """
         Fetch dict of pydantic models from json in self.path
         """
         try:
-            return parse_file_as(list[RecipeInDb], self.path)
+            if not self.path.exists():
+                return []
+            with self.path.open("r") as f:
+                recipes_in_db = RecipeListInDb.model_validate_json(f.read())
+            return recipes_in_db
         except FileNotFoundError:
             return []
 
@@ -87,4 +97,4 @@ class RecipeRepository:
         self._write_models(locked)
 
     def list(self):
-        return self._fetch_all()
+        return list(self._fetch_all())

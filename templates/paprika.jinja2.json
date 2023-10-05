@@ -5,7 +5,7 @@
    "servings":"2",
    "rating":0,
    "difficulty":"",
-   "ingredients":"{% for ingredient in recipe.ingredients %}{% if ingredient.quantity %}{{'{0:g}'.format(ingredient.quantity) }}{% endif %} {{ingredient.measure|default('',true)}} {{ingredient.ingredient.uncountableTitle.de|default('',true)}}\n{% endfor %}",
+   "ingredients":"{% for ingredient in recipe.ingredients %}{% if ingredient.quantity %}{{'{0:g}'.format(ingredient.quantity) }}{% endif %} {{ingredient.measure|default('',true)}} {{ingredient.ingredient.uncountable_title.de|default('',true)}}\n{% endfor %}",
    "notes":"",
    "created":"{{dtnow}}",
    "image_url":null,

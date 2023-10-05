@@ -29,10 +29,10 @@ class NameIsIdModel(BaseModel):
 
 
 class RecipeTag(NameIsIdModel):
-    slug: str | None
+    slug: str | None = None
     name: str
     group_id: UUID4 | None = Field(None, alias="groupId")
-    id: UUID4 | None
+    id: UUID4 | None = None
 
 
 class RecipeCategory(RecipeTag):
@@ -54,6 +54,7 @@ class RecipeFood(UnitFoodBase):
 
 
 class RecipeUnit(UnitFoodBase):
+    id: UUID4 | None = None
     fraction: bool = True
     abbreviation: str = ""
 
@@ -68,19 +69,19 @@ class RecipeIngredient(BaseModel):
 
 
 class RecipeSummary(BaseModel):
-    id: UUID4 | None
+    id: UUID4 | None = None
 
     user_id: UUID4 | None = Field(None, alias="userId")
     group_id: UUID4 | None = Field(None, alias="groupId")
 
     name: str | None
     slug: str = ""
-    image: Any | None
+    image: Any | None = None
     recipe_yield: str | None
 
     total_time: str | None = None
-    prep_time: str | None = None
-    cook_time: str | None = None
+    prep_time: str | int | None = None
+    cook_time: str | int | None = None
     perform_time: str | None = None
 
     description: str | None = ""
@@ -88,13 +89,13 @@ class RecipeSummary(BaseModel):
     tags: list[RecipeTag] | None = []
     # tags: list[RecipeTag | str] | None = []
     tools: list[RecipeTool] = []
-    rating: int | None
+    rating: int | None = None
     org_url: str | None = Field(None, alias="orgURL")
 
     recipe_ingredient: list[RecipeIngredient] | None = []
 
-    date_added: datetime.date | None
-    date_updated: datetime.datetime | None
+    date_added: datetime.date | None = None
+    date_updated: datetime.datetime | None = None
 
 
 class RecipeStep(BaseModel):
@@ -105,13 +106,13 @@ class RecipeStep(BaseModel):
 
 
 class Nutrition(BaseModel):
-    calories: str | None
-    fat_content: str | None
-    protein_content: str | None
-    carbohydrate_content: str | None
-    fiber_content: str | None
-    sodium_content: str | None
-    sugar_content: str | None
+    calories: str | int | None = None
+    fat_content: str | None = None
+    protein_content: str | None = None
+    carbohydrate_content: str | None = None
+    fiber_content: str | None = None
+    sodium_content: str | None = None
+    sugar_content: str | None = None
 
 
 class RecipeSettings(BaseModel):
@@ -320,7 +321,7 @@ class MealieApiClient:
         r = self.put(recipe_detail_path, data=recipe.json())
         print(r.text)
         r.raise_for_status()
-        return Recipe.parse_obj(r.json())
+        return Recipe.model_validate(r.json())
 
     def create_recipe(self, recipe):
         slug = self._post_recipe_trunk_and_get_slug(recipe.name)
@@ -339,14 +340,16 @@ class MealieApiClient:
 
         r = self.get("/recipes?page=1&perPage=50")
         r.raise_for_status()
-        all_recipes.extend([Recipe.parse_obj(recipe) for recipe in r.json()["items"]])
+        all_recipes.extend(
+            [Recipe.model_validate(recipe) for recipe in r.json()["items"]]
+        )
 
         page = 2
         while page <= r.json()["total_pages"]:
             r = self.get(f"/recipes?page={page}&perPage=50")
             r.raise_for_status()
             all_recipes.extend(
-                [Recipe.parse_obj(recipe) for recipe in r.json()["items"]]
+                [Recipe.model_validate(recipe) for recipe in r.json()["items"]]
             )
             page += 1
 
@@ -360,7 +363,7 @@ class MealieApiClient:
     def get_via_slug(self, slug):
         r = self.get(f"/recipes/{slug}")
         r.raise_for_status()
-        return Recipe.parse_obj(r.json())
+        return Recipe.model_validate(r.json())
 
 
 def kptncook_to_mealie_ingredients(kptncook_ingredients):
@@ -416,4 +419,5 @@ def kptncook_to_mealie(
         "tags": [RecipeTag(name="kptncook")],
         "extras": {"kptncook_id": kcin.id.oid, "source": "kptncook"},
     }
+    print("kwargs: ", kwargs)
     return RecipeWithImage(**kwargs)
