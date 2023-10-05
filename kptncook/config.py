@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     root: DirectoryPath = Field(Path.home() / ".kptncook", env="KPTNCOOK_HOME")
     kptncook_api_key: str
     kptncook_access_token: str | None = None
-    kptncook_api_url: AnyHttpUrl = "https://mobile.kptncook.com"
-    mealie_url: AnyHttpUrl = "http://localhost:9000/api"
+    kptncook_api_url: AnyHttpUrl = AnyHttpUrl("https://mobile.kptncook.com")
+    mealie_url: AnyHttpUrl = AnyHttpUrl("http://localhost:9000/api")
     mealie_username: str
     mealie_password: str
 

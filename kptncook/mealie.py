@@ -416,7 +416,7 @@ def kptncook_to_mealie(
         "recipe_instructions": kptncook_to_mealie_steps(kcin.steps, api_key),
         "recipe_ingredient": kptncook_to_mealie_ingredients(kcin.ingredients),
         "image_url": kcin.get_image_url(api_key),
-        "tags": [RecipeTag(name="kptncook")],
+        "tags": [RecipeTag.model_validate({"name": "kptncook", "group_id": None})],
         "extras": {"kptncook_id": kcin.id.oid, "source": "kptncook"},
     }
     print("kwargs: ", kwargs)
