@@ -1,3 +1,15 @@
+0.0.12 - 2023-10-21
+===================
+Ignore pydantic DeprecationWarnings.
+
+### Fixes
+- Fixed broken `KptnCookClient.to_url` method
+    - #23 use urljoin instead of f-string @ephes
+
+0.0.11 - 2023-10-05
+===================
+Pydantic >= 2 compatibility and Python 3.12 support.
+
 0.0.10 - 2023-02-26
 ===================
 Export recipes to [Paprika Recipe Manager](https://www.paprikaapp.com/)
