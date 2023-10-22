@@ -30,6 +30,7 @@ __all__ = [
     "list_recipes",
     "search_kptncook_recipe_by_id",
     "export_recipes_to_paprika",
+    "test"
 ]
 
 __version__ = "0.0.12"
