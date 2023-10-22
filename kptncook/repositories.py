@@ -58,7 +58,7 @@ class RecipeRepository:
             pass
         models = RecipeListInDb.model_validate(locked.values())
         with self.path.open("w") as f:
-            f.write(models.model_dump_json())
+            f.write(models.model_dump_json(), encoding="utf-8")
 
     def _fetch_all(self):
         """
