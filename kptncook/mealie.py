@@ -1,16 +1,19 @@
 import datetime
 import io
 import json
+import logging
 from getpass import getpass
 from pathlib import Path
 from typing import Any
 
 import httpx
-from pydantic import UUID4, BaseModel, Field, parse_obj_as
+from pydantic import UUID4, BaseModel, Field, ValidationError, parse_obj_as
 
 from .config import settings
 from .models import Image
 from .models import Recipe as KptnCookRecipe
+
+logger = logging.getLogger(__name__)
 
 
 class NameIsIdModel(BaseModel):
@@ -44,7 +47,7 @@ class RecipeTool(RecipeTag):
 
 
 class UnitFoodBase(NameIsIdModel):
-    id: UUID4 | None
+    id: UUID4 | None = None
     name: str
     description: str = ""
 
@@ -60,8 +63,8 @@ class RecipeUnit(UnitFoodBase):
 
 
 class RecipeIngredient(BaseModel):
-    title: str | None
-    note: str | None
+    title: str | None = None
+    note: str | None = None
     unit: RecipeUnit | None
     food: RecipeUnit | None
     disable_amount: bool = True
@@ -74,10 +77,10 @@ class RecipeSummary(BaseModel):
     user_id: UUID4 | None = Field(None, alias="userId")
     group_id: UUID4 | None = Field(None, alias="groupId")
 
-    name: str | None
+    name: str | None = None
     slug: str = ""
     image: Any | None = None
-    recipe_yield: str | None
+    recipe_yield: str | None = None
 
     total_time: str | None = None
     prep_time: str | int | None = None
@@ -102,7 +105,7 @@ class RecipeStep(BaseModel):
     title: str | None = ""
     text: str
     ingredientReferences: list[Any] = []
-    image: Image | None
+    image: Image | None = None
 
 
 class Nutrition(BaseModel):
@@ -139,7 +142,7 @@ class RecipeNote(BaseModel):
 class Recipe(RecipeSummary):
     recipe_ingredient: list[RecipeIngredient] = []
     recipe_instructions: list[RecipeStep] | None = []
-    nutrition: Nutrition | None
+    nutrition: Nutrition | None = None
 
     # Mealie Specific
     settings: RecipeSettings | None = RecipeSettings()
@@ -319,7 +322,6 @@ class MealieApiClient:
     def _update_recipe(self, recipe, slug):
         recipe_detail_path = f"/recipes/{slug}"
         r = self.put(recipe_detail_path, data=recipe.json())
-        print(r.text)
         r.raise_for_status()
         return Recipe.model_validate(r.json())
 
@@ -335,22 +337,33 @@ class MealieApiClient:
         recipe = self.enrich_recipe_with_step_images(recipe)
         return self._update_recipe(recipe, slug)
 
+    @staticmethod
+    def validate_recipes(recipes):
+        validated_recipes = []
+        for recipe in recipes:
+            try:
+                validated_recipe = Recipe.model_validate(recipe)
+                validated_recipes.append(validated_recipe)
+            except ValidationError as e:
+                logger.error(
+                    "Could not parse recipe {recipe_id}".format(recipe_id=recipe["id"])
+                )
+                logger.exception(e)
+                continue
+        return validated_recipes
+
     def get_all_recipes(self):
         all_recipes = []
 
         r = self.get("/recipes?page=1&perPage=50")
         r.raise_for_status()
-        all_recipes.extend(
-            [Recipe.model_validate(recipe) for recipe in r.json()["items"]]
-        )
+        all_recipes.extend(self.validate_recipes(r.json()["items"]))
 
         page = 2
         while page <= r.json()["total_pages"]:
             r = self.get(f"/recipes?page={page}&perPage=50")
             r.raise_for_status()
-            all_recipes.extend(
-                [Recipe.model_validate(recipe) for recipe in r.json()["items"]]
-            )
+            all_recipes.extend(self.validate_recipes(r.json()["items"]))
             page += 1
 
         return all_recipes
