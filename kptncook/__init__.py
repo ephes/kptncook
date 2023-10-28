@@ -32,7 +32,7 @@ __all__ = [
     "export_recipes_to_paprika",
 ]
 
-__version__ = "0.0.12"
+__version__ = "0.0.13"
 cli = typer.Typer()
 
 

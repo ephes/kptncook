@@ -1,3 +1,12 @@
+0.0.13 - 2023-10-28
+===================
+
+Pydantic2 compatibility.
+
+### Fixes
+- Fixed missing default values for mealie Recipe model
+    - #28 issue reported by @m4um4u1
+
 0.0.12 - 2023-10-21
 ===================
 Ignore pydantic DeprecationWarnings.
