@@ -1,7 +1,7 @@
 0.0.14 - 2023-10-30
 ===================
 
-Forgot some lines.
+Forgot some lines in the last release :-( thanks to @ca-dmin for reporting.
 
 0.0.13 - 2023-10-28
 ===================
