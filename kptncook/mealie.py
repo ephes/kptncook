@@ -131,12 +131,12 @@ class RecipeSettings(BaseModel):
 class RecipeAsset(BaseModel):
     name: str
     icon: str
-    file_name: str | None
+    file_name: str | None = None
 
 
 class RecipeNote(BaseModel):
     title: str
-    text: str | None
+    text: str | None = None
 
 
 class Recipe(RecipeSummary):
