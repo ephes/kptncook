@@ -54,7 +54,9 @@ PAPRIKA_RECIPE_TEMPLATE = """{
 
 
 class GeneratedData:
-    def __init__(self, cover_filename: str, cover_img: str, dtnow: str, hash_: str):
+    def __init__(
+        self, cover_filename: str | None, cover_img: str | None, dtnow: str, hash_: str
+    ):
         self.cover_filename = cover_filename
         self.cover_img = cover_img
         self.dtnow = dtnow
