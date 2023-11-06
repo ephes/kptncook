@@ -1,3 +1,12 @@
+0.0.15 - 2023-11-06
+===================
+
+Paprika export was broken. Thanks to @patryk-31 for reporting.
+
+### Fixes
+- The paprika export template was missing -> moved the template into the export module
+    - #29 issue reported by @m4um4u1
+
 0.0.14 - 2023-10-30
 ===================
 
