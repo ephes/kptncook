@@ -2,10 +2,9 @@ import os
 
 import httpx
 import pytest
-from jinja2.exceptions import TemplateNotFound
 
 from kptncook.models import Recipe
-from kptncook.paprika import ExportRenderer, PaprikaExporter
+from kptncook.paprika import GeneratedData, PaprikaExporter
 
 
 def test_asciify_string():
@@ -99,17 +98,17 @@ def test_get_cover(minimal):
         p.get_cover(image_list=dict())
 
 
-def test_get_template_dir():
-    r = ExportRenderer()
-    assert os.path.isdir(r.get_template_dir()) is True
-
-
-def test_render(minimal):
+def test_render(minimal, mocker):
     # happy path
     recipe = Recipe.model_validate(minimal)
-    r = ExportRenderer()
-    json = r.render(template_name="paprika.jinja2.json", recipe=recipe)
-    assert json == (
+    paprika_exporter = PaprikaExporter()
+    generated = GeneratedData("", "", "", "")
+    mocker.patch.object(
+        paprika_exporter, "get_generated_data", return_value=generated, autospec=True
+    )
+    export_data = paprika_exporter.get_export_data(recipes=[recipe])
+    [actual] = list(export_data.values())
+    expected = (
         "{\n"
         '   "uid":"5e5390e2740000cdf1381c64",\n'
         '   "name":"Minimal Recipe",\n'
@@ -136,6 +135,4 @@ def test_render(minimal):
         '   "categories":["Kptncook"]\n'
         "}"
     )
-    # invalid
-    with pytest.raises(TemplateNotFound):
-        r.render(template_name="invalid_template.jinja2.json", recipe=recipe)
+    assert actual == expected

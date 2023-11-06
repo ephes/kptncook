@@ -20,11 +20,45 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Template
 from unidecode import unidecode
 
 from kptncook.config import settings
 from kptncook.models import Image, Recipe
+
+PAPRIKA_RECIPE_TEMPLATE = """{
+   "uid":"{{recipe.id.oid}}",
+   "name":"{{recipe.localized_title.de}}",
+   "directions": "{% for step in recipe.steps %}{{step.title.de}}\\n{% endfor %}",
+   "servings":"2",
+   "rating":0,
+   "difficulty":"",
+   "ingredients":"{% for ingredient in recipe.ingredients %}{% if ingredient.quantity %}{{'{0:g}'.format(ingredient.quantity) }}{% endif %} {{ingredient.measure|default('',true)}} {{ingredient.ingredient.uncountable_title.de|default('',true)}}\n{% endfor %}",
+   "notes":"",
+   "created":"{{dtnow}}",
+   "image_url":null,
+   "cook_time":"{{recipe.cooking_time|default('',true)}}",
+   "prep_time":"{{recipe.preparation_time|default('',true)}}",
+   "source":"Kptncook",
+   "source_url":"",
+   "hash" : "{{hash}}",
+   "photo_hash":null,
+   "photos":[],
+   "photo": "{{cover_filename}}",
+   "nutritional_info":"{% for nutrient, amount in recipe.recipe_nutrition %}{{nutrient}}: {{amount}}\\n{% endfor %}",
+   "photo_data":"{{cover_img}}",
+   "photo_large":null,
+   "categories":["Kptncook"]
+}
+"""  # noqa: E501
+
+
+class GeneratedData:
+    def __init__(self, cover_filename: str, cover_img: str, dtnow: str, hash_: str):
+        self.cover_filename = cover_filename
+        self.cover_img = cover_img
+        self.dtnow = dtnow
+        self.hash = hash_
 
 
 class PaprikaExporter:
@@ -50,20 +84,24 @@ class PaprikaExporter:
         else:
             return "allrecipes.paprikarecipes"
 
+    def get_generated_data(self, recipe: Recipe) -> GeneratedData:
+        """Just to make testing easier and only have one method to mock in tests."""
+        cover_filename, cover_img = self.get_cover_img_as_base64_string(recipe=recipe)
+        dtnow = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        hash = secrets.token_hex(32)
+        return GeneratedData(cover_filename, cover_img, dtnow, hash)
+
     def get_export_data(self, recipes: list[Recipe]) -> dict[str, str]:
-        renderer = ExportRenderer()
+        template = Template(PAPRIKA_RECIPE_TEMPLATE, trim_blocks=True)
         export_data = dict()
         for recipe in recipes:
-            cover_filename, cover_img = self.get_cover_img_as_base64_string(
-                recipe=recipe
-            )
-            recipe_as_json = renderer.render(
-                template_name="paprika.jinja2.json",
+            generated = self.get_generated_data(recipe=recipe)
+            recipe_as_json = template.render(
                 recipe=recipe,
-                dtnow=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                cover_filename=cover_filename,
-                hash=secrets.token_hex(32),
-                cover_img=cover_img,
+                dtnow=generated.dtnow,
+                cover_filename=generated.cover_filename,
+                hash=generated.hash,
+                cover_img=generated.cover_img,
             )
             export_data[str(recipe.id.oid)] = recipe_as_json
         return export_data
@@ -126,22 +164,3 @@ class PaprikaExporter:
         except ValueError:
             return None
         return cover
-
-
-class ExportRenderer:
-    def render(self, template_name: str, recipe: Recipe, **kwargs) -> str:
-        environment = self.get_environment()
-        template = environment.get_template(template_name)
-        return template.render(recipe=recipe, **kwargs)
-
-    @staticmethod
-    def get_template_dir() -> str:
-        module_path = os.path.abspath(__file__)
-        real_path = os.path.realpath(module_path)
-        root_dir = os.path.dirname(os.path.dirname(real_path))
-        return os.path.join(root_dir, "templates")
-
-    def get_environment(self) -> Environment:
-        return Environment(
-            loader=FileSystemLoader(self.get_template_dir()), trim_blocks=True
-        )
