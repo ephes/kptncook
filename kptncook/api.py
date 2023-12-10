@@ -102,7 +102,10 @@ class KptnCookClient:
         Get recipes from list of ids.
         """
         payload = ids_to_payload(ids)
-        response = self.post(f"/recipes/search?kptnkey={self.api_key}", json=payload)
+        # timeout disabled because saving more than 999 favorites didn't work for @brotkrume
+        response = self.post(
+            f"/recipes/search?kptnkey={self.api_key}", json=payload, timeout=None
+        )
         response.raise_for_status()
         results = response.json()
         if results is None:
