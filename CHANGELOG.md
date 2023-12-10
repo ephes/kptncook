@@ -1,3 +1,10 @@
+0.0.17 - 2023-12-10
+===================
+
+### Features
+- Downloading more than 999 favorites from kptncook triggers timeout -> removed timeout
+    - #30 issue reported by @brotkrume
+
 0.0.16 - 2023-12-10
 ===================
 
