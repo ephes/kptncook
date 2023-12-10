@@ -32,7 +32,7 @@ __all__ = [
     "export_recipes_to_paprika",
 ]
 
-__version__ = "0.0.15"
+__version__ = "0.0.16"
 cli = typer.Typer()
 
 
@@ -191,12 +191,20 @@ def list_recipes():
 
 
 @cli.command(name="search-by-id")
-def search_kptncook_recipe_by_id(_id: str):
+def search_kptncook_recipe_by_id(id_: str):
     """
     Search for a recipe by id in kptncook api, id can be a sharing
     url or an oid for example, and add it to the local repository.
     """
-    parsed = parse_id(_id)
+    if id_.startswith(
+        "https://share.kptncook.com/"
+    ):  # sharing url -> use redirect location
+        r = httpx.get(id_)
+        if r.status_code not in (301, 302):
+            rprint("Could not get redirect location")
+            sys.exit(1)
+        id_ = r.headers["location"]
+    parsed = parse_id(id_)
     if parsed is None:
         rprint("Could not parse id")
         sys.exit(1)

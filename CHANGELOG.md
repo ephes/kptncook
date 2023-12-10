@@ -1,3 +1,10 @@
+0.0.16 - 2023-12-10
+===================
+
+### Features
+- If a sharing link is provided, get the recipe id from the redirect location
+    - #30 issue reported by @brotkrume
+
 0.0.15 - 2023-11-06
 ===================
 
