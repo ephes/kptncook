@@ -2,10 +2,9 @@ import os
 
 import httpx
 import pytest
-from jinja2.exceptions import TemplateNotFound
 
 from kptncook.models import Recipe
-from kptncook.paprika import ExportRenderer, PaprikaExporter
+from kptncook.paprika import GeneratedData, PaprikaExporter
 
 
 def test_asciify_string():
@@ -19,7 +18,7 @@ def test_asciify_string():
 
 def test_get_cover_img_as_base64_string(full_recipe, mocker):
     p = PaprikaExporter()
-    recipe = Recipe.parse_obj(full_recipe)
+    recipe = Recipe.model_validate(full_recipe)
     mocker.patch(
         "kptncook.paprika.httpx.get",
         return_value=mocker.Mock(content=b"foobar", status_code=200),
@@ -36,7 +35,7 @@ def test_get_cover_img_as_base64_string(full_recipe, mocker):
 
 def test_get_cover_img_as_base64_string_can_handle_404(full_recipe, mocker):
     p = PaprikaExporter()
-    recipe = Recipe.parse_obj(full_recipe)
+    recipe = Recipe.model_validate(full_recipe)
     mocker.patch(
         "kptncook.paprika.httpx.get",
         return_value=mocker.Mock(content=b"foobar", status_code=404),
@@ -55,7 +54,7 @@ def test_get_cover_img_as_base64_string_can_handle_404(full_recipe, mocker):
 
 def test_export_single_recipe(full_recipe, mocker):
     p = PaprikaExporter()
-    recipe = Recipe.parse_obj(full_recipe)
+    recipe = Recipe.model_validate(full_recipe)
     mocker.patch(
         "kptncook.paprika.httpx.get",
         return_value=mocker.Mock(content=b"foobar", status_code=200),
@@ -71,8 +70,8 @@ def test_export_single_recipe(full_recipe, mocker):
 
 def test_export_all_recipes(full_recipe, minimal, mocker):
     p = PaprikaExporter()
-    recipe1 = Recipe.parse_obj(full_recipe)
-    recipe2 = Recipe.parse_obj(minimal)
+    recipe1 = Recipe.model_validate(full_recipe)
+    recipe2 = Recipe.model_validate(minimal)
     mocker.patch(
         "kptncook.paprika.httpx.get",
         return_value=mocker.Mock(content=b"foobar", status_code=200),
@@ -86,7 +85,7 @@ def test_export_all_recipes(full_recipe, minimal, mocker):
 
 def test_get_cover(minimal):
     p = PaprikaExporter()
-    recipe = Recipe.parse_obj(minimal)
+    recipe = Recipe.model_validate(minimal)
     assert p.get_cover(image_list=list()) is None
 
     cover = p.get_cover(image_list=recipe.image_list)
@@ -99,17 +98,17 @@ def test_get_cover(minimal):
         p.get_cover(image_list=dict())
 
 
-def test_get_template_dir():
-    r = ExportRenderer()
-    assert os.path.isdir(r.get_template_dir()) is True
-
-
-def test_render(minimal):
+def test_render(minimal, mocker):
     # happy path
-    recipe = Recipe.parse_obj(minimal)
-    r = ExportRenderer()
-    json = r.render(template_name="paprika.jinja2.json", recipe=recipe)
-    assert json == (
+    recipe = Recipe.model_validate(minimal)
+    paprika_exporter = PaprikaExporter()
+    generated = GeneratedData("", "", "", "")
+    mocker.patch.object(
+        paprika_exporter, "get_generated_data", return_value=generated, autospec=True
+    )
+    export_data = paprika_exporter.get_export_data(recipes=[recipe])
+    [actual] = list(export_data.values())
+    expected = (
         "{\n"
         '   "uid":"5e5390e2740000cdf1381c64",\n'
         '   "name":"Minimal Recipe",\n'
@@ -136,6 +135,4 @@ def test_render(minimal):
         '   "categories":["Kptncook"]\n'
         "}"
     )
-    # invalid
-    with pytest.raises(TemplateNotFound):
-        r.render(template_name="invalid_template.jinja2.json", recipe=recipe)
+    assert actual == expected

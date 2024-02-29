@@ -2,6 +2,7 @@ import re
 from datetime import date
 from time import time
 from typing import Literal
+from urllib.parse import urljoin
 
 import httpx
 
@@ -31,7 +32,7 @@ class KptnCookClient:
     def __init__(
         self, base_url=settings.kptncook_api_url, api_key=settings.kptncook_api_key
     ):
-        self.base_url = base_url
+        self.base_url = str(base_url)
         self.headers = {
             "content-type": "application/json",
             "Accept": "application/vnd.kptncook.mobile-v8+json",
@@ -47,7 +48,7 @@ class KptnCookClient:
         return "Token" in self.headers
 
     def to_url(self, path):
-        return f"{self.base_url}{path}"
+        return urljoin(self.base_url, path)
 
     def __getattr__(self, name):
         """
@@ -68,7 +69,7 @@ class KptnCookClient:
         Get all recipes for today from kptncook api.
         """
         time_str = str(time())
-        response = self.get(f"/recipes/de/{time_str}?kptnkey={self.api_key}")
+        response = self.get(f"recipes/de/{time_str}?kptnkey={self.api_key}")
         response.raise_for_status()
         recipes = []
         today = date.today()
@@ -101,7 +102,10 @@ class KptnCookClient:
         Get recipes from list of ids.
         """
         payload = ids_to_payload(ids)
-        response = self.post(f"/recipes/search?kptnkey={self.api_key}", json=payload)
+        # timeout disabled because saving more than 999 favorites didn't work for @brotkrume
+        response = self.post(
+            f"/recipes/search?kptnkey={self.api_key}", json=payload, timeout=None
+        )
         response.raise_for_status()
         results = response.json()
         if results is None:

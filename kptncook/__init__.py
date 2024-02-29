@@ -32,7 +32,7 @@ __all__ = [
     "export_recipes_to_paprika",
 ]
 
-__version__ = "0.0.10"
+__version__ = "0.0.17"
 cli = typer.Typer()
 
 
@@ -79,7 +79,16 @@ def get_kptncook_recipes_from_repository() -> list[Recipe]:
     fs_repo = RecipeRepository(settings.root)
     recipes = []
     for repo_recipe in fs_repo.list():
-        recipes.append(Recipe.parse_obj(repo_recipe.data))
+        recipes.append(Recipe.model_validate(repo_recipe.data))
+        # try:
+        #     recipes.append(Recipe.model_validate(repo_recipe.data))
+        # except Exception as e:
+        #     print(f"Could not parse recipe {repo_recipe.id}: {e}")
+        #     for ingredient in repo_recipe.data.get("ingredients"):
+        #         uncountable_title = ingredient["ingredient"].get("uncountableTitle")
+        #         if uncountable_title is None:
+        #             print("ingredient: ", ingredient["ingredient"])
+        #     return []
     return recipes
 
 
@@ -90,7 +99,7 @@ def get_recipe_from_repository_by_oid(oid: str) -> list[Recipe]:
     :return: list
     """
     recipes = get_kptncook_recipes_from_repository()
-    return [(recipe) for num, recipe in enumerate(recipes) if recipe.id.oid == oid]
+    return [recipe for num, recipe in enumerate(recipes) if recipe.id.oid == oid]
 
 
 @cli.command(name="sync-with-mealie")
@@ -143,7 +152,7 @@ def backup_kptncook_favorites():
     Store kptncook favorites in local repository.
     """
     if settings.kptncook_access_token is None:
-        print("Please set KPTNCOOK_ACCESS_TOKEN in your environment or .env file")
+        rprint("Please set KPTNCOOK_ACCESS_TOKEN in your environment or .env file")
         sys.exit(1)
     client = KptnCookClient()
     favorites = client.list_favorites()
@@ -182,12 +191,20 @@ def list_recipes():
 
 
 @cli.command(name="search-by-id")
-def search_kptncook_recipe_by_id(_id: str):
+def search_kptncook_recipe_by_id(id_: str):
     """
     Search for a recipe by id in kptncook api, id can be a sharing
     url or an oid for example, and add it to the local repository.
     """
-    parsed = parse_id(_id)
+    if id_.startswith(
+        "https://share.kptncook.com/"
+    ):  # sharing url -> use redirect location
+        r = httpx.get(id_)
+        if r.status_code not in (301, 302):
+            rprint("Could not get redirect location")
+            sys.exit(1)
+        id_ = r.headers["location"]
+    parsed = parse_id(id_)
     if parsed is None:
         rprint("Could not parse id")
         sys.exit(1)

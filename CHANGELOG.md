@@ -1,3 +1,52 @@
+0.0.17 - 2023-12-10
+===================
+
+### Features
+- Downloading more than 999 favorites from kptncook triggers timeout -> removed timeout
+    - #30 issue reported by @brotkrume
+
+0.0.16 - 2023-12-10
+===================
+
+### Features
+- If a sharing link is provided, get the recipe id from the redirect location
+    - #30 issue reported by @brotkrume
+
+0.0.15 - 2023-11-06
+===================
+
+Paprika export was broken. Thanks to @patryk-31 for reporting.
+
+### Fixes
+- The paprika export template was missing -> moved the template into the export module
+    - #29 issue reported by @m4um4u1
+
+0.0.14 - 2023-10-30
+===================
+
+Forgot some lines in the last release :-( thanks to @ca-dmin for reporting.
+
+0.0.13 - 2023-10-28
+===================
+
+Pydantic2 compatibility.
+
+### Fixes
+- Fixed missing default values for mealie Recipe model
+    - #28 issue reported by @m4um4u1
+
+0.0.12 - 2023-10-21
+===================
+Ignore pydantic DeprecationWarnings.
+
+### Fixes
+- Fixed broken `KptnCookClient.to_url` method
+    - #23 use urljoin instead of f-string @ephes
+
+0.0.11 - 2023-10-05
+===================
+Pydantic >= 2 compatibility and Python 3.12 support.
+
 0.0.10 - 2023-02-26
 ===================
 Export recipes to [Paprika Recipe Manager](https://www.paprikaapp.com/)

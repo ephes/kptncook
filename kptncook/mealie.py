@@ -1,16 +1,19 @@
 import datetime
 import io
 import json
+import logging
 from getpass import getpass
 from pathlib import Path
 from typing import Any
 
 import httpx
-from pydantic import UUID4, BaseModel, Field, parse_obj_as
+from pydantic import UUID4, BaseModel, Field, ValidationError, parse_obj_as
 
 from .config import settings
 from .models import Image
 from .models import Recipe as KptnCookRecipe
+
+logger = logging.getLogger(__name__)
 
 
 class NameIsIdModel(BaseModel):
@@ -29,10 +32,10 @@ class NameIsIdModel(BaseModel):
 
 
 class RecipeTag(NameIsIdModel):
-    slug: str | None
+    slug: str | None = None
     name: str
     group_id: UUID4 | None = Field(None, alias="groupId")
-    id: UUID4 | None
+    id: UUID4 | None = None
 
 
 class RecipeCategory(RecipeTag):
@@ -44,7 +47,7 @@ class RecipeTool(RecipeTag):
 
 
 class UnitFoodBase(NameIsIdModel):
-    id: UUID4 | None
+    id: UUID4 | None = None
     name: str
     description: str = ""
 
@@ -54,13 +57,14 @@ class RecipeFood(UnitFoodBase):
 
 
 class RecipeUnit(UnitFoodBase):
+    id: UUID4 | None = None
     fraction: bool = True
     abbreviation: str = ""
 
 
 class RecipeIngredient(BaseModel):
-    title: str | None
-    note: str | None
+    title: str | None = None
+    note: str | None = None
     unit: RecipeUnit | None
     food: RecipeUnit | None
     disable_amount: bool = True
@@ -68,19 +72,19 @@ class RecipeIngredient(BaseModel):
 
 
 class RecipeSummary(BaseModel):
-    id: UUID4 | None
+    id: UUID4 | None = None
 
     user_id: UUID4 | None = Field(None, alias="userId")
     group_id: UUID4 | None = Field(None, alias="groupId")
 
-    name: str | None
+    name: str | None = None
     slug: str = ""
-    image: Any | None
-    recipe_yield: str | None
+    image: Any | None = None
+    recipe_yield: str | None = None
 
     total_time: str | None = None
-    prep_time: str | None = None
-    cook_time: str | None = None
+    prep_time: str | int | None = None
+    cook_time: str | int | None = None
     perform_time: str | None = None
 
     description: str | None = ""
@@ -88,30 +92,30 @@ class RecipeSummary(BaseModel):
     tags: list[RecipeTag] | None = []
     # tags: list[RecipeTag | str] | None = []
     tools: list[RecipeTool] = []
-    rating: int | None
+    rating: int | None = None
     org_url: str | None = Field(None, alias="orgURL")
 
     recipe_ingredient: list[RecipeIngredient] | None = []
 
-    date_added: datetime.date | None
-    date_updated: datetime.datetime | None
+    date_added: datetime.date | None = None
+    date_updated: datetime.datetime | None = None
 
 
 class RecipeStep(BaseModel):
     title: str | None = ""
     text: str
     ingredientReferences: list[Any] = []
-    image: Image | None
+    image: Image | None = None
 
 
 class Nutrition(BaseModel):
-    calories: str | None
-    fat_content: str | None
-    protein_content: str | None
-    carbohydrate_content: str | None
-    fiber_content: str | None
-    sodium_content: str | None
-    sugar_content: str | None
+    calories: str | int | None = None
+    fat_content: str | None = None
+    protein_content: str | None = None
+    carbohydrate_content: str | None = None
+    fiber_content: str | None = None
+    sodium_content: str | None = None
+    sugar_content: str | None = None
 
 
 class RecipeSettings(BaseModel):
@@ -127,18 +131,18 @@ class RecipeSettings(BaseModel):
 class RecipeAsset(BaseModel):
     name: str
     icon: str
-    file_name: str | None
+    file_name: str | None = None
 
 
 class RecipeNote(BaseModel):
     title: str
-    text: str | None
+    text: str | None = None
 
 
 class Recipe(RecipeSummary):
     recipe_ingredient: list[RecipeIngredient] = []
     recipe_instructions: list[RecipeStep] | None = []
-    nutrition: Nutrition | None
+    nutrition: Nutrition | None = None
 
     # Mealie Specific
     settings: RecipeSettings | None = RecipeSettings()
@@ -318,9 +322,8 @@ class MealieApiClient:
     def _update_recipe(self, recipe, slug):
         recipe_detail_path = f"/recipes/{slug}"
         r = self.put(recipe_detail_path, data=recipe.json())
-        print(r.text)
         r.raise_for_status()
-        return Recipe.parse_obj(r.json())
+        return Recipe.model_validate(r.json())
 
     def create_recipe(self, recipe):
         slug = self._post_recipe_trunk_and_get_slug(recipe.name)
@@ -334,20 +337,33 @@ class MealieApiClient:
         recipe = self.enrich_recipe_with_step_images(recipe)
         return self._update_recipe(recipe, slug)
 
+    @staticmethod
+    def validate_recipes(recipes):
+        validated_recipes = []
+        for recipe in recipes:
+            try:
+                validated_recipe = Recipe.model_validate(recipe)
+                validated_recipes.append(validated_recipe)
+            except ValidationError as e:
+                logger.error(
+                    "Could not parse recipe {recipe_id}".format(recipe_id=recipe["id"])
+                )
+                logger.exception(e)
+                continue
+        return validated_recipes
+
     def get_all_recipes(self):
         all_recipes = []
 
         r = self.get("/recipes?page=1&perPage=50")
         r.raise_for_status()
-        all_recipes.extend([Recipe.parse_obj(recipe) for recipe in r.json()["items"]])
+        all_recipes.extend(self.validate_recipes(r.json()["items"]))
 
         page = 2
         while page <= r.json()["total_pages"]:
             r = self.get(f"/recipes?page={page}&perPage=50")
             r.raise_for_status()
-            all_recipes.extend(
-                [Recipe.parse_obj(recipe) for recipe in r.json()["items"]]
-            )
+            all_recipes.extend(self.validate_recipes(r.json()["items"]))
             page += 1
 
         return all_recipes
@@ -360,7 +376,7 @@ class MealieApiClient:
     def get_via_slug(self, slug):
         r = self.get(f"/recipes/{slug}")
         r.raise_for_status()
-        return Recipe.parse_obj(r.json())
+        return Recipe.model_validate(r.json())
 
 
 def kptncook_to_mealie_ingredients(kptncook_ingredients):
@@ -413,7 +429,8 @@ def kptncook_to_mealie(
         "recipe_instructions": kptncook_to_mealie_steps(kcin.steps, api_key),
         "recipe_ingredient": kptncook_to_mealie_ingredients(kcin.ingredients),
         "image_url": kcin.get_image_url(api_key),
-        "tags": [RecipeTag(name="kptncook")],
+        "tags": [RecipeTag.model_validate({"name": "kptncook", "group_id": None})],
         "extras": {"kptncook_id": kcin.id.oid, "source": "kptncook"},
     }
+    print("kwargs: ", kwargs)
     return RecipeWithImage(**kwargs)

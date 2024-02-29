@@ -2,7 +2,7 @@
 All the domain models for kptncook live here.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 def to_camel(string: str) -> str:
@@ -16,11 +16,11 @@ def to_camel(string: str) -> str:
 
 
 class LocalizedString(BaseModel):
-    en: str | None
-    de: str | None
-    es: str | None
-    fr: str | None
-    pt: str | None
+    en: str | None = None
+    de: str | None = None
+    es: str | None = None
+    fr: str | None = None
+    pt: str | None = None
 
 
 class Nutrition(BaseModel):
@@ -32,28 +32,36 @@ class Nutrition(BaseModel):
 
 class Image(BaseModel):
     name: str
-    type: str | None
+    type: str | None = None
     url: str
 
     def get_image_with_api_key_url(self, api_key: str) -> "Image":
         url_with_key = f"{self.url}?kptnkey={api_key}"
-        kwargs = self.dict() | {"url": url_with_key}
+        kwargs = self.model_dump() | {"url": url_with_key}
         return Image(**kwargs)
 
 
 class IngredientDetails(BaseModel):
     typ: str
     localized_title: LocalizedString
-    uncountableTitle: LocalizedString
+    number_title: LocalizedString
+    uncountable_title: LocalizedString | None = None
     category: str
+
+    @model_validator(mode="before")
+    def fix_json_errors(cls, values):
+        if "uncountableTitle" not in values or values["uncountableTitle"] is None:
+            if "numberTitle" in values:
+                values["uncountableTitle"] = values["numberTitle"]
+        return values
 
     class Config:
         alias_generator = to_camel
 
 
 class Ingredient(BaseModel):
-    quantity: float | None
-    measure: str | None
+    quantity: float | None = None
+    measure: str | None = None
     ingredient: IngredientDetails
 
 
@@ -72,7 +80,7 @@ class Recipe(BaseModel):
     country: str
     author_comment: LocalizedString
     preparation_time: int
-    cooking_time: int | None
+    cooking_time: int | None = None
     recipe_nutrition: Nutrition
     steps: list[RecipeStep] = Field(..., alias="steps")
     image_list: list[Image]
