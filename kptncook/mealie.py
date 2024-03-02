@@ -216,18 +216,22 @@ class MealieApiClient:
         )
         r.raise_for_status()
 
-        return r.json()["fileName"]
+        return r.json()
 
     @staticmethod
     def _build_recipestep_text(recipe_uuid, text, image_name):
         return f'{text} <img src="/api/media/recipes/{recipe_uuid}/assets/{image_name}" height="100%" width="100%"/>'
 
     def enrich_recipe_with_step_images(self, recipe):
+        assets = []
         for instruction in recipe.recipe_instructions:
-            uploaded_image_name = self.upload_asset(recipe.slug, instruction.image)
+            asset_properties = self.upload_asset(recipe.slug, instruction.image)
+            uploaded_image_name = asset_properties["fileName"]
             instruction.text = self._build_recipestep_text(
                 recipe.id, instruction.text, uploaded_image_name
             )
+            assets.append(RecipeAsset(name=asset_properties["name"], icon=asset_properties["icon"], file_name=asset_properties["fileName"]))
+        recipe.assets = assets
         return recipe
 
     def _post_recipe_trunk_and_get_slug(self, recipe_name):
