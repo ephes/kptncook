@@ -1,3 +1,11 @@
+0.0.20 - 2024-09-13
+===================
+
+### Fixes
+
+- #23 make recipe export skip invalid recipes @ephes
+- #32 remove unescaped newlines from json for paprika export @ephes
+
 0.0.19 - 2024-03-12
 ===================
 
