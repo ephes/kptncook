@@ -77,7 +77,6 @@ class RecipeStep(BaseModel):
 class Recipe(BaseModel):
     id: RecipeId = Field(..., alias="_id")
     localized_title: LocalizedString
-    country: str
     author_comment: LocalizedString
     preparation_time: int
     cooking_time: int | None = None
