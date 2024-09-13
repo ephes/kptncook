@@ -1,3 +1,4 @@
+import json
 import os
 
 import httpx
@@ -108,6 +109,7 @@ def test_render(minimal, mocker):
     )
     export_data = paprika_exporter.get_export_data(recipes=[recipe])
     [actual] = list(export_data.values())
+    print("actual: ", actual)
     expected = (
         "{\n"
         '   "uid":"5e5390e2740000cdf1381c64",\n'
@@ -135,4 +137,23 @@ def test_render(minimal, mocker):
         '   "categories":["Kptncook"]\n'
         "}"
     )
+    expected = PaprikaExporter.unescaped_newline.sub(" ", expected)
     assert actual == expected
+
+
+def test_filter_unescaped_newline(minimal):
+    """
+    Test that unescaped newlines are converted to a space.
+
+    Unescaped newlines in the recipe title are invalid in JSON, so
+    Paprika would not be able to import the recipe.
+    """
+    # Given a recipe with an unescaped newline in the title
+    recipe = Recipe.model_validate(minimal)
+    recipe.steps[0].title.de = "Alles parat?\n"  # add unescaped newline
+    paprika_exporter = PaprikaExporter()
+    # When the recipe is rendered as a JSON string
+    json_string = paprika_exporter.get_recipe_as_json_string(recipe=recipe)
+    data = json.loads(json_string)
+    # Then the unescaped newline is converted to a space
+    assert data["directions"] == "Alles parat? \n"

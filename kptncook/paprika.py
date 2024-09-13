@@ -6,9 +6,11 @@ file format:
     2. compress file as gz: naming convention: a_recipe_name.paprikarecipe (Singular)
     3. zip this file as some_recipes.paprikarecipes (Plural!)
 """
+
 import base64
 import glob
 import gzip
+import json
 import os
 import re
 import secrets
@@ -64,6 +66,10 @@ class GeneratedData:
 
 
 class PaprikaExporter:
+    invalid_control_chars = re.compile(r"[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]")
+    template = Template(PAPRIKA_RECIPE_TEMPLATE, trim_blocks=True)
+    unescaped_newline = re.compile(r"(?<!\\)\n")
+
     def export(self, recipes: list[Recipe]) -> str:
         export_data = self.get_export_data(recipes=recipes)
         filename = self.get_export_filename(export_data=export_data, recipes=recipes)
@@ -93,19 +99,28 @@ class PaprikaExporter:
         hash = secrets.token_hex(32)
         return GeneratedData(cover_filename, cover_img, dtnow, hash)
 
+    def get_recipe_as_json_string(self, recipe: Recipe) -> str:
+        generated = self.get_generated_data(recipe=recipe)
+        recipe_as_json = self.template.render(
+            recipe=recipe,
+            dtnow=generated.dtnow,
+            cover_filename=generated.cover_filename,
+            hash=generated.hash,
+            cover_img=generated.cover_img,
+        )
+        recipe_as_json = self.invalid_control_chars.sub("", recipe_as_json)
+        recipe_as_json = self.unescaped_newline.sub(" ", recipe_as_json)
+        json.loads(recipe_as_json)  # check if valid json
+        return recipe_as_json
+
     def get_export_data(self, recipes: list[Recipe]) -> dict[str, str]:
-        template = Template(PAPRIKA_RECIPE_TEMPLATE, trim_blocks=True)
         export_data = dict()
         for recipe in recipes:
-            generated = self.get_generated_data(recipe=recipe)
-            recipe_as_json = template.render(
-                recipe=recipe,
-                dtnow=generated.dtnow,
-                cover_filename=generated.cover_filename,
-                hash=generated.hash,
-                cover_img=generated.cover_img,
-            )
-            export_data[str(recipe.id.oid)] = recipe_as_json
+            try:
+                recipe_as_json = self.get_recipe_as_json_string(recipe=recipe)
+                export_data[str(recipe.id.oid)] = recipe_as_json
+            except json.JSONDecodeError as e:
+                print(f"Could not parse recipe {recipe.id.oid}: {e}")
         return export_data
 
     def move_to_target_dir(self, source: str, target: str) -> str:
