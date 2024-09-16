@@ -1,3 +1,8 @@
+0.0.21 - 2024-09-16
+===================
+
+- #39 fixed encoding issues on windows by setting utf-8 encoding as default @ephes
+
 0.0.20 - 2024-09-13
 ===================
 
