@@ -4,6 +4,7 @@ Repositories to store recipes.
 Atm only uses json. But this could also be a sqlite or a
 remote api, maybe mealie... hmm.
 """
+
 import shutil
 from datetime import date
 from pathlib import Path
@@ -57,7 +58,7 @@ class RecipeRepository:
             # LocalPath in tests
             pass
         models = RecipeListInDb.model_validate(locked.values())
-        with self.path.open("w") as f:
+        with self.path.open("w", encoding="utf-8") as f:
             f.write(models.model_dump_json())
 
     def _fetch_all(self):
@@ -67,7 +68,7 @@ class RecipeRepository:
         try:
             if not self.path.exists():
                 return []
-            with self.path.open("r") as f:
+            with self.path.open("r", encoding="utf-8") as f:
                 recipes_in_db = RecipeListInDb.model_validate_json(f.read())
             return recipes_in_db
         except FileNotFoundError:
