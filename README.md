@@ -42,7 +42,7 @@ Commands:
   save-todays-recipes       Save recipes for today from kptncook site.
   search-by-id              Search for a recipe by id in kptncook api, id...
   sync                      Fetch recipes for today from api, save them to...
-  sync-with-mealie          Sync locally saced recipes with mealie.
+  sync-with-mealie          Sync locally saved recipes with mealie.
   export-recipes-to-paprika  Export a recipe by id or all recipes to Paprika app
 ```
 
