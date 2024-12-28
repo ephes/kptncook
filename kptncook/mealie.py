@@ -397,7 +397,7 @@ def kptncook_to_mealie_ingredients(kptncook_ingredients):
             if ingredient.measure is not None:
                 measure = {"name": ingredient.measure}
         mealie_ingredient = RecipeIngredient(
-            title=title, quantity=quantity, unit=measure, note=note, food=food
+            title=None, quantity=quantity, unit=measure, note=note, food=food
         )
         mealie_ingredients.append(mealie_ingredient)
     return mealie_ingredients
