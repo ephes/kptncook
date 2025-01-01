@@ -187,11 +187,17 @@ class MealieApiClient:
         r.raise_for_status()
         return r.json()["access_token"]
 
+    def _set_token_header(self, access_token: str):
+        self.headers = {"authorization": f"Bearer {access_token}"}
+
     def login(self, username: str = "admin", password: str = ""):
         if password == "":
             password = getpass()
         access_token = self.fetch_api_token(username, password)
-        self.headers = {"authorization": f"Bearer {access_token}"}
+        self._set_token_header(access_token)
+
+    def login_with_token(self, token: str):
+        self._set_token_header(token)
 
     def upload_asset(self, recipe_slug, image: Image):
         # download image

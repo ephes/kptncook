@@ -80,7 +80,11 @@ def save_todays_recipes():
 
 def get_mealie_client() -> MealieApiClient:
     client = MealieApiClient(settings.mealie_url)
-    client.login(settings.mealie_username, settings.mealie_password)
+
+    if settings.mealie_api_token:
+        client.login_with_token(settings.mealie_api_token)
+    else:
+        client.login(settings.mealie_username, settings.mealie_password)
     return client
 
 
