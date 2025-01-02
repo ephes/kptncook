@@ -2,12 +2,10 @@
 Base settings for kptncook.
 """
 
-import sys
 from pathlib import Path
 
-from pydantic import AnyHttpUrl, DirectoryPath, Field, ValidationError, field_validator
+from pydantic import AnyHttpUrl, DirectoryPath, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from rich import print as rprint
 
 
 class Settings(BaseSettings):
@@ -30,10 +28,3 @@ class Settings(BaseSettings):
     def root_must_exist(cls, path: Path) -> Path:
         path.mkdir(parents=True, exist_ok=True)
         return path
-
-
-try:
-    settings = Settings()  # type: ignore
-except ValidationError as e:
-    rprint("validation error: ", e)
-    sys.exit(1)

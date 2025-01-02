@@ -8,8 +8,8 @@ from kptncook.models import Recipe
 from kptncook.paprika import GeneratedData, PaprikaExporter
 
 
-def test_asciify_string():
-    p = PaprikaExporter()
+def test_asciify_string(test_settings):
+    p = PaprikaExporter(test_settings.kptncook_api_key)
     assert (
         p.asciify_string("Süßkartoffeln mit Taboulé & Dip")
         == "Susskartoffeln_mit_Taboule___Dip"
@@ -17,8 +17,8 @@ def test_asciify_string():
     assert p.asciify_string("Ölige_Ähren") == "Olige_Ahren"
 
 
-def test_get_cover_img_as_base64_string(full_recipe, mocker):
-    p = PaprikaExporter()
+def test_get_cover_img_as_base64_string(full_recipe, mocker, test_settings):
+    p = PaprikaExporter(test_settings.kptncook_api_key)
     recipe = Recipe.model_validate(full_recipe)
     mocker.patch(
         "kptncook.paprika.httpx.get",
@@ -34,8 +34,10 @@ def test_get_cover_img_as_base64_string(full_recipe, mocker):
         p.get_cover_img_as_base64_string(recipe=recipe)
 
 
-def test_get_cover_img_as_base64_string_can_handle_404(full_recipe, mocker):
-    p = PaprikaExporter()
+def test_get_cover_img_as_base64_string_can_handle_404(
+    full_recipe, mocker, test_settings
+):
+    p = PaprikaExporter(test_settings.kptncook_api_key)
     recipe = Recipe.model_validate(full_recipe)
     mocker.patch(
         "kptncook.paprika.httpx.get",
@@ -53,8 +55,8 @@ def test_get_cover_img_as_base64_string_can_handle_404(full_recipe, mocker):
     assert p.get_cover_img_as_base64_string(recipe=recipe) == (None, None)
 
 
-def test_export_single_recipe(full_recipe, mocker):
-    p = PaprikaExporter()
+def test_export_single_recipe(full_recipe, mocker, test_settings):
+    p = PaprikaExporter(test_settings.kptncook_api_key)
     recipe = Recipe.model_validate(full_recipe)
     mocker.patch(
         "kptncook.paprika.httpx.get",
@@ -69,8 +71,8 @@ def test_export_single_recipe(full_recipe, mocker):
         os.unlink(expected_file)
 
 
-def test_export_all_recipes(full_recipe, minimal, mocker):
-    p = PaprikaExporter()
+def test_export_all_recipes(full_recipe, minimal, mocker, test_settings):
+    p = PaprikaExporter(test_settings.kptncook_api_key)
     recipe1 = Recipe.model_validate(full_recipe)
     recipe2 = Recipe.model_validate(minimal)
     mocker.patch(
@@ -84,8 +86,8 @@ def test_export_all_recipes(full_recipe, minimal, mocker):
         os.unlink(expected_file)
 
 
-def test_get_cover(minimal):
-    p = PaprikaExporter()
+def test_get_cover(minimal, test_settings):
+    p = PaprikaExporter(test_settings.kptncook_api_key)
     recipe = Recipe.model_validate(minimal)
     assert p.get_cover(image_list=list()) is None
 
@@ -99,10 +101,10 @@ def test_get_cover(minimal):
         p.get_cover(image_list=dict())
 
 
-def test_render(minimal, mocker):
+def test_render(minimal, mocker, test_settings):
     # happy path
     recipe = Recipe.model_validate(minimal)
-    paprika_exporter = PaprikaExporter()
+    paprika_exporter = PaprikaExporter(test_settings.kptncook_api_key)
     generated = GeneratedData("", "", "", "")
     mocker.patch.object(
         paprika_exporter, "get_generated_data", return_value=generated, autospec=True
@@ -141,7 +143,7 @@ def test_render(minimal, mocker):
     assert actual == expected
 
 
-def test_filter_unescaped_newline(minimal):
+def test_filter_unescaped_newline(minimal, test_settings):
     """
     Test that unescaped newlines are converted to a space.
 
@@ -151,7 +153,7 @@ def test_filter_unescaped_newline(minimal):
     # Given a recipe with an unescaped newline in the title
     recipe = Recipe.model_validate(minimal)
     recipe.steps[0].title.de = "Alles parat?\n"  # add unescaped newline
-    paprika_exporter = PaprikaExporter()
+    paprika_exporter = PaprikaExporter(test_settings.kptncook_api_key)
     # When the recipe is rendered as a JSON string
     json_string = paprika_exporter.get_recipe_as_json_string(recipe=recipe)
     data = json.loads(json_string)

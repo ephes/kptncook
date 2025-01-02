@@ -6,7 +6,6 @@ from urllib.parse import urljoin
 
 import httpx
 
-from .config import settings
 from .repositories import RecipeInDb
 
 
@@ -29,9 +28,7 @@ class KptnCookClient:
     Client for the kptncook api.
     """
 
-    def __init__(
-        self, base_url=settings.kptncook_api_url, api_key=settings.kptncook_api_key
-    ):
+    def __init__(self, base_url, api_key, access_token=None):
         self.base_url = str(base_url)
         self.headers = {
             "content-type": "application/json",
@@ -40,8 +37,8 @@ class KptnCookClient:
             "hasIngredients": "yes",
         }
         self.api_key = api_key
-        if settings.kptncook_access_token is not None:
-            self.headers["Token"] = settings.kptncook_access_token
+        if access_token is not None:
+            self.headers["Token"] = access_token
 
     @property
     def logged_in(self):

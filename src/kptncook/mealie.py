@@ -9,7 +9,6 @@ from typing import Any
 import httpx
 from pydantic import UUID4, BaseModel, Field, ValidationError, parse_obj_as
 
-from .config import settings
 from .models import Image
 from .models import Recipe as KptnCookRecipe
 
@@ -418,9 +417,7 @@ def kptncook_to_mealie_steps(steps, api_key):
     return mealie_instructions
 
 
-def kptncook_to_mealie(
-    kcin: KptnCookRecipe, api_key: str = settings.kptncook_api_key
-) -> RecipeWithImage:
+def kptncook_to_mealie(kcin: KptnCookRecipe, api_key: str) -> RecipeWithImage:
     kwargs = {
         "name": kcin.localized_title.de,
         "notes": [

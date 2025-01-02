@@ -9,11 +9,13 @@ from typing import Optional
 
 import httpx
 import typer
+from pydantic import ValidationError
 from rich import print as rprint
 from rich.pretty import pprint
 
+from kptncook.config import Settings
+
 from .api import KptnCookClient, parse_id
-from .config import settings
 from .mealie import MealieApiClient, kptncook_to_mealie
 from .models import Recipe
 from .paprika import PaprikaExporter
@@ -32,7 +34,26 @@ __all__ = [
 ]
 
 __version__ = "0.0.25"
-cli = typer.Typer()
+
+
+def load_settings():
+    global settings
+    try:
+        settings = Settings()  # type: ignore
+    except ValidationError as e:
+        rprint("validation error: ", e)
+        sys.exit(1)
+
+
+def create_kptncook_client():
+    return KptnCookClient(
+        base_url=settings.kptncook_api_url,
+        api_key=settings.kptncook_api_key,
+        access_token=settings.kptncook_access_token,
+    )
+
+
+cli = typer.Typer(callback=load_settings)
 
 
 @cli.command(name="kptncook-today")
@@ -40,7 +61,7 @@ def list_kptncook_today():
     """
     List all recipes for today from the kptncook site.
     """
-    client = KptnCookClient()
+    client = create_kptncook_client()
     all_recipes = client.list_today()
     for recipe in all_recipes:
         pprint(recipe)
@@ -53,7 +74,7 @@ def save_todays_recipes():
     """
     fs_repo = RecipeRepository(settings.root)
     if fs_repo.needs_to_be_synced(date.today()):
-        client = KptnCookClient()
+        client = create_kptncook_client()
         fs_repo.add_list(client.list_today())
 
 
@@ -113,7 +134,9 @@ def sync_with_mealie():
         sys.exit(1)
     kptncook_recipes_from_mealie = get_kptncook_recipes_from_mealie(client)
     recipes = get_kptncook_recipes_from_repository()
-    kptncook_recipes_from_repository = [kptncook_to_mealie(r) for r in recipes]
+    kptncook_recipes_from_repository = [
+        kptncook_to_mealie(r, settings.kptncook_api_key) for r in recipes
+    ]
     ids_in_mealie = {r.extras["kptncook_id"] for r in kptncook_recipes_from_mealie}
     ids_from_api = {r.extras["kptncook_id"] for r in kptncook_recipes_from_repository}
     ids_to_add = ids_from_api - ids_in_mealie
@@ -153,7 +176,7 @@ def backup_kptncook_favorites():
     if settings.kptncook_access_token is None:
         rprint("Please set KPTNCOOK_ACCESS_TOKEN in your environment or .env file")
         sys.exit(1)
-    client = KptnCookClient()
+    client = create_kptncook_client()
     favorites = client.list_favorites()
     rprint(f"Found {len(favorites)} favorites")
     ids = [("oid", oid["identifier"]) for oid in favorites]
@@ -191,7 +214,7 @@ def get_kptncook_access_token():
         rprint("[red]Failed to get credentials[/red]")
         sys.exit(1)
 
-    client = KptnCookClient()
+    client = create_kptncook_client()
     try:
         access_token = client.get_access_token(username, password)
         rprint("[green]✓ Access token retrieved successfully[/green]")
@@ -231,7 +254,7 @@ def search_kptncook_recipe_by_id(id_: str):
         sys.exit(1)
     id_type, id_value = parsed
     rprint(id_type, id_value)
-    client = KptnCookClient()
+    client = create_kptncook_client()
     recipes = client.get_by_ids([(id_type, id_value)])
     if len(recipes) == 0:
         rprint("Could not find recipe")
@@ -258,7 +281,7 @@ def export_recipes_to_paprika(_id: OptionalId = typer.Argument(None)):
         recipes = get_recipe_by_id(_id)
     else:
         recipes = get_kptncook_recipes_from_repository()
-    exporter = PaprikaExporter()
+    exporter = PaprikaExporter(settings.kptncook_api_key)
     filename = exporter.export(recipes=recipes)
     rprint(
         "\n The data was exported to '%s'. Open the export file with the Paprika App.\n"

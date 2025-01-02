@@ -25,7 +25,6 @@ import httpx
 from jinja2 import Template
 from unidecode import unidecode
 
-from kptncook.config import settings
 from kptncook.models import Image, Recipe
 
 PAPRIKA_RECIPE_TEMPLATE = """{
@@ -69,6 +68,9 @@ class PaprikaExporter:
     invalid_control_chars = re.compile(r"[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]")
     template = Template(PAPRIKA_RECIPE_TEMPLATE, trim_blocks=True)
     unescaped_newline = re.compile(r"(?<!\\)\n")
+
+    def __init__(self, kptncook_api_key):
+        self.kptncook_api_key = kptncook_api_key
 
     def export(self, recipes: list[Recipe]) -> str:
         export_data = self.get_export_data(recipes=recipes)
@@ -155,7 +157,7 @@ class PaprikaExporter:
         cover = self.get_cover(image_list=recipe.image_list)
         if cover is None:
             raise ValueError("No cover image found")
-        cover_url = recipe.get_image_url(api_key=settings.kptncook_api_key)
+        cover_url = recipe.get_image_url(api_key=self.kptncook_api_key)
         if not isinstance(cover_url, str):
             raise ValueError("Cover URL must be a string")
         try:
