@@ -1,7 +1,35 @@
+import contextlib
 import json
+import os
 from pathlib import Path
 
 import pytest
+
+import kptncook.config as config
+
+# make sure settings need be specified explicitly during tests
+if "env_file" in config.Settings.model_config:
+    del config.Settings.model_config["env_file"]
+
+
+@contextlib.contextmanager
+def temp_env(**environ):
+    original = dict(os.environ)
+    os.environ.update(environ)
+    try:
+        yield
+    finally:
+        os.environ.clear()
+        os.environ.update(original)
+
+
+@pytest.fixture(scope="function")
+def test_settings():
+    with temp_env(
+        MEALIE_USERNAME="test", MEALIE_PASSWORD="test", KPTNCOOK_API_KEY="test"
+    ):
+        settings = config.Settings()
+        yield settings
 
 
 @pytest.fixture
