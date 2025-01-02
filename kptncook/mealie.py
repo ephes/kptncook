@@ -9,7 +9,6 @@ from typing import Any
 import httpx
 from pydantic import UUID4, BaseModel, Field, ValidationError, parse_obj_as
 
-from .config import settings
 from .models import Image
 from .models import Recipe as KptnCookRecipe
 
@@ -52,8 +51,7 @@ class UnitFoodBase(NameIsIdModel):
     description: str = ""
 
 
-class RecipeFood(UnitFoodBase):
-    ...
+class RecipeFood(UnitFoodBase): ...
 
 
 class RecipeUnit(UnitFoodBase):
@@ -189,11 +187,17 @@ class MealieApiClient:
         r.raise_for_status()
         return r.json()["access_token"]
 
+    def _set_token_header(self, access_token: str):
+        self.headers = {"authorization": f"Bearer {access_token}"}
+
     def login(self, username: str = "admin", password: str = ""):
         if password == "":
             password = getpass()
         access_token = self.fetch_api_token(username, password)
-        self.headers = {"authorization": f"Bearer {access_token}"}
+        self._set_token_header(access_token)
+
+    def login_with_token(self, token: str):
+        self._set_token_header(token)
 
     def upload_asset(self, recipe_slug, image: Image):
         # download image
@@ -230,7 +234,13 @@ class MealieApiClient:
             instruction.text = self._build_recipestep_text(
                 recipe.id, instruction.text, uploaded_image_name
             )
-            assets.append(RecipeAsset(name=asset_properties["name"], icon=asset_properties["icon"], file_name=asset_properties["fileName"]))
+            assets.append(
+                RecipeAsset(
+                    name=asset_properties["name"],
+                    icon=asset_properties["icon"],
+                    file_name=asset_properties["fileName"],
+                )
+            )
         recipe.assets = assets
         return recipe
 
@@ -413,9 +423,7 @@ def kptncook_to_mealie_steps(steps, api_key):
     return mealie_instructions
 
 
-def kptncook_to_mealie(
-    kcin: KptnCookRecipe, api_key: str = settings.kptncook_api_key
-) -> RecipeWithImage:
+def kptncook_to_mealie(kcin: KptnCookRecipe, api_key: str) -> RecipeWithImage:
     kwargs = {
         "name": kcin.localized_title.de,
         "notes": [
