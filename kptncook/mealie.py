@@ -108,13 +108,13 @@ class RecipeStep(BaseModel):
 
 
 class Nutrition(BaseModel):
-    calories: str | int | None = None
-    fat_content: str | None = None
-    protein_content: str | None = None
-    carbohydrate_content: str | None = None
-    fiber_content: str | None = None
-    sodium_content: str | None = None
-    sugar_content: str | None = None
+    calories: str | None = None
+    fatContent: str | None = None
+    proteinContent: str | None = None
+    carbohydrateContent: str | None = None
+    fiberContent: str | None = None
+    sodiumContent: str | None = None
+    sugarContent: str | None = None
 
 
 class RecipeSettings(BaseModel):
@@ -421,11 +421,11 @@ def kptncook_to_mealie(
             RecipeNote(title="author comment", text=kcin.author_comment.de),
         ],
         "nutrition": Nutrition(
-            calories=kcin.recipe_nutrition.calories,
-            proteinContent=kcin.recipe_nutrition.protein,
-            fatContent=kcin.recipe_nutrition.fat,
-            carbohydrateContent=kcin.recipe_nutrition.carbohydrate,
-        ),  # type: ignore
+            calories=str(kcin.recipe_nutrition.calories),
+            proteinContent=str(kcin.recipe_nutrition.protein),
+            fatContent=str(kcin.recipe_nutrition.fat),
+            carbohydrateContent=str(kcin.recipe_nutrition.carbohydrate),
+        ),
         "prep_time": kcin.preparation_time,
         "cook_time": kcin.cooking_time,
         "recipe_yield": "1 Portionen",
