@@ -59,6 +59,24 @@ class IngredientDetails(BaseModel):
         alias_generator = to_camel
 
 
+class StepIngredientUnit(BaseModel):
+    quantity: float | None = None
+    measure: str | None = None
+
+
+class LocalizedStepIngredientUnit(BaseModel):
+    en: StepIngredientUnit | None = None
+    de: StepIngredientUnit | None = None
+    es: StepIngredientUnit | None = None
+    fr: StepIngredientUnit | None = None
+    pt: StepIngredientUnit | None = None
+
+
+class StepIngredientDetails(BaseModel):
+    unit: LocalizedStepIngredientUnit | None = None
+    title: LocalizedString
+
+
 class Ingredient(BaseModel):
     quantity: float | None = None
     measure: str | None = None
@@ -72,10 +90,13 @@ class RecipeId(BaseModel):
 class RecipeStep(BaseModel):
     title: LocalizedString
     image: Image
+    ingredients: list[StepIngredientDetails] | None = None
 
 
 class Recipe(BaseModel):
     id: RecipeId = Field(..., alias="_id")
+    uid: str
+    rtype: str | None = None
     localized_title: LocalizedString
     author_comment: LocalizedString
     preparation_time: int

@@ -16,6 +16,7 @@ def full_recipe():
 def minimal():
     return {
         "_id": {"$oid": "5e5390e2740000cdf1381c64"},
+        "uid": "1234",
         "localizedTitle": {"de": "Minimal Recipe"},
         "country": "us/de/ww",
         "authorComment": {"de": "Dies ist ein Kommentar"},

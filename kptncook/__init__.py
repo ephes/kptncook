@@ -13,6 +13,8 @@ from rich import print as rprint
 from rich.pretty import pprint
 from rich.prompt import Prompt
 
+from kptncook.tandoor import TandoorExporter
+
 from .api import KptnCookClient, parse_id
 from .config import settings
 from .mealie import MealieApiClient, kptncook_to_mealie
@@ -30,6 +32,7 @@ __all__ = [
     "list_recipes",
     "search_kptncook_recipe_by_id",
     "export_recipes_to_paprika",
+    "export_recipes_to_tandoor",
 ]
 
 __version__ = "0.0.21"
@@ -241,6 +244,26 @@ def export_recipes_to_paprika(_id: OptionalId = typer.Argument(None)):
     filename = exporter.export(recipes=recipes)
     rprint(
         "\n The data was exported to '%s'. Open the export file with the Paprika App.\n"
+        % filename
+    )
+
+
+@cli.command(name="export-recipes-to-tandoor")
+def export_recipes_to_tandoor(_id: OptionalId = typer.Argument(None)):
+    """
+    Export one recipe or all recipes to Tandoor format
+
+    Example usage 1:  kptncook  export-recipes-to-tandoor 635a68635100007500061cd7
+    Example usage 2:  kptncook  export-recipes-to-tandoor
+    """
+    if _id:
+        recipes = get_recipe_by_id(_id)
+    else:
+        recipes = get_kptncook_recipes_from_repository()
+    exporter = TandoorExporter()
+    filename = exporter.export(recipes=recipes)
+    rprint(
+        "\n The data was exported to '%s'. Import the export file with Tandoor.\n"
         % filename
     )
 
