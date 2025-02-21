@@ -8,6 +8,18 @@ from kptncook.models import Recipe
 from kptncook.paprika import GeneratedData, PaprikaExporter
 
 
+@pytest.fixture(autouse=True)
+def run_before_and_after_tests(tmpdir):
+    """Fixture to execute asserts before and after a test is run"""
+    # Setup: fill with any logic you want
+
+    yield  # this is where the testing happens
+
+    if os.path.isfile("allrecipes.zip"):
+        os.remove("allrecipes.zip")
+    # Teardown : fill with any logic you want
+
+
 def test_asciify_string():
     p = PaprikaExporter()
     assert (
