@@ -115,7 +115,7 @@ class KptnCookClient:
 
 
 def looks_like_uid(token: str) -> bool:
-    correct_len = len(token) == 8
+    correct_len = len(token) == 8 or len(token) == 7
     is_alnum = token.isalnum()
     return correct_len and is_alnum
 

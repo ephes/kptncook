@@ -1,3 +1,9 @@
+0.0.22 - 2025-02-21
+===================
+
+- #48 uid can also have a length of 7 @Nero3ooo
+- Some minor fixes for pre-commit hooks / mypy etc @ephes
+
 0.0.21 - 2024-09-16
 ===================
 
