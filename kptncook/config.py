@@ -1,6 +1,7 @@
 """
 Base settings for kptncook.
 """
+
 import sys
 from pathlib import Path
 

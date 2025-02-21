@@ -52,8 +52,7 @@ class UnitFoodBase(NameIsIdModel):
     description: str = ""
 
 
-class RecipeFood(UnitFoodBase):
-    ...
+class RecipeFood(UnitFoodBase): ...  # noqa: E701
 
 
 class RecipeUnit(UnitFoodBase):
@@ -230,7 +229,13 @@ class MealieApiClient:
             instruction.text = self._build_recipestep_text(
                 recipe.id, instruction.text, uploaded_image_name
             )
-            assets.append(RecipeAsset(name=asset_properties["name"], icon=asset_properties["icon"], file_name=asset_properties["fileName"]))
+            assets.append(
+                RecipeAsset(
+                    name=asset_properties["name"],
+                    icon=asset_properties["icon"],
+                    file_name=asset_properties["fileName"],
+                )
+            )
         recipe.assets = assets
         return recipe
 
