@@ -11,3 +11,12 @@ def test_parse_full_recipe(full_recipe):
     assert mealie_recipe.extras is not None
     assert "kptncook_id" in mealie_recipe.extras
     assert mealie_recipe.extras["source"] == "kptncook"
+
+    assert mealie_recipe.nutrition is not None
+    assert mealie_recipe.nutrition.calories == "900"
+    assert mealie_recipe.nutrition.fatContent == "41"
+    assert mealie_recipe.nutrition.proteinContent == "40"
+    assert mealie_recipe.nutrition.carbohydrateContent == "85"
+    assert mealie_recipe.nutrition.fiberContent is None
+    assert mealie_recipe.nutrition.sodiumContent is None
+    assert mealie_recipe.nutrition.sugarContent is None
