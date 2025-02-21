@@ -15,7 +15,7 @@ repos:
     rev: 25.1.0
     hooks:
       - id: black
-        language_version: python3.11
+        language_version: python3.13
 
   - repo: https://github.com/timothycrosley/isort
     # isort config is in setup.cfg
