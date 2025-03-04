@@ -64,7 +64,7 @@ class RecipeUnit(UnitFoodBase):
 
 
 class RecipeIngredient(BaseModel):
-    id: UUID4 | None = uuid.uuid4()
+    reference_id: UUID4 | None
     title: str | None = None
     note: str | None = None
     unit: RecipeUnit | None
@@ -110,7 +110,7 @@ class IngredientReference(BaseModel):
 class RecipeStep(BaseModel):
     title: str | None = ""
     text: str
-    ingredientReferences: list[IngredientReference] = []
+    ingredient_references: list[IngredientReference] = []
     image: Image | None = None
 
 
@@ -410,10 +410,10 @@ def kptncook_to_mealie_ingredients(kptncook_ingredients):
             if ingredient.measure is not None:
                 measure = {"name": ingredient.measure}
         mealie_ingredient = RecipeIngredient(
-            title=None, quantity=quantity, unit=measure, note=note, food=food
+            title=None, quantity=quantity, unit=measure, note=note, food=food, reference_id=uuid.uuid4()
         )
         mealie_ingredients.append(mealie_ingredient)
-        kptncook_ingredient_id_to_mealie_ingredient_id[ingredient.ingredient.id.oid] = mealie_ingredient.id
+        kptncook_ingredient_id_to_mealie_ingredient_id[ingredient.ingredient.id.oid] = mealie_ingredient.reference_id
     return mealie_ingredients, kptncook_ingredient_id_to_mealie_ingredient_id
 
 
@@ -423,7 +423,7 @@ def kptncook_to_mealie_steps(steps:list[kptncook.models.RecipeStep], api_key, kp
         image = step.image.get_image_with_api_key_url(api_key)
         ingredient_references = [ IngredientReference(reference_id=kptncook_ingredient_id_to_mealie_ingredient_id[ingredient.ingredientId]) for ingredient in step.ingredients ]
         mealie_instructions.append(
-            RecipeStep(title=None, text=step.title.de, image=image, ingredientReferences=ingredient_references)
+            RecipeStep(title=None, text=step.title.de, image=image, ingredient_references=ingredient_references)
         )
     return mealie_instructions
 

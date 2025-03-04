@@ -24,12 +24,13 @@ def test_parse_full_recipe(full_recipe):
     assert mealie_recipe.recipe_ingredient is not None
     assert len(mealie_recipe.recipe_ingredient) == 13
     assert mealie_recipe.recipe_ingredient[7].food.name == "Lachsfilet"
+    assert len({ i.reference_id for i in mealie_recipe.recipe_ingredient}) == 13
 
     assert mealie_recipe.recipe_instructions is not None
     assert len(mealie_recipe.recipe_instructions) == 17
 
     assert mealie_recipe.recipe_instructions[1] is not None
-    assert mealie_recipe.recipe_instructions[1].ingredientReferences is not None
-    assert len(mealie_recipe.recipe_instructions[1].ingredientReferences) == 1
-    assert mealie_recipe.recipe_instructions[1].ingredientReferences[0].reference_id == mealie_recipe.recipe_ingredient[7].id
+    assert mealie_recipe.recipe_instructions[1].ingredient_references is not None
+    assert len(mealie_recipe.recipe_instructions[1].ingredient_references) == 1
+    assert mealie_recipe.recipe_instructions[1].ingredient_references[0].reference_id == mealie_recipe.recipe_ingredient[7].reference_id
 
