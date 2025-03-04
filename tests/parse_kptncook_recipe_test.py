@@ -38,6 +38,7 @@ def test_ingredient_details_without_uncountable_title():
         "numberTitle": {"de": "Zucker", "en": "sugar"},
         "uncountableTitle": None,
         "category": "baking",
+        "_id": {"$oid": "abc"}
     }
     ingredient_details = IngredientDetails(**ingredient_details)
     assert ingredient_details.uncountable_title == ingredient_details.number_title
