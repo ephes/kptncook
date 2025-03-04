@@ -1,8 +1,10 @@
 """
 All the domain models for kptncook live here.
 """
+import uuid
 
 from pydantic import BaseModel, Field, model_validator
+from pydantic.v1 import UUID4
 
 
 def to_camel(string: str) -> str:
@@ -41,12 +43,17 @@ class Image(BaseModel):
         return Image(**kwargs)
 
 
+class IngredientId(BaseModel):
+    oid: str = Field(..., alias="$oid")
+
+
 class IngredientDetails(BaseModel):
     typ: str
     localized_title: LocalizedString
     number_title: LocalizedString
     uncountable_title: LocalizedString | None = None
     category: str
+    id: IngredientId = Field(..., alias="_id")
 
     @model_validator(mode="before")
     def fix_json_errors(cls, values):
@@ -69,9 +76,15 @@ class RecipeId(BaseModel):
     oid: str = Field(..., alias="$oid")
 
 
+class StepIngredient(BaseModel):
+    title: LocalizedString
+    ingredientId: str
+
+
 class RecipeStep(BaseModel):
     title: LocalizedString
     image: Image
+    ingredients: list[StepIngredient] = []
 
 
 class Recipe(BaseModel):
