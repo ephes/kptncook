@@ -20,3 +20,16 @@ def test_parse_full_recipe(full_recipe):
     assert mealie_recipe.nutrition.fiberContent is None
     assert mealie_recipe.nutrition.sodiumContent is None
     assert mealie_recipe.nutrition.sugarContent is None
+
+    assert mealie_recipe.recipe_ingredient is not None
+    assert len(mealie_recipe.recipe_ingredient) == 13
+    assert mealie_recipe.recipe_ingredient[7].food.name == "Lachsfilet"
+
+    assert mealie_recipe.recipe_instructions is not None
+    assert len(mealie_recipe.recipe_instructions) == 17
+
+    assert mealie_recipe.recipe_instructions[1] is not None
+    assert mealie_recipe.recipe_instructions[1].ingredientReferences is not None
+    assert len(mealie_recipe.recipe_instructions[1].ingredientReferences) == 1
+    assert mealie_recipe.recipe_instructions[1].ingredientReferences[0].reference_id == mealie_recipe.recipe_ingredient[7].id
+
