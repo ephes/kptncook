@@ -2,3 +2,4 @@
 ignore = D203,W503
 exclude = .git,__pycache__,build,dist
 max-line-length = 119
+extend-ignore = E701

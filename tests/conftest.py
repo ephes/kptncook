@@ -2,6 +2,31 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource
+
+import kptncook.config as config
+
+
+class MockSettings(config.Settings):
+    model_config = config.Settings.model_config
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (init_settings,)
+
+
+@pytest.fixture(scope="function")
+def test_settings():
+    return MockSettings(
+        mealie_username="test", mealie_password="password", kptncook_api_key="test"
+    )
 
 
 @pytest.fixture
