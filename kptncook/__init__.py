@@ -199,11 +199,17 @@ def search_kptncook_recipe_by_id(id_: str):
     if id_.startswith(
         "https://share.kptncook.com/"
     ):  # sharing url -> use redirect location
-        r = httpx.get(id_)
-        if r.status_code not in (301, 302):
-            rprint("Could not get redirect location")
+        r = httpx.get(id_, follow_redirects=True)
+        # If it's a redirect, httpx (with follow_redirects) will land at the new location.
+        if r.history and r.status_code == 200:
+            # Landed on new page, extract id from final URL if needed
+            id_ = r.url.path.strip("/")
+        elif r.status_code in (301, 302):
+            # Safety: fallback, although with follow_redirects this usually doesn't occur
+            id_ = r.headers.get("location", id_)
+        else:
+            rprint(f"Could not get redirect location (status: {r.status_code})")
             sys.exit(1)
-        id_ = r.headers["location"]
     parsed = parse_id(id_)
     if parsed is None:
         rprint("Could not parse id")
