@@ -159,8 +159,12 @@ class PaprikaExporter:
         if not isinstance(cover_url, str):
             raise ValueError("Cover URL must be a string")
         try:
-            response = httpx.get(cover_url)
+            response = httpx.get(cover_url, follow_redirects=True)
             response.raise_for_status()
+            # If not an image, could check content-type here
+            if not response.content:
+                print(f"Cover image for \"{recipe.localized_title.de}\" returned empty content.")
+                return None, None
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 print(
