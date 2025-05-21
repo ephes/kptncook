@@ -196,8 +196,10 @@ class MealieApiClient:
 
     def upload_asset(self, recipe_slug, image: Image):
         # download image
-        r = httpx.get(image.url)
+        r = httpx.get(image.url, follow_redirects=True)
         r.raise_for_status()
+        if not r.content:
+            raise ValueError(f"Image at {image.url} returned empty content.")
 
         download = io.BytesIO(r.content)
 
