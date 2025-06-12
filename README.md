@@ -53,7 +53,26 @@ Set environment variables via `~/.kptncook/.env` dotenv file or directly in your
 If you want to back up your favorite receipts from KptnCook, you have to set the `KPTNCOOK_ACCESS_TOKEN` variable as well. You can obtain the access token by running the `kptncook kptncook-access_token` command. But you need a kptncook account to do that.
 Beware: If you don't have a kptncook account, you'll lose all your favorites by creating a new one.
 
-Here's an example:
+### Password Manager Integration
+
+You can retrieve KptnCook credentials from a password manager instead of typing them interactively. Set these environment variables:
+
+- `KPTNCOOK_USERNAME_COMMAND`: Shell command to retrieve username
+- `KPTNCOOK_PASSWORD_COMMAND`: Shell command to retrieve password
+
+Example for 1Password CLI:
+```shell
+KPTNCOOK_USERNAME_COMMAND="op read op://Personal/KptnCook/username"
+KPTNCOOK_PASSWORD_COMMAND="op read op://Personal/KptnCook/password"
+```
+
+Example for pass (password-store):
+```shell
+KPTNCOOK_USERNAME_COMMAND="pass show kptncook/username"
+KPTNCOOK_PASSWORD_COMMAND="pass show kptncook/password"
+```
+
+### Full Configuration Example
 
 ```shell
 KPTNCOOK_API_KEY=6q7QNKy-oIgk-IMuWisJ-jfN7s6
@@ -61,6 +80,10 @@ KPTNCOOK_ACCESS_TOKEN=9353xxxx-xxxx-4fe1-xxxx-xxx4a173805  # replace with correc
 MEALIE_URL=https://mealie.staging.django-cast.com/api
 MEALIE_USERNAME=jochen
 MEALIE_PASSWORD=password  # replace with correct password
+
+# Optional: Password manager integration
+KPTNCOOK_USERNAME_COMMAND="op read op://Personal/KptnCook/username"
+KPTNCOOK_PASSWORD_COMMAND="op read op://Personal/KptnCook/password"
 ```
 
 # Contribute

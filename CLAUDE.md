@@ -82,6 +82,24 @@ MEALIE_PASSWORD=password
 - **KPTNCOOK_ACCESS_TOKEN**: For accessing favorites (use `kptncook kptncook-access-token` command)
 - **Mealie credentials**: For syncing recipes
 
+### Password Manager Integration
+
+The `kptncook-access-token` command supports retrieving credentials from password managers:
+
+- **KPTNCOOK_USERNAME_COMMAND**: Shell command to retrieve username
+- **KPTNCOOK_PASSWORD_COMMAND**: Shell command to retrieve password
+
+Examples:
+```bash
+# 1Password
+KPTNCOOK_USERNAME_COMMAND="op read op://Personal/KptnCook/username"
+KPTNCOOK_PASSWORD_COMMAND="op read op://Personal/KptnCook/password"
+
+# pass (password-store)
+KPTNCOOK_USERNAME_COMMAND="pass show kptncook/username"
+KPTNCOOK_PASSWORD_COMMAND="pass show kptncook/password"
+```
+
 ## Common Tasks
 
 ### Adding New Features

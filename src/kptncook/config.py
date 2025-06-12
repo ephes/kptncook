@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     mealie_username: str
     mealie_password: str
 
+    # Password manager integration
+    kptncook_username_command: str | None = None
+    kptncook_password_command: str | None = None
+
     @field_validator("root", mode="before")
     def root_must_exist(cls, path: Path) -> Path:
         path.mkdir(parents=True, exist_ok=True)

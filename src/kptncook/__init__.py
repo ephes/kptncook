@@ -11,7 +11,6 @@ import httpx
 import typer
 from rich import print as rprint
 from rich.pretty import pprint
-from rich.prompt import Prompt
 
 from .api import KptnCookClient, parse_id
 from .config import settings
@@ -172,12 +171,34 @@ def backup_kptncook_favorites():
 def get_kptncook_access_token():
     """
     Get access token for kptncook.
+
+    Credentials can be retrieved from a password manager by setting:
+    - KPTNCOOK_USERNAME_COMMAND: Command to retrieve username
+    - KPTNCOOK_PASSWORD_COMMAND: Command to retrieve password
+
+    Example for 1Password:
+    KPTNCOOK_USERNAME_COMMAND="op read op://Personal/KptnCook/username"
+    KPTNCOOK_PASSWORD_COMMAND="op read op://Personal/KptnCook/password"
     """
-    username = Prompt.ask("Enter your kptncook email address")
-    password = Prompt.ask("Enter your kptncook password", password=True)
+    from .password_manager import get_credentials
+
+    username, password = get_credentials(
+        username_command=settings.kptncook_username_command,
+        password_command=settings.kptncook_password_command,
+    )
+
+    if not username or not password:
+        rprint("[red]Failed to get credentials[/red]")
+        sys.exit(1)
+
     client = KptnCookClient()
-    access_token = client.get_access_token(username, password)
-    rprint("your access token: ", access_token)
+    try:
+        access_token = client.get_access_token(username, password)
+        rprint("[green]✓ Access token retrieved successfully[/green]")
+        rprint("Your access token: ", access_token)
+    except Exception as e:
+        rprint(f"[red]Failed to get access token: {e}[/red]")
+        sys.exit(1)
 
 
 @cli.command(name="list-recipes")
