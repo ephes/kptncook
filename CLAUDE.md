@@ -40,28 +40,27 @@ KptnCook is a Python command-line client for downloading recipes from the KptnCo
 - Python >=3.10
 - Main libs: httpx, pydantic, typer, rich
 - Dev tools: pytest, mypy, pre-commit, jupyterlab
+- Build tool: uv
 
 ### Installation
 
 ```bash
 # Clone and setup dev environment
-python -m pip install flit
-flit install -s
+uv sync
 
 # Install pre-commit hooks
-pre-commit install
+uvx run pre-commit install
 ```
 
 ### Running Tests
 
 ```bash
-pytest
+uv run pytest
 ```
 
 ### Code Style
 
-- Uses Black formatter (via pre-commit)
-- isort for imports
+- Uses Ruff for linting and formatting (via pre-commit)
 - Type hints encouraged
 - Follow existing patterns in codebase
 
@@ -116,10 +115,10 @@ MEALIE_PASSWORD=password
 
 ```bash
 # Run tests first
-pytest
+uv run pytest
 
 # Publish to PyPI
-flit publish
+uv publish --token your_token
 ```
 
 ## Notes for Contributors

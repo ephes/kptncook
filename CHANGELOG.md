@@ -1,3 +1,13 @@
+0.0.23 - 2025-06-12
+===================
+
+### Infrastructure
+- Migrated build system from flit to uv
+- Moved package to src layout (kptncook/ → src/kptncook/)
+- Replaced Black, isort, and flake8 with Ruff for linting and formatting
+- Updated all documentation to use uv commands instead of flit/pipx
+- Changed from project.optional-dependencies to dependency-groups for dev dependencies
+
 0.0.22 - 2025-02-21
 ===================
 

@@ -15,7 +15,7 @@ It's in pre alpha status and currently slightly unmaintained. If you want to ste
 # Installation
 
 ```shell
-$ pipx install kptncook
+$ uvx install kptncook
 ```
 
 # Usage
@@ -68,35 +68,30 @@ MEALIE_PASSWORD=password  # replace with correct password
 ## Install Development Version
 
 - Checkout source repository
-- Create a virtualenv
+- Install uv if not already installed
 
-Inside the virtualenv install flit (not via pipx!):
+Install the development environment:
 ```shell
-$ python -m pip install flit
-```
-
-Install a symlinked development version of the package:
-```
-$ flit install -s
+$ uv sync
 ```
 
 Install the git pre-commit hooks:
-```
-$ pre-commit install
+```shell
+$ uvx run pre-commit install
 ```
 
 ## Run Tests
 
-Flit should have already installed pytest:
+Run tests using uv:
 
 ```shell
-$ pytest
+$ uv run pytest
 ```
 
 ## Publish a Release
 
-After running the tests, run `flit publish` to publish the package to PyPI.
+After running the tests, publish the package to PyPI using uv:
 
 ```shell
-$ flit publish
+$ uv publish --token your_token
 ```

@@ -1,13 +1,14 @@
 [build-system]
-requires = ["flit_core >=3.2,<4"]
-build-backend = "flit_core.buildapi"
+requires = ["uv_build>=0.7.8,<0.8.0"]
+build-backend = "uv_build"
 
 [project]
 name = "kptncook"
+version = "0.0.23"
+description = "kptncook is a little command line utility to download new recipes."
 authors = [
     {name = "Jochen Wersdörfer", email = "jochen-kptncook@wersdoerfer.de"},
 ]
-dynamic = ["version", "description"]
 requires-python = ">=3.10"
 keywords = [
     "cooking",
@@ -40,27 +41,19 @@ dependencies = [
     "jinja2"
 ]
 
-[project.optional-dependencies]
-test = [
+[dependency-groups]
+dev = [
+    "jupyterlab >= 3.2.9",
+    "mkdocs >= 1.2",
+    "mypy",
+    "pre-commit",
     "pytest >= 6",
     "pytest-cov >= 3",
     "pytest-mock",
 ]
-doc = [
-    "mkdocs >= 1.2",
-]
-dev = [
-    "jupyterlab >= 3.2.9",
-    "mypy",
-    "pre-commit"
-]
 
 [project.urls]
 Home = "https://github.com/ephes/kptncook"
-
-[tool.isort]
-profile = "black"
-known_third_party = ["pydantic", "rich"]
 
 [project.scripts]
 kptncook = "kptncook:cli"
