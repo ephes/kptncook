@@ -1,3 +1,12 @@
+0.0.24 - 2025-06-12
+===================
+
+### Features
+- Added password manager integration for KptnCook authentication
+  - Support for retrieving credentials via shell commands (1Password, pass, Bitwarden, etc.)
+  - New environment variables: KPTNCOOK_USERNAME_COMMAND and KPTNCOOK_PASSWORD_COMMAND
+  - Automatic fallback to interactive prompts if password manager commands fail
+
 0.0.23 - 2025-06-12
 ===================
 
