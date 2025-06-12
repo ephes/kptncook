@@ -91,7 +91,7 @@ class KptnCookClient:
 
     def list_favorites(self) -> list[str]:
         """
-        Get list of favorite recipes.
+        Get a list of favorite recipes.
         """
         response = self.get("/favorites")
         response.raise_for_status()
