@@ -48,7 +48,16 @@ Commands:
 
 ## Environment
 
-Set environment variables via `~/.kptncook/.env` dotenv file or directly in your shell. You'll need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie, you also have to set some additional variables.
+First, create the configuration directory and `.env` file:
+
+```shell
+$ mkdir -p ~/.kptncook
+$ touch ~/.kptncook/.env
+```
+
+Then set environment variables in the `~/.kptncook/.env` file (or directly in your shell). You'll need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie, you also have to set some additional variables.
+
+**Important:** The `.env` file must be created in the `~/.kptncook/` directory, NOT in the installation directory or by editing the `kptncook` executable.
 
 If you want to back up your favorite receipts from KptnCook, you have to set the `KPTNCOOK_ACCESS_TOKEN` variable as well. You can obtain the access token by running the `kptncook kptncook-access_token` command. But you need a kptncook account to do that.
 Beware: If you don't have a kptncook account, you'll lose all your favorites by creating a new one.
@@ -85,6 +94,24 @@ MEALIE_PASSWORD=password  # replace with correct password
 KPTNCOOK_USERNAME_COMMAND="op read op://Personal/KptnCook/username"
 KPTNCOOK_PASSWORD_COMMAND="op read op://Personal/KptnCook/password"
 ```
+
+# Troubleshooting
+
+## Common Issues
+
+### "SyntaxError: invalid decimal literal" after defining API key
+
+This error occurs if you accidentally edited the `kptncook` executable file instead of creating a `.env` file.
+
+**Solution:**
+1. Restore the original `kptncook` executable (reinstall if needed)
+2. Create the configuration directory: `mkdir -p ~/.kptncook`
+3. Create the `.env` file: `touch ~/.kptncook/.env`
+4. Add your environment variables to `~/.kptncook/.env`
+
+### "Field required" validation errors
+
+This happens when the required environment variables are not set. Make sure you have created the `.env` file in the correct location (`~/.kptncook/.env`) and added at least the `KPTNCOOK_API_KEY` variable.
 
 # Contribute
 

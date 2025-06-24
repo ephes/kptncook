@@ -1,3 +1,12 @@
+0.0.25 - TBD
+============
+
+### Documentation
+- Clarified `.env` file setup instructions to prevent users from editing the executable
+  - Added explicit directory and file creation steps
+  - Added warning about correct file location
+  - Added troubleshooting section for common configuration errors
+
 0.0.24 - 2025-06-12
 ===================
 
