@@ -1,5 +1,8 @@
-0.0.25 - TBD
-============
+0.0.25 - 2025-06-28
+===================
+
+### Fixes
+- #57 Fixed the url for fetching the access token
 
 ### Documentation
 - Clarified `.env` file setup instructions to prevent users from editing the executable

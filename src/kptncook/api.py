@@ -81,9 +81,12 @@ class KptnCookClient:
         """
         Get access token for kptncook api.
         """
+        headers = self.headers.copy()
+        headers["kptnkey"] = str(self.api_key)
         response = self.post(
-            "/login/userpass",
+            "/auth/login",
             json={"email": username, "password": password},
+            headers=headers,
         )
         response.raise_for_status()
         token_data = response.json()
@@ -99,7 +102,7 @@ class KptnCookClient:
 
     def get_by_ids(self, ids: list[tuple[str, str]]) -> list[RecipeInDb]:
         """
-        Get recipes from list of ids.
+        Get recipes from a list of ids.
         """
         payload = ids_to_payload(ids)
         # timeout disabled because saving more than 999 favorites didn't work for @brotkrume
