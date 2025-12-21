@@ -50,6 +50,7 @@ dev = [
     "pytest >= 6",
     "pytest-cov >= 3",
     "pytest-mock",
+    "ruff >= 0.11",
 ]
 
 [project.urls]
@@ -63,4 +64,9 @@ minversion = "6.0"
 testpaths = "tests"
 filterwarnings = [
     "ignore::DeprecationWarning:pydantic",
+]
+
+[tool.ruff]
+exclude = [
+    "notebooks/**",
 ]
