@@ -97,5 +97,21 @@ class RecipeRepository:
             locked[recipe.id] = recipe
         self._write_models(locked)
 
+    def delete_by_ids(self, ids: list[str]) -> tuple[list[str], list[str]]:
+        locked = self.list_by_id()
+        key_map = {str(key): key for key in locked.keys()}
+        deleted: list[str] = []
+        missing: list[str] = []
+        for oid in ids:
+            key = key_map.get(str(oid))
+            if key is None:
+                missing.append(str(oid))
+                continue
+            locked.pop(key)
+            deleted.append(str(oid))
+        if deleted:
+            self._write_models(locked)
+        return deleted, missing
+
     def list(self):
         return list(self._fetch_all())

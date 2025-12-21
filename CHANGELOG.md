@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+### Features
+- #54 Added `delete-recipes` command to remove recipes from the local repository by
+  index or oid to avoid re-syncing unwanted items.
+
 ### Fixes
 - #60 Tolerate string localized fields from the KptnCook API by coercing to localized values
   and falling back when `localizedTitle` is missing.

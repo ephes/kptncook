@@ -36,6 +36,7 @@ Options:
 
 Commands:
   backup-favorites          Store kptncook favorites in local repository.
+  delete-recipes            Delete recipes from the local repository.
   kptncook-access-token     Get access token for kptncook.
   kptncook-today            List all recipes for today from the kptncook...
   list-recipes              List all locally saved recipes.
@@ -44,6 +45,16 @@ Commands:
   sync                      Fetch recipes for today from api, save them to...
   sync-with-mealie          Sync locally saved recipes with mealie.
   export-recipes-to-paprika  Export a recipe by id or all recipes to Paprika app
+```
+
+## Delete recipes
+
+Use indices from `kptncook list-recipes` or pass one or more `--oid` values.
+
+```shell
+$ kptncook delete-recipes 0 2
+$ kptncook delete-recipes --oid 635a68635100007500061cd7 --oid 635a68635100007500061cd8
+$ kptncook delete-recipes 0 --force
 ```
 
 ## Environment

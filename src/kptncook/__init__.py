@@ -27,6 +27,7 @@ __all__ = [
     "backup_kptncook_favorites",
     "get_kptncook_access_token",
     "list_recipes",
+    "delete_recipes",
     "search_kptncook_recipe_by_id",
     "export_recipes_to_paprika",
 ]
@@ -214,6 +215,85 @@ def list_recipes():
     recipes = get_kptncook_recipes_from_repository()
     for num, recipe in enumerate(recipes):
         rprint(num, recipe.localized_title.de, recipe.id.oid)
+
+
+@cli.command(name="delete-recipes")
+def delete_recipes(
+    indices: Optional[list[int]] = typer.Argument(
+        None, help="Indices from list-recipes to delete."
+    ),
+    oids: Optional[list[str]] = typer.Option(
+        None, "--oid", "-o", help="Recipe oid to delete (repeatable)."
+    ),
+    force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation."),
+):
+    """
+    Delete recipes from the local repository.
+    """
+    index_list = indices or []
+    oid_list = oids or []
+    if not index_list and not oid_list:
+        rprint("Please provide one or more recipe indices or --oid values.")
+        sys.exit(1)
+
+    recipes = get_kptncook_recipes_from_repository()
+    index_ids = []
+    invalid_indices = []
+    for index in index_list:
+        if index < 0 or index >= len(recipes):
+            invalid_indices.append(index)
+            continue
+        index_ids.append(recipes[index].id.oid)
+
+    requested_ids = []
+    for oid in index_ids + oid_list:
+        if oid not in requested_ids:
+            requested_ids.append(oid)
+
+    repo = RecipeRepository(settings.root)
+    existing_by_id = repo.list_by_id()
+    existing_ids = {str(key) for key in existing_by_id.keys()}
+
+    missing_ids = [oid for oid in requested_ids if str(oid) not in existing_ids]
+    to_delete_ids = [oid for oid in requested_ids if str(oid) in existing_ids]
+
+    if invalid_indices:
+        rprint(
+            "Invalid indices (out of range): "
+            + ", ".join(str(i) for i in invalid_indices)
+        )
+    if missing_ids:
+        rprint("Unknown recipe ids: " + ", ".join(missing_ids))
+
+    if not to_delete_ids:
+        rprint("No matching recipes to delete.")
+        sys.exit(1)
+
+    recipe_by_oid = {recipe.id.oid: recipe for recipe in recipes}
+    rprint("Recipes to delete:")
+    for oid in to_delete_ids:
+        recipe = recipe_by_oid.get(oid)
+        if recipe is None:
+            rprint(f"- {oid}")
+            continue
+        title = (
+            recipe.localized_title.de
+            or recipe.localized_title.en
+            or recipe.localized_title.fr
+            or recipe.localized_title.es
+            or recipe.localized_title.pt
+            or "Unknown title"
+        )
+        rprint(f"- {title} ({oid})")
+
+    if not force and not typer.confirm("Delete these recipes from local storage?"):
+        rprint("Aborted.")
+        sys.exit(1)
+
+    deleted, missing = repo.delete_by_ids(to_delete_ids)
+    if missing:
+        rprint("Some recipes were not found: " + ", ".join(missing))
+    rprint(f"Deleted {len(deleted)} recipes.")
 
 
 @cli.command(name="search-by-id")
