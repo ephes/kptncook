@@ -14,7 +14,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=(Path.home() / ".kptncook" / ".env"), extra="ignore"
     )
-    root: DirectoryPath = Field(Path.home() / ".kptncook", env="KPTNCOOK_HOME")  # type: ignore
+    root: DirectoryPath = Field(
+        Path.home() / ".kptncook", validation_alias="KPTNCOOK_HOME"
+    )  # type: ignore
     kptncook_api_key: str
     kptncook_access_token: str | None = None
     kptncook_api_url: AnyHttpUrl = AnyHttpUrl("https://mobile.kptncook.com")

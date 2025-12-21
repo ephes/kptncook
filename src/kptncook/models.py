@@ -4,7 +4,7 @@ All the domain models for kptncook live here.
 
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 def to_camel(string: str) -> str:
@@ -59,6 +59,8 @@ class Image(BaseModel):
 
 
 class IngredientDetails(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel)
+
     typ: str
     localized_title: LocalizedString
     number_title: LocalizedString
@@ -77,9 +79,6 @@ class IngredientDetails(BaseModel):
                 values["uncountableTitle"] = values["numberTitle"]
         return values
 
-    class Config:
-        alias_generator = to_camel
-
 
 class Ingredient(BaseModel):
     quantity: float | None = None
@@ -97,6 +96,8 @@ class RecipeStep(BaseModel):
 
 
 class Recipe(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel)
+
     id: RecipeId = Field(..., alias="_id")
     localized_title: LocalizedString
     author_comment: LocalizedString
@@ -106,9 +107,6 @@ class Recipe(BaseModel):
     steps: list[RecipeStep] = Field(..., alias="steps")
     image_list: list[Image]
     ingredients: list[Ingredient]
-
-    class Config:
-        alias_generator = to_camel
 
     @model_validator(mode="before")
     def normalize_titles(cls, values):

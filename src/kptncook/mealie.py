@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from pydantic import UUID4, BaseModel, Field, ValidationError, parse_obj_as
+from pydantic import UUID4, BaseModel, ConfigDict, Field, ValidationError, parse_obj_as
 
 from .config import settings
 from .models import Image
@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 
 class NameIsIdModel(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     name: str
 
     def __hash__(self):
@@ -26,9 +28,6 @@ class NameIsIdModel(BaseModel):
     def __eq__(self, other):
         """Compare on name to be able to subtract sets of models."""
         return self.name == other.name
-
-    class Config:
-        frozen = True  # make it hashable
 
 
 class RecipeTag(NameIsIdModel):
