@@ -8,11 +8,13 @@ Unreleased
 - Added Ruff to dev dependencies to support `just lint`.
 - Excluded notebooks from Ruff formatting and linting.
 - Updated clean targets to skip `.venv/`, `.beads/`, and `.git/`.
+- Added a GitHub-to-Beads importer script and just helper with dry-run support.
 
 ### Documentation
 - Documented Beads onboarding and `.beads/` commit policy.
 - Documented required quality gates and beadsflow usage.
 - Updated pre-commit install instructions to use `uv run`.
+- Documented the GitHub issue import helper.
 
 0.0.25 - 2025-06-28
 ===================

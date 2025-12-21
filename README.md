@@ -180,6 +180,17 @@ $ just beadsflow-once <epic-id>
 $ just beadsflow-run <epic-id>
 ```
 
+## GitHub Issue Import
+
+Import GitHub issues into Beads epics (open issues by default), including
+comments. The importer is idempotent and uses `external_ref` as `gh-<number>`.
+
+```shell
+$ just beads-import-gh-issues
+$ just beads-import-gh-issues --repo OWNER/REPO --state open --limit 500
+$ just beads-import-gh-issues --dry-run
+```
+
 ## Publish a Release
 
 After running the tests, publish the package to PyPI using uv:

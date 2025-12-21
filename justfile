@@ -49,3 +49,7 @@ beadsflow-once EPIC:
 
 beadsflow-run EPIC:
     uv run --project ../beadsflow beadsflow run {{EPIC}} --interval 30 --verbose
+
+# Import GitHub issues into Beads epics
+beads-import-gh-issues *ARGS:
+    uv run python scripts/import_github_issues_to_beads.py {{ARGS}}
