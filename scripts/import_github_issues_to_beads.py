@@ -16,7 +16,9 @@ from pathlib import Path
 from typing import Iterable
 
 
-def run(cmd: list[str], input_text: str | None = None) -> subprocess.CompletedProcess[str]:
+def run(
+    cmd: list[str], input_text: str | None = None
+) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(
         cmd,
         input=input_text,
@@ -119,7 +121,7 @@ def load_issue(repo: str | None, number: int) -> dict[str, object]:
 
 def format_description(issue: dict[str, object]) -> str:
     url = str(issue["url"])
-    author = (issue.get("author") or {})
+    author = issue.get("author") or {}
     author_login = "unknown"
     if isinstance(author, dict):
         author_login = author.get("login") or "unknown"
@@ -146,7 +148,7 @@ def add_comment(bead_id: str, author: str, text: str) -> None:
 
 
 def format_comment(comment: dict[str, object]) -> tuple[str, str, str]:
-    author = (comment.get("author") or {})
+    author = comment.get("author") or {}
     author_login = "unknown"
     if isinstance(author, dict):
         author_login = author.get("login") or "unknown"
