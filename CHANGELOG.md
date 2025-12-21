@@ -1,3 +1,19 @@
+Unreleased
+==========
+
+### Infrastructure
+- Added a justfile with common dev commands and beadsflow helpers.
+- Added beadsflow configuration for local Beads automation.
+- Added AGENTS.md for repo-specific workflow guidance.
+- Added Ruff to dev dependencies to support `just lint`.
+- Excluded notebooks from Ruff formatting and linting.
+- Updated clean targets to skip `.venv/`, `.beads/`, and `.git/`.
+
+### Documentation
+- Documented Beads onboarding and `.beads/` commit policy.
+- Documented required quality gates and beadsflow usage.
+- Updated pre-commit install instructions to use `uv run`.
+
 0.0.25 - 2025-06-28
 ===================
 

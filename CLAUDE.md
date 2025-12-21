@@ -19,13 +19,13 @@ KptnCook is a Python command-line client for downloading recipes from the KptnCo
 
 ### Core Components
 
-- **`kptncook/__init__.py`**: Main CLI entry point using Typer
-- **`kptncook/api.py`**: KptnCook API client for fetching recipes
-- **`kptncook/models.py`**: Pydantic models for KptnCook recipe data
-- **`kptncook/mealie.py`**: Mealie API client and recipe conversion
-- **`kptncook/paprika.py`**: Paprika export functionality
-- **`kptncook/repositories.py`**: Local JSON storage repository
-- **`kptncook/config.py`**: Settings management with Pydantic
+- **`src/kptncook/__init__.py`**: Main CLI entry point using Typer
+- **`src/kptncook/api.py`**: KptnCook API client for fetching recipes
+- **`src/kptncook/models.py`**: Pydantic models for KptnCook recipe data
+- **`src/kptncook/mealie.py`**: Mealie API client and recipe conversion
+- **`src/kptncook/paprika.py`**: Paprika export functionality
+- **`src/kptncook/repositories.py`**: Local JSON storage repository
+- **`src/kptncook/config.py`**: Settings management with Pydantic
 
 ### Data Flow
 
@@ -49,10 +49,18 @@ KptnCook is a Python command-line client for downloading recipes from the KptnCo
 uv sync
 
 # Install pre-commit hooks
-uvx run pre-commit install
+uv run pre-commit install
 ```
 
-### Running Tests
+### Quality Gates (Required)
+
+```bash
+just lint
+just typecheck
+just test
+```
+
+### Running Tests (Direct)
 
 ```bash
 uv run pytest
@@ -60,7 +68,7 @@ uv run pytest
 
 ### Code Style
 
-- Uses Ruff for linting and formatting (via pre-commit)
+- Uses Ruff for linting and formatting (via pre-commit or `just lint`)
 - Type hints encouraged
 - Follow existing patterns in codebase
 
@@ -121,6 +129,44 @@ KPTNCOOK_PASSWORD_COMMAND="pass show kptncook/password"
 - pytest with fixtures in `conftest.py`
 - Mock HTTP requests when testing API clients
 - Test data in `tests/fixtures/`
+
+## Beads and Beadsflow
+
+- Beads is the issue tracker; `.beads/` is committed.
+- Onboard with `bd onboard` (fallback: `bd init` + `bd hooks install`).
+- If your global gitignore ignores `.beads/`, remove `**/.beads/` or use `git add -f`.
+- Use local beadsflow: `uv run --project ../beadsflow beadsflow run <epic-id> ...` or the `just` helpers.
+- Comment markers must start with one of: `Ready for review:`, `LGTM`, `Changes requested:`.
+
+## Commits and Push
+
+Do not run `git commit`, `git push`, or `bd sync` unless the user explicitly asks.
+
+## Landing the Plane (Session Completion)
+
+**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+
+**MANDATORY WORKFLOW:**
+
+1. **File issues for remaining work** - Create issues for anything that needs follow-up
+2. **Run quality gates** (if code changed) - Tests, linters, builds
+3. **Update issue status** - Close finished work, update in-progress items
+4. **PUSH TO REMOTE** - This is MANDATORY:
+   ```bash
+   git pull --rebase
+   bd sync
+   git push
+   git status  # MUST show "up to date with origin"
+   ```
+5. **Clean up** - Clear stashes, prune remote branches
+6. **Verify** - All changes committed AND pushed
+7. **Hand off** - Provide context for next session
+
+**CRITICAL RULES:**
+- Work is NOT complete until `git push` succeeds
+- NEVER stop before pushing - that leaves work stranded locally
+- NEVER say "ready to push when you are" - YOU must push
+- If push fails, resolve and retry until it succeeds
 
 ## Important Considerations
 

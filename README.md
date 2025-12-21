@@ -119,6 +119,7 @@ This happens when the required environment variables are not set. Make sure you 
 
 - Checkout source repository
 - Install uv if not already installed
+- Install just if not already installed
 
 Install the development environment:
 ```shell
@@ -127,15 +128,56 @@ $ uv sync
 
 Install the git pre-commit hooks:
 ```shell
-$ uvx run pre-commit install
+$ uv run pre-commit install
 ```
 
-## Run Tests
+## Beads Setup (Required)
+
+This repo uses Beads for issue tracking, and `.beads/` is committed.
+
+```shell
+$ bd onboard
+```
+
+If `bd onboard` is not available:
+
+```shell
+$ bd init
+$ bd hooks install
+```
+
+If your global gitignore ignores `.beads/`, remove `**/.beads/` or use `git add -f`.
+
+## Quality Gates (Required)
+
+```shell
+$ just lint
+$ just typecheck
+$ just test
+```
+
+Target a single test:
+
+```shell
+$ just test-one tests/test_file.py::TestClass::test_case
+```
+
+## Run Tests (Direct)
 
 Run tests using uv:
 
 ```shell
 $ uv run pytest
+```
+
+## Beadsflow
+
+Use the local beadsflow checkout:
+
+```shell
+$ just beadsflow-dry <epic-id>
+$ just beadsflow-once <epic-id>
+$ just beadsflow-run <epic-id>
 ```
 
 ## Publish a Release
