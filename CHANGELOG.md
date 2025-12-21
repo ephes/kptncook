@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+### Fixes
+- #60 Tolerate string localized fields from the KptnCook API by coercing to localized values
+  and falling back when `localizedTitle` is missing.
+
 ### Infrastructure
 - Added a justfile with common dev commands and beadsflow helpers.
 - Added beadsflow configuration for local Beads automation.

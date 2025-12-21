@@ -2,6 +2,8 @@
 All the domain models for kptncook live here.
 """
 
+from typing import Any
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -21,6 +23,21 @@ class LocalizedString(BaseModel):
     es: str | None = None
     fr: str | None = None
     pt: str | None = None
+
+    @model_validator(mode="before")
+    def coerce_string(cls, value: Any) -> dict[str, Any] | Any:
+        if isinstance(value, str):
+            # Default to German for string-only payloads.
+            return {"de": value}
+        if isinstance(value, dict):
+            singular = value.get("singular")
+            if isinstance(singular, dict):
+                # Prefer singular if both singular/plural are present.
+                return singular
+            plural = value.get("plural")
+            if isinstance(plural, dict):
+                return plural
+        return value
 
 
 class Nutrition(BaseModel):
@@ -50,8 +67,13 @@ class IngredientDetails(BaseModel):
 
     @model_validator(mode="before")
     def fix_json_errors(cls, values):
-        if "uncountableTitle" not in values or values["uncountableTitle"] is None:
-            if "numberTitle" in values:
+        if isinstance(values, dict):
+            if values.get("localizedTitle") is None:
+                for key in ("uncountableTitle", "numberTitle", "title"):
+                    if values.get(key) is not None:
+                        values["localizedTitle"] = values[key]
+                        break
+            if values.get("uncountableTitle") is None and "numberTitle" in values:
                 values["uncountableTitle"] = values["numberTitle"]
         return values
 
@@ -87,6 +109,15 @@ class Recipe(BaseModel):
 
     class Config:
         alias_generator = to_camel
+
+    @model_validator(mode="before")
+    def normalize_titles(cls, values):
+        if isinstance(values, dict):
+            if values.get("localizedTitle") is None:
+                title = values.get("title")
+                if title is not None:
+                    values["localizedTitle"] = title
+        return values
 
     def get_image_url(self, api_key: str) -> str | None:
         try:
