@@ -17,6 +17,9 @@
 - Python 3.10+ with type hints for public interfaces.
 - Ruff handles formatting and linting; prefer minimal, focused changes.
 
+## Documentation
+- Update `CHANGELOG.md` for user-visible changes.
+
 ## Beads workflow (required)
 - This repo uses Beads for issue tracking, and `.beads/` is committed.
 - Onboard: `bd onboard` (fallback: `bd init` + `bd hooks install`).

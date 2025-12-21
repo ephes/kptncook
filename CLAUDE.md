@@ -117,6 +117,7 @@ KPTNCOOK_PASSWORD_COMMAND="pass show kptncook/password"
 3. Add CLI command in `__init__.py`
 4. Write tests in `tests/`
 5. Update type hints
+6. Update `CHANGELOG.md` for user-visible changes
 
 ### Debugging
 
