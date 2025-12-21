@@ -195,7 +195,7 @@ class MealieApiClient:
 
     def upload_asset(self, recipe_slug, image: Image):
         # download image
-        r = httpx.get(image.url)
+        r = httpx.get(image.url, follow_redirects=True)
         r.raise_for_status()
 
         download = io.BytesIO(r.content)

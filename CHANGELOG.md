@@ -4,6 +4,8 @@ Unreleased
 ### Fixes
 - #60 Tolerate string localized fields from the KptnCook API by coercing to localized values
   and falling back when `localizedTitle` is missing.
+- #55 Follow redirects when fetching KptnCook images for Mealie sync and avoid JSON parsing
+  on non-JSON error responses.
 
 ### Infrastructure
 - Added a justfile with common dev commands and beadsflow helpers.

@@ -1,4 +1,7 @@
+import httpx
+
 from kptncook.mealie import MealieApiClient, Recipe
+from kptncook.models import Image
 
 
 def test_parse_empty_mealie_recipe_is_valid():
@@ -59,3 +62,30 @@ def test_skip_validation_errors():
         {"id": "123", "nutrition": "not a nutrition dict"},
     ]
     assert MealieApiClient.validate_recipes(invalid_recipes) == []
+
+
+def test_upload_asset_follows_redirects(monkeypatch):
+    client = MealieApiClient("http://mealie.local/api")
+    image = Image(name="step.jpg", url="http://images.kptncook.com/step.jpg")
+    seen = {}
+
+    def fake_get(url, follow_redirects=False, **kwargs):
+        seen["follow_redirects"] = follow_redirects
+        request = httpx.Request("GET", url)
+        return httpx.Response(200, request=request, content=b"image-bytes")
+
+    def fake_post(path, data=None, files=None, **kwargs):
+        request = httpx.Request("POST", f"http://mealie.local/api{path}")
+        return httpx.Response(
+            200,
+            request=request,
+            json={"fileName": "step.jpg", "name": "step", "icon": "mdi-file-image"},
+        )
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    client.post = fake_post
+
+    result = client.upload_asset("recipe-slug", image)
+
+    assert seen["follow_redirects"] is True
+    assert result["fileName"] == "step.jpg"

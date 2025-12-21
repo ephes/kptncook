@@ -127,10 +127,15 @@ def sync_with_mealie():
             created = client.create_recipe(recipe)
             created_slugs.append(created.slug)
         except httpx.HTTPStatusError as e:
-            if (
-                e.response.json().get("detail", {}).get("message")
-                == "Recipe already exists"
-            ):
+            detail_message = None
+            try:
+                if "application/json" in e.response.headers.get("content-type", ""):
+                    detail = e.response.json().get("detail", {})
+                    if isinstance(detail, dict):
+                        detail_message = detail.get("message")
+            except ValueError:
+                detail_message = None
+            if detail_message == "Recipe already exists":
                 continue
     rprint(f"Created {len(created_slugs)} recipes")
 
