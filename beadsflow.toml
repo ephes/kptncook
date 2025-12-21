@@ -1,0 +1,58 @@
+beads_dir = ".beads"
+beads_no_db = true
+interval_seconds = 30
+log_level = "info"
+implementer = "codex"
+reviewer = "claude"
+
+# Run beadsflow from the local checkout in ../beadsflow, not the package:
+# uv run --project ../beadsflow beadsflow run <epic-id> --dry-run --verbose
+
+[implementers.codex]
+comment_mode = "stdout"
+comment_prefix = "Ready for review:\n\n"
+comment_suffix = "\n\nValidation:\n- just lint\n- just typecheck\n- just test"
+require_git_changes = true
+command = """bash -lc 'set -euo pipefail
+export BEADS_NO_DAEMON=1
+export BEADS_DIR="$PWD/.beads"
+issue="$BEADSFLOW_ISSUE_ID"
+epic="$BEADSFLOW_EPIC_ID"
+
+set +e
+codex --ask-for-approval never exec --sandbox workspace-write \
+  "Implement bead ${issue} under epic ${epic}. First, read the bead and its dependency chain using JSONL mode: bd --no-daemon --no-db show ${issue}; bd --no-daemon --no-db dep tree ${issue}. If the bead references a spec/PRD, read it before changing code. Implement the acceptance criteria by editing files in this repo. Ensure there is a non-empty git diff when done. Do not post Beads comments yourself. Do not run tests, type checks, lint/format, or install commands; the wrapper handles validation."
+codex_rc=$?
+set -e
+
+just lint
+just typecheck
+just test
+
+codex_note=""
+if [ "${codex_rc}" != "0" ]; then
+  codex_note="$(printf "\n\nNote: codex exited with code %s but produced working-tree changes; continuing." "${codex_rc}")"
+fi
+if [ -n "$codex_note" ]; then
+  printf "%s" "$codex_note"
+fi
+'"""
+
+[reviewers.claude]
+comment_mode = "stdout"
+command = """bash -lc 'set -euo pipefail
+issue="$BEADSFLOW_ISSUE_ID"
+epic="$BEADSFLOW_EPIC_ID"
+
+export BEADS_NO_DAEMON=1
+export BEADS_DIR="$PWD/.beads"
+
+claude -p "Review bead ${issue} under epic ${epic}. Review the bead, the repo changes, and any validation notes. Respond with a Beads comment. The first non-empty line must be exactly LGTM or start with Changes requested:. Do not wrap that marker in markdown/backticks."
+'"""
+
+[run]
+max_iterations = 500
+resume_in_progress = true
+selection_strategy = "priority_then_oldest"
+on_command_failure = "stop"
+command_timeout_seconds = 7200
