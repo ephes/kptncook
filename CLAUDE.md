@@ -54,6 +54,8 @@ uv run pre-commit install
 
 ### Quality Gates (Required)
 
+All of `just lint`, `just typecheck`, and `just test` must pass before declaring work done.
+
 ```bash
 just lint
 just typecheck

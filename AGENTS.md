@@ -12,6 +12,7 @@
 - Type checks: `just typecheck` (mypy).
 - Tests: `just test` or `just test-one tests/test_file.py::TestClass::test_case`.
 - Pre-commit hooks: `uv run pre-commit install`.
+- Before declaring work done, `just lint`, `just typecheck`, and `just test` must pass.
 
 ## Coding style
 - Python 3.10+ with type hints for public interfaces.
