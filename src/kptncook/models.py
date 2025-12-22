@@ -24,6 +24,12 @@ class LocalizedString(BaseModel):
     fr: str | None = None
     pt: str | None = None
 
+    def fallback(self) -> str | None:
+        for candidate in (self.de, self.en, self.es, self.fr, self.pt):
+            if candidate:
+                return candidate
+        return None
+
     @model_validator(mode="before")
     def coerce_string(cls, value: Any) -> dict[str, Any] | Any:
         if isinstance(value, str):
@@ -38,6 +44,16 @@ class LocalizedString(BaseModel):
             if isinstance(plural, dict):
                 return plural
         return value
+
+
+class LocalizedStepIngredientUnit(LocalizedString):
+    """Localized unit labels for step ingredients."""
+
+
+def localized_fallback(value: LocalizedString | None) -> str | None:
+    if value is None:
+        return None
+    return value.fallback()
 
 
 class Nutrition(BaseModel):
@@ -80,6 +96,20 @@ class IngredientDetails(BaseModel):
         return values
 
 
+class StepIngredientUnit(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel)
+
+    name: str | None = None
+    localized_title: LocalizedStepIngredientUnit | None = None
+    short_title: LocalizedStepIngredientUnit | None = None
+
+    @model_validator(mode="before")
+    def coerce_unit_string(cls, value: Any) -> dict[str, Any] | Any:
+        if isinstance(value, str):
+            return {"name": value}
+        return value
+
+
 class Ingredient(BaseModel):
     quantity: float | None = None
     measure: str | None = None
@@ -90,15 +120,63 @@ class RecipeId(BaseModel):
     oid: str = Field(..., alias="$oid")
 
 
+class StepIngredientDetails(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel)
+
+    id: RecipeId | None = Field(None, alias="_id")
+    typ: str | None = None
+    localized_title: LocalizedString | None = None
+    number_title: LocalizedString | None = None
+    uncountable_title: LocalizedString | None = None
+    category: str | None = None
+
+    @model_validator(mode="before")
+    def coerce_titles(cls, values):
+        if isinstance(values, str):
+            return {"localizedTitle": values}
+        if isinstance(values, dict):
+            if values.get("localizedTitle") is None:
+                for key in ("uncountableTitle", "numberTitle", "title", "name"):
+                    if values.get(key) is not None:
+                        values["localizedTitle"] = values[key]
+                        break
+            if (
+                values.get("uncountableTitle") is None
+                and values.get("numberTitle") is not None
+            ):
+                values["uncountableTitle"] = values["numberTitle"]
+        return values
+
+
+class StepIngredient(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel)
+
+    quantity: float | None = None
+    unit: StepIngredientUnit | None = None
+    ingredient: StepIngredientDetails | None = None
+
+    @model_validator(mode="before")
+    def normalize_fields(cls, values):
+        if isinstance(values, dict):
+            if values.get("quantity") is None and values.get("amount") is not None:
+                values["quantity"] = values["amount"]
+            if values.get("unit") is None and values.get("measure") is not None:
+                values["unit"] = values["measure"]
+        return values
+
+
 class RecipeStep(BaseModel):
     title: LocalizedString
     image: Image
+    ingredients: list[StepIngredient | None] | None = None
 
 
 class Recipe(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel)
 
     id: RecipeId = Field(..., alias="_id")
+    uid: str | None = None
+    rtype: str | None = None
     localized_title: LocalizedString
     author_comment: LocalizedString
     preparation_time: int

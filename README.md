@@ -45,6 +45,7 @@ Commands:
   sync                      Fetch recipes for today from api, save them to...
   sync-with-mealie          Sync locally saved recipes with mealie.
   export-recipes-to-paprika  Export a recipe by id or all recipes to Paprika app
+  export-recipes-to-tandoor  Export a recipe by id or all recipes to Tandoor
 ```
 
 ## Delete recipes

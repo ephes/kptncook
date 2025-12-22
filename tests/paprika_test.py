@@ -1,5 +1,4 @@
 import json
-import os
 
 import httpx
 import pytest
@@ -53,9 +52,10 @@ def test_get_cover_img_as_base64_string_can_handle_404(full_recipe, mocker):
     assert p.get_cover_img_as_base64_string(recipe=recipe) == (None, None)
 
 
-def test_export_single_recipe(full_recipe, mocker):
+def test_export_single_recipe(full_recipe, mocker, tmp_path, monkeypatch):
     p = PaprikaExporter()
     recipe = Recipe.model_validate(full_recipe)
+    monkeypatch.chdir(tmp_path)
     mocker.patch(
         "kptncook.paprika.httpx.get",
         return_value=mocker.Mock(content=b"foobar", status_code=200),
@@ -64,24 +64,23 @@ def test_export_single_recipe(full_recipe, mocker):
     expected_file = (
         "Uberbackene_Muschelnudeln_mit_Lachs___Senf_Dill_Sauce.paprikarecipes"
     )
-    assert os.path.isfile(expected_file) is True
-    if os.path.isfile(expected_file):
-        os.unlink(expected_file)
+    expected_path = tmp_path / expected_file
+    assert expected_path.is_file() is True
 
 
-def test_export_all_recipes(full_recipe, minimal, mocker):
+def test_export_all_recipes(full_recipe, minimal, mocker, tmp_path, monkeypatch):
     p = PaprikaExporter()
     recipe1 = Recipe.model_validate(full_recipe)
     recipe2 = Recipe.model_validate(minimal)
+    monkeypatch.chdir(tmp_path)
     mocker.patch(
         "kptncook.paprika.httpx.get",
         return_value=mocker.Mock(content=b"foobar", status_code=200),
     )
     p.export(recipes=[recipe1, recipe2])
     expected_file = "allrecipes.paprikarecipes"
-    assert os.path.isfile(expected_file) is True
-    if os.path.isfile(expected_file):
-        os.unlink(expected_file)
+    expected_path = tmp_path / expected_file
+    assert expected_path.is_file() is True
 
 
 def test_get_cover(minimal):

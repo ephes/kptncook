@@ -26,16 +26,16 @@ from jinja2 import Template
 from unidecode import unidecode
 
 from kptncook.config import settings
-from kptncook.models import Image, Recipe
+from kptncook.models import Image, Recipe, localized_fallback
 
 PAPRIKA_RECIPE_TEMPLATE = """{
    "uid":"{{recipe.id.oid}}",
-   "name":"{{recipe.localized_title.de}}",
-   "directions": "{% for step in recipe.steps %}{{step.title.de}}\\n{% endfor %}",
+   "name":"{{localized_fallback(recipe.localized_title)|default('',true)}}",
+   "directions": "{% for step in recipe.steps %}{{localized_fallback(step.title)|default('',true)}}\\n{% endfor %}",
    "servings":"2",
    "rating":0,
    "difficulty":"",
-   "ingredients":"{% for ingredient in recipe.ingredients %}{% if ingredient.quantity %}{{'{0:g}'.format(ingredient.quantity) }}{% endif %} {{ingredient.measure|default('',true)}} {{ingredient.ingredient.uncountable_title.de|default('',true)}}\\n{% endfor %}",
+   "ingredients":"{% for ingredient in recipe.ingredients %}{% if ingredient.quantity %}{{'{0:g}'.format(ingredient.quantity) }}{% endif %} {{ingredient.measure|default('',true)}} {{localized_fallback(ingredient.ingredient.uncountable_title)|default('',true)}}\\n{% endfor %}",
    "notes":"",
    "created":"{{dtnow}}",
    "image_url":null,
@@ -87,7 +87,10 @@ class PaprikaExporter:
     ) -> str:
         if len(export_data) == 1:
             return (
-                self.asciify_string(s=recipes[0].localized_title.de) + ".paprikarecipes"
+                self.asciify_string(
+                    s=localized_fallback(recipes[0].localized_title) or "recipe"
+                )
+                + ".paprikarecipes"
             )
         else:
             return "allrecipes.paprikarecipes"
@@ -103,6 +106,7 @@ class PaprikaExporter:
         generated = self.get_generated_data(recipe=recipe)
         recipe_as_json = self.template.render(
             recipe=recipe,
+            localized_fallback=localized_fallback,
             dtnow=generated.dtnow,
             cover_filename=generated.cover_filename,
             hash=generated.hash,
@@ -163,9 +167,8 @@ class PaprikaExporter:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
-                print(
-                    f'Cover image for "{recipe.localized_title.de}" not found online any more.'
-                )
+                title = localized_fallback(recipe.localized_title) or "kptncook-recipe"
+                print(f'Cover image for "{title}" not found online any more.')
             else:
                 print(
                     f"While trying to fetch the cover img a HTTP error occurred: {exc.response.status_code}: {exc}"

@@ -10,7 +10,7 @@ import httpx
 from pydantic import UUID4, BaseModel, ConfigDict, Field, ValidationError, parse_obj_as
 
 from .config import settings
-from .models import Image
+from .models import Image, localized_fallback
 from .models import Recipe as KptnCookRecipe
 
 logger = logging.getLogger(__name__)
@@ -390,7 +390,7 @@ class MealieApiClient:
 def kptncook_to_mealie_ingredients(kptncook_ingredients):
     mealie_ingredients = []
     for ingredient in kptncook_ingredients:
-        title = ingredient.ingredient.localized_title.de
+        title = localized_fallback(ingredient.ingredient.localized_title) or ""
         note = None
         if "," in title:
             title, note, *parts = (p.strip() for p in title.split(","))
@@ -412,7 +412,11 @@ def kptncook_to_mealie_steps(steps, api_key):
     for step in steps:
         image = step.image.get_image_with_api_key_url(api_key)
         mealie_instructions.append(
-            RecipeStep(title=None, text=step.title.de, image=image)
+            RecipeStep(
+                title=None,
+                text=localized_fallback(step.title) or "",
+                image=image,
+            )
         )
     return mealie_instructions
 
@@ -421,9 +425,12 @@ def kptncook_to_mealie(
     kcin: KptnCookRecipe, api_key: str = settings.kptncook_api_key
 ) -> RecipeWithImage:
     kwargs = {
-        "name": kcin.localized_title.de,
+        "name": localized_fallback(kcin.localized_title),
         "notes": [
-            RecipeNote(title="author comment", text=kcin.author_comment.de),
+            RecipeNote(
+                title="author comment",
+                text=localized_fallback(kcin.author_comment),
+            ),
         ],
         "nutrition": Nutrition(
             calories=str(kcin.recipe_nutrition.calories),

@@ -4,12 +4,17 @@ Unreleased
 ### Features
 - #54 Added `delete-recipes` command to remove recipes from the local repository by
   index or oid to avoid re-syncing unwanted items.
+- #50 Added a Tandoor exporter module and `export-recipes-to-tandoor` command for
+  recipe.zip generation (thanks @michael-arndt-gcx).
+- Added step-ingredient models and recipe type keywords for Tandoor exports.
 
 ### Fixes
 - #60 Tolerate string localized fields from the KptnCook API by coercing to localized values
   and falling back when `localizedTitle` is missing.
 - #55 Follow redirects when fetching KptnCook images for Mealie sync and avoid JSON parsing
   on non-JSON error responses.
+- #818 Apply locale fallback (de -> en -> any) for exporter localized strings instead of
+  hard-coding German.
 
 ### Infrastructure
 - Added a justfile with common dev commands and beadsflow helpers.
@@ -25,6 +30,7 @@ Unreleased
 - Documented required quality gates and beadsflow usage.
 - Updated pre-commit install instructions to use `uv run`.
 - Documented the GitHub issue import helper.
+- Documented the `export-recipes-to-tandoor` command in the README.
 
 0.0.25 - 2025-06-28
 ===================
