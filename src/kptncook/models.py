@@ -37,12 +37,16 @@ class LocalizedString(BaseModel):
             return {"de": value}
         if isinstance(value, dict):
             singular = value.get("singular")
-            if isinstance(singular, dict):
-                # Prefer singular if both singular/plural are present.
-                return singular
             plural = value.get("plural")
-            if isinstance(plural, dict):
-                return plural
+            uncountable = value.get("uncountable")
+            for candidate in (singular, plural, uncountable):
+                if isinstance(candidate, dict):
+                    # Prefer localized singular/plural if present.
+                    return candidate
+            for candidate in (uncountable, singular, plural):
+                if isinstance(candidate, str):
+                    # Fall back to the raw string if only singular/plural are present.
+                    return {"de": candidate}
         return value
 
 
@@ -87,9 +91,14 @@ class IngredientDetails(BaseModel):
     def fix_json_errors(cls, values):
         if isinstance(values, dict):
             if values.get("localizedTitle") is None:
-                for key in ("uncountableTitle", "numberTitle", "title"):
+                for key in ("uncountableTitle", "title", "numberTitle", "name"):
                     if values.get(key) is not None:
                         values["localizedTitle"] = values[key]
+                        break
+            if values.get("numberTitle") is None:
+                for key in ("localizedTitle", "uncountableTitle", "title", "name"):
+                    if values.get(key) is not None:
+                        values["numberTitle"] = values[key]
                         break
             if values.get("uncountableTitle") is None and "numberTitle" in values:
                 values["uncountableTitle"] = values["numberTitle"]
@@ -136,7 +145,7 @@ class StepIngredientDetails(BaseModel):
             return {"localizedTitle": values}
         if isinstance(values, dict):
             if values.get("localizedTitle") is None:
-                for key in ("uncountableTitle", "numberTitle", "title", "name"):
+                for key in ("uncountableTitle", "title", "name", "numberTitle"):
                     if values.get(key) is not None:
                         values["localizedTitle"] = values[key]
                         break
@@ -190,7 +199,7 @@ class Recipe(BaseModel):
     def normalize_titles(cls, values):
         if isinstance(values, dict):
             if values.get("localizedTitle") is None:
-                title = values.get("title")
+                title = values.get("title") or values.get("name")
                 if title is not None:
                     values["localizedTitle"] = title
         return values

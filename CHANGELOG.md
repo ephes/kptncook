@@ -9,8 +9,8 @@ Unreleased
 - Added step-ingredient models and recipe type keywords for Tandoor exports.
 
 ### Fixes
-- #60 Tolerate string localized fields from the KptnCook API by coercing to localized values
-  and falling back when `localizedTitle` is missing.
+- #60 Extend localized field fallbacks to handle singular/plural title payloads and
+  fill missing ingredient titles more robustly.
 - #55 Follow redirects when fetching KptnCook images for Mealie sync and avoid JSON parsing
   on non-JSON error responses.
 - #818 Apply locale fallback (de -> en -> any) for exporter localized strings instead of

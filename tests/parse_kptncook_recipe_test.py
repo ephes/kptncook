@@ -93,3 +93,52 @@ def test_parse_recipe_with_string_fields():
     assert recipe.author_comment.de == "Parme-sahnig und crunchy!"
     assert recipe.steps[0].title.de == "Alles parat?"
     assert recipe.ingredients[0].ingredient.localized_title.de == "Pfeffer"
+
+
+def test_parse_recipe_with_number_title_strings():
+    recipe_data = {
+        "_id": {"$oid": "6279169b5100000701201fee"},
+        "title": "Test recipe",
+        "authorComment": "Author note",
+        "preparationTime": 10,
+        "recipeNutrition": {
+            "calories": 200,
+            "fat": 10,
+            "carbohydrate": 20,
+            "protein": 5,
+        },
+        "steps": [
+            {
+                "title": "All set?",
+                "ingredients": [],
+                "image": {
+                    "name": "REZ_0001_01.jpg",
+                    "url": "https://example.com/step.jpg",
+                    "type": "step",
+                },
+            }
+        ],
+        "imageList": [
+            {
+                "name": "REZ_0001_Cover.jpg",
+                "type": "cover",
+                "url": "https://example.com/cover.jpg",
+            }
+        ],
+        "ingredients": [
+            {
+                "quantity": 1.0,
+                "measure": "g",
+                "ingredient": {
+                    "_id": {"$oid": "5536511e5100000701221fee"},
+                    "typ": "regular",
+                    "title": "Mandel",
+                    "numberTitle": {"singular": "Mandel", "plural": "Mandeln"},
+                    "category": "nuts",
+                },
+            }
+        ],
+    }
+
+    recipe = Recipe.model_validate(recipe_data)
+    assert recipe.ingredients[0].ingredient.localized_title.de == "Mandel"
