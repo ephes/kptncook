@@ -48,6 +48,11 @@ Commands:
   export-recipes-to-tandoor  Export a recipe by id or all recipes to Tandoor
 ```
 
+### Export metadata
+
+Exports to Mealie and Tandoor include KptnCook active tags as tags/keywords
+(verbatim).
+
 ## Delete recipes
 
 Use indices from `kptncook list-recipes` or pass one or more `--oid` values.

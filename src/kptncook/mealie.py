@@ -421,6 +421,21 @@ def kptncook_to_mealie_steps(steps, api_key):
     return mealie_instructions
 
 
+def kptncook_to_mealie_tags(active_tags: list[str] | None) -> list[RecipeTag]:
+    tag_names = ["kptncook"]
+    if active_tags:
+        tag_names.extend(active_tags)
+
+    seen = set()
+    tags = []
+    for name in tag_names:
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        tags.append(RecipeTag.model_validate({"name": name, "group_id": None}))
+    return tags
+
+
 def kptncook_to_mealie(
     kcin: KptnCookRecipe, api_key: str = settings.kptncook_api_key
 ) -> RecipeWithImage:
@@ -444,7 +459,7 @@ def kptncook_to_mealie(
         "recipe_instructions": kptncook_to_mealie_steps(kcin.steps, api_key),
         "recipe_ingredient": kptncook_to_mealie_ingredients(kcin.ingredients),
         "image_url": kcin.get_image_url(api_key),
-        "tags": [RecipeTag.model_validate({"name": "kptncook", "group_id": None})],
+        "tags": kptncook_to_mealie_tags(kcin.active_tags),
         "extras": {"kptncook_id": kcin.id.oid, "source": "kptncook"},
     }
     print("kwargs: ", kwargs)

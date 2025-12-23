@@ -123,9 +123,15 @@ class TandoorExporter:
 
     def get_keywords(self, recipe: Recipe) -> list[str]:
         keywords = ["kptncook"]
+        if recipe.active_tags:
+            keywords.extend(self._filter_active_tags(recipe.active_tags))
         if recipe.rtype:
             keywords.append(recipe.rtype)
         return keywords
+
+    @staticmethod
+    def _filter_active_tags(active_tags: list[str]) -> list[str]:
+        return [tag for tag in active_tags if tag != "kptncook"]
 
     def get_steps(self, recipe: Recipe) -> list[dict[str, Any]]:
         steps = []

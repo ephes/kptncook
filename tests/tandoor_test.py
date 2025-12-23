@@ -32,6 +32,9 @@ def test_export_recipe_writes_zip_with_image(
         assert set(zip_file.namelist()) == {"recipe.json", "image.jpg"}
         payload = json.loads(zip_file.read("recipe.json").decode("utf-8"))
     assert payload["name"] == recipe.localized_title.de
+    assert "kptncook" in payload["keywords"]
+    assert "main_ingredient_pasta" in payload["keywords"]
+    assert "Fish" in payload["keywords"]
     httpx_get.assert_called_once_with(
         "https://example.com/cover.jpg", follow_redirects=True
     )
@@ -102,3 +105,15 @@ def test_get_source_url_prefers_uid(full_recipe, minimal):
     assert exporter.get_source_url(without_uid) == (
         f"https://share.kptncook.com/{without_uid.id.oid}"
     )
+
+
+def test_get_keywords_includes_active_tags_and_rtype(minimal):
+    exporter = TandoorExporter()
+    recipe_data = {
+        **minimal,
+        "activeTags": ["kptncook", "quick", "dinner"],
+        "rtype": "Fish",
+    }
+    recipe = Recipe.model_validate(recipe_data)
+
+    assert exporter.get_keywords(recipe) == ["kptncook", "quick", "dinner", "Fish"]

@@ -31,6 +31,17 @@ def test_parse_full_recipe(full_recipe):
     # assert False
 
 
+def test_parse_recipe_active_tags_present(full_recipe):
+    recipe = Recipe.model_validate(full_recipe)
+    assert recipe.active_tags is not None
+    assert "main_ingredient_pasta" in recipe.active_tags
+
+
+def test_parse_recipe_active_tags_missing(minimal):
+    recipe = Recipe.model_validate(minimal)
+    assert recipe.active_tags is None
+
+
 def test_ingredient_details_without_uncountable_title():
     ingredient_details = {
         "typ": "ingredient",

@@ -191,6 +191,7 @@ class Recipe(BaseModel):
     preparation_time: int
     cooking_time: int | None = None
     recipe_nutrition: Nutrition
+    active_tags: list[str] | None = None
     steps: list[RecipeStep] = Field(..., alias="steps")
     image_list: list[Image]
     ingredients: list[Ingredient]
