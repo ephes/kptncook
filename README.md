@@ -18,6 +18,38 @@ It's in pre alpha status and currently slightly unmaintained. If you want to ste
 $ uvx install kptncook
 ```
 
+# Docker
+
+Build the image from this repository:
+
+```shell
+$ docker build -t kptncook .
+```
+
+The container sets `KPTNCOOK_HOME=/data`. Mount that directory and provide the
+required environment variables:
+
+```shell
+$ docker run --rm -v ~/.kptncook:/data \
+    -e KPTNCOOK_API_KEY=6q7QNKy-oIgk-IMuWisJ-jfN7s6 \
+    -e MEALIE_URL=https://mealie.example.com/api \
+    -e MEALIE_USERNAME=user \
+    -e MEALIE_PASSWORD=pass \
+    kptncook sync
+```
+
+To back up favorites, also set `KPTNCOOK_ACCESS_TOKEN`:
+
+```shell
+$ docker run --rm -v ~/.kptncook:/data \
+    -e KPTNCOOK_API_KEY=... \
+    -e KPTNCOOK_ACCESS_TOKEN=... \
+    -e MEALIE_URL=https://mealie.example.com/api \
+    -e MEALIE_USERNAME=user \
+    -e MEALIE_PASSWORD=pass \
+    kptncook backup-favorites
+```
+
 # Usage
 
 ## help

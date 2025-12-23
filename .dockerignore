@@ -1,0 +1,10 @@
+.beads/
+.git/
+.venv/
+__pycache__/
+*.egg-info/
+*.pyc
+build/
+dist/
+notebooks/
+tests/

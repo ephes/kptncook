@@ -28,6 +28,7 @@ Unreleased
 - Excluded notebooks from Ruff formatting and linting.
 - Updated clean targets to skip `.venv/`, `.beads/`, and `.git/`.
 - Added a GitHub-to-Beads importer script and just helper with dry-run support.
+- Added a basic Dockerfile and .dockerignore for container builds.
 
 ### Documentation
 - Documented Beads onboarding and `.beads/` commit policy.
@@ -35,6 +36,7 @@ Unreleased
 - Updated pre-commit install instructions to use `uv run`.
 - Documented the GitHub issue import helper.
 - Documented the `export-recipes-to-tandoor` command in the README.
+- Added Docker usage instructions to the README.
 
 0.0.25 - 2025-06-28
 ===================
