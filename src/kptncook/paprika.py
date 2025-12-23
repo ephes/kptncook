@@ -26,7 +26,8 @@ from jinja2 import Template
 from unidecode import unidecode
 
 from kptncook.config import settings
-from kptncook.models import Image, Recipe, localized_fallback
+from kptncook.ingredient_groups import iter_ingredient_groups
+from kptncook.models import Image, Ingredient, Recipe, localized_fallback
 
 PAPRIKA_RECIPE_TEMPLATE = """{
    "uid":"{{recipe.id.oid}}",
@@ -35,7 +36,7 @@ PAPRIKA_RECIPE_TEMPLATE = """{
    "servings":"2",
    "rating":0,
    "difficulty":"",
-   "ingredients":"{% for ingredient in recipe.ingredients %}{% if ingredient.quantity %}{{'{0:g}'.format(ingredient.quantity) }}{% endif %} {{ingredient.measure|default('',true)}} {{localized_fallback(ingredient.ingredient.uncountable_title)|default('',true)}}\\n{% endfor %}",
+   "ingredients":"{{ingredients_text}}",
    "notes":"",
    "created":"{{dtnow}}",
    "image_url":null,
@@ -104,6 +105,7 @@ class PaprikaExporter:
 
     def get_recipe_as_json_string(self, recipe: Recipe) -> str:
         generated = self.get_generated_data(recipe=recipe)
+        ingredients_text = self.get_ingredients_text(recipe.ingredients)
         recipe_as_json = self.template.render(
             recipe=recipe,
             localized_fallback=localized_fallback,
@@ -111,11 +113,38 @@ class PaprikaExporter:
             cover_filename=generated.cover_filename,
             hash=generated.hash,
             cover_img=generated.cover_img,
+            ingredients_text=ingredients_text,
         )
         recipe_as_json = self.invalid_control_chars.sub("", recipe_as_json)
         recipe_as_json = self.unescaped_newline.sub(" ", recipe_as_json)
         json.loads(recipe_as_json)  # check if valid json
         return recipe_as_json
+
+    def get_ingredients_text(self, ingredients: list[Ingredient]) -> str:
+        lines = []
+        for group_label, group_ingredients in iter_ingredient_groups(ingredients):
+            if group_label:
+                lines.append(f"{group_label}:")
+            for ingredient in group_ingredients:
+                line = self.format_ingredient_line(ingredient)
+                if line:
+                    lines.append(line)
+        if not lines:
+            return ""
+        return "\\n".join(lines) + "\\n"
+
+    def format_ingredient_line(self, ingredient: Ingredient) -> str:
+        parts: list[str] = []
+        if ingredient.quantity:
+            parts.append("{0:g}".format(ingredient.quantity))
+        if ingredient.measure:
+            parts.append(ingredient.measure)
+        ingredient_name = (
+            localized_fallback(ingredient.ingredient.uncountable_title) or ""
+        )
+        if ingredient_name:
+            parts.append(ingredient_name)
+        return " ".join(part for part in parts if part).strip()
 
     def get_export_data(self, recipes: list[Recipe]) -> dict[str, str]:
         export_data = dict()

@@ -3,6 +3,14 @@ from pathlib import Path
 
 import pytest
 
+from kptncook.config import settings
+
+
+@pytest.fixture(autouse=True)
+def reset_grouping_settings(monkeypatch):
+    monkeypatch.setattr(settings, "kptncook_group_ingredients_by_typ", False)
+    monkeypatch.setattr(settings, "kptncook_ingredient_group_labels", None)
+
 
 @pytest.fixture
 def full_recipe():

@@ -7,6 +7,8 @@ Unreleased
 - #50 Added a Tandoor exporter module and `export-recipes-to-tandoor` command for
   recipe.zip generation (thanks @michael-arndt-gcx).
 - Added step-ingredient models and recipe type keywords for Tandoor exports.
+- #38 Added optional ingredient grouping by `ingredient.typ` across exporters with
+  configurable labels (thanks @ValleBL).
 - #41 Exported KptnCook active tags to Mealie and Tandoor, deduping the base
   kptncook tag while preserving recipe type keywords (thanks @Kadz93).
 

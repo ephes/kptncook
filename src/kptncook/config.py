@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     # Password manager integration
     kptncook_username_command: str | None = None
     kptncook_password_command: str | None = None
+    kptncook_group_ingredients_by_typ: bool = False
+    kptncook_ingredient_group_labels: str | None = None
 
     @field_validator("root", mode="before")
     def root_must_exist(cls, path: Path) -> Path:

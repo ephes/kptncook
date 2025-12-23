@@ -10,6 +10,7 @@ import httpx
 from pydantic import UUID4, BaseModel, ConfigDict, Field, ValidationError, parse_obj_as
 
 from .config import settings
+from .ingredient_groups import iter_ingredient_groups
 from .models import Image, localized_fallback
 from .models import Recipe as KptnCookRecipe
 
@@ -389,21 +390,31 @@ class MealieApiClient:
 
 def kptncook_to_mealie_ingredients(kptncook_ingredients):
     mealie_ingredients = []
-    for ingredient in kptncook_ingredients:
-        title = localized_fallback(ingredient.ingredient.localized_title) or ""
-        note = None
-        if "," in title:
-            title, note, *parts = (p.strip() for p in title.split(","))
-        food = {"name": title}
-        quantity = ingredient.quantity
-        measure = None
-        if hasattr(ingredient, "measure"):
-            if ingredient.measure is not None:
-                measure = {"name": ingredient.measure}
-        mealie_ingredient = RecipeIngredient(
-            title=None, quantity=quantity, unit=measure, note=note, food=food
-        )
-        mealie_ingredients.append(mealie_ingredient)
+    groups = iter_ingredient_groups(kptncook_ingredients or [])
+    for group_label, ingredients in groups:
+        for ingredient in ingredients:
+            ingredient_title = (
+                localized_fallback(ingredient.ingredient.localized_title) or ""
+            )
+            note = None
+            if "," in ingredient_title:
+                ingredient_title, note, *_ = (
+                    p.strip() for p in ingredient_title.split(",")
+                )
+            food = {"name": ingredient_title}
+            quantity = ingredient.quantity
+            measure = None
+            if hasattr(ingredient, "measure"):
+                if ingredient.measure is not None:
+                    measure = {"name": ingredient.measure}
+            mealie_ingredient = RecipeIngredient(
+                title=group_label or None,
+                quantity=quantity,
+                unit=measure,
+                note=note,
+                food=food,
+            )
+            mealie_ingredients.append(mealie_ingredient)
     return mealie_ingredients
 
 

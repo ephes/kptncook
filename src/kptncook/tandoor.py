@@ -17,6 +17,7 @@ import httpx
 from unidecode import unidecode
 
 from kptncook.config import settings
+from kptncook.ingredient_groups import iter_ingredient_groups
 from kptncook.models import (
     Image,
     Ingredient,
@@ -199,9 +200,17 @@ class TandoorExporter:
 
     def get_ingredients(self, recipe: Recipe) -> list[dict[str, Any]]:
         ingredients = []
-        for ingredient in recipe.ingredients:
-            ingredients.append(self.get_ingredient_payload(ingredient=ingredient))
+        for group_label, group_ingredients in iter_ingredient_groups(
+            recipe.ingredients
+        ):
+            if group_label:
+                ingredients.append(self.get_group_header_payload(label=group_label))
+            for ingredient in group_ingredients:
+                ingredients.append(self.get_ingredient_payload(ingredient=ingredient))
         return ingredients
+
+    def get_group_header_payload(self, label: str) -> dict[str, Any]:
+        return {"note": label, "is_header": True, "no_amount": True, "amount": 0}
 
     def get_ingredient_payload(self, ingredient: Ingredient) -> dict[str, Any]:
         ingredient_name = self.get_ingredient_name(ingredient=ingredient) or ""

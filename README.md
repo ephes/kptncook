@@ -98,6 +98,16 @@ KPTNCOOK_USERNAME_COMMAND="pass show kptncook/username"
 KPTNCOOK_PASSWORD_COMMAND="pass show kptncook/password"
 ```
 
+### Ingredient Grouping (Optional)
+
+To split ingredient lists by `ingredient.typ` (e.g., "regular" vs "basic") across
+all exporters, set the toggle below. You can also customize the section labels.
+
+```shell
+KPTNCOOK_GROUP_INGREDIENTS_BY_TYP=true
+KPTNCOOK_INGREDIENT_GROUP_LABELS="regular:You need,basic:Pantry"
+```
+
 ### Full Configuration Example
 
 ```shell
@@ -110,6 +120,10 @@ MEALIE_PASSWORD=password  # replace with correct password
 # Optional: Password manager integration
 KPTNCOOK_USERNAME_COMMAND="op read op://Personal/KptnCook/username"
 KPTNCOOK_PASSWORD_COMMAND="op read op://Personal/KptnCook/password"
+
+# Optional: Ingredient grouping
+KPTNCOOK_GROUP_INGREDIENTS_BY_TYP=true
+KPTNCOOK_INGREDIENT_GROUP_LABELS="regular:You need,basic:Pantry"
 ```
 
 # Troubleshooting
