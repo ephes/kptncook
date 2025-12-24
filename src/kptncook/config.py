@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     kptncook_api_key: str
     kptncook_access_token: str | None = None
     kptncook_api_url: AnyHttpUrl = AnyHttpUrl("https://mobile.kptncook.com")
+    kptncook_lang: str = "de"
+    kptncook_store: str = "de"
+    kptncook_preferences: str | None = None
     mealie_url: AnyHttpUrl = AnyHttpUrl("http://localhost:9000/api")
     mealie_username: str
     mealie_password: str

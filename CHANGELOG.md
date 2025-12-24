@@ -2,6 +2,13 @@ Unreleased
 ==========
 
 ### Features
+- Added `discovery-screen` command to list discovery lists and quick search entries.
+- Added `discovery-list` command to fetch discovery list recipes (latest/recommended or curated/automated list IDs).
+- Added `dailies` command and API support to fetch full daily recipes with optional filters.
+- Added `onboarding` command to fetch tagged onboarding recipes.
+- Added `ingredients-popular` and `recipes-with-ingredients` commands with API support
+  for ingredient discovery and ingredient-based recipe searches.
+- Added an API helper to resolve recipe summary identifiers via `/recipes/search`.
 - #54 Added `delete-recipes` command to remove recipes from the local repository by
   index or oid to avoid re-syncing unwanted items.
 - #50 Added a Tandoor exporter module and `export-recipes-to-tandoor` command for
@@ -13,6 +20,9 @@ Unreleased
   kptncook tag while preserving recipe type keywords (thanks @Kadz93).
 
 ### Fixes
+- Fixed discovery list fetching to use the correct API paths and show quick-search
+  entries and ingredient names in the CLI output.
+- Allow comma-separated onboarding tags in the CLI and de-duplicate inputs.
 - #36 Handle Mealie 422 validation errors without masking the response (thanks @dvogt23).
 - #60 Extend localized field fallbacks to handle singular/plural title payloads and
   fill missing ingredient titles more robustly.
@@ -33,6 +43,32 @@ Unreleased
 - Added a basic Dockerfile and .dockerignore for container builds.
 
 ### Documentation
+- Added quick README examples for automated discovery lists and multi-tag onboarding saves.
+- Clarified required `--tag` and `--ingredient-id` flags for onboarding and
+  ingredient-based commands in the README usage section.
+- Added quick usage snippets for discovery, dailies, onboarding, and ingredient
+  commands in the README.
+- Added curated and recommended discovery list examples to the README quick usage snippets.
+- Documented discovery, dailies, onboarding, and ingredient-based commands with
+  examples (including recipeFilter/zone) and required flags in the README.
+- Documented discovery list short flags and onboarding tag slug examples in the
+  README usage section.
+- Added a discovery-screen -> discovery-list workflow example and clarified save
+  options for dailies, discovery lists, and ingredient-based commands in the
+  README usage section.
+- Expanded README discovery and ingredient usage examples for automated lists
+  and repeatable ingredient ids.
+- Clarified discovery list output format and recipe summary resolution in the
+  README usage section.
+- Clarified required discovery list flags and popular ingredient output format
+  in the README usage section.
+- Updated the README intro and ingredient guidance for discovery, dailies,
+  onboarding, and ingredient-based commands, and corrected the access-token
+  helper name.
+- Clarified README guidance on access-token requirements for ingredient-based
+  commands and onboarding recipe resolution.
+- Clarified discovery list type requirements and list-id usage in the README
+  usage section.
 - Documented Beads onboarding and `.beads/` commit policy.
 - Documented required quality gates and beadsflow usage.
 - Updated pre-commit install instructions to use `uv run`.
