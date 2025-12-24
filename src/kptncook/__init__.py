@@ -104,6 +104,22 @@ def get_recipe_from_repository_by_oid(oid: str) -> list[Recipe]:
     return [recipe for num, recipe in enumerate(recipes) if recipe.id.oid == oid]
 
 
+def _extract_mealie_detail_message(response: httpx.Response) -> str | None:
+    if "application/json" not in response.headers.get("content-type", ""):
+        return None
+    try:
+        response_data = response.json()
+    except ValueError:
+        return None
+    if isinstance(response_data, dict):
+        detail = response_data.get("detail", {})
+        if isinstance(detail, dict):
+            detail_message = detail.get("message")
+            if isinstance(detail_message, str):
+                return detail_message
+    return None
+
+
 @cli.command(name="sync-with-mealie")
 def sync_with_mealie():
     """
@@ -130,14 +146,7 @@ def sync_with_mealie():
             created = client.create_recipe(recipe)
             created_slugs.append(created.slug)
         except httpx.HTTPStatusError as e:
-            detail_message = None
-            try:
-                if "application/json" in e.response.headers.get("content-type", ""):
-                    detail = e.response.json().get("detail", {})
-                    if isinstance(detail, dict):
-                        detail_message = detail.get("message")
-            except ValueError:
-                detail_message = None
+            detail_message = _extract_mealie_detail_message(e.response)
             if detail_message == "Recipe already exists":
                 continue
     rprint(f"Created {len(created_slugs)} recipes")

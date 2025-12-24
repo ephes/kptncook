@@ -13,6 +13,7 @@ Unreleased
   kptncook tag while preserving recipe type keywords (thanks @Kadz93).
 
 ### Fixes
+- #36 Handle Mealie 422 validation errors without masking the response (thanks @dvogt23).
 - #60 Extend localized field fallbacks to handle singular/plural title payloads and
   fill missing ingredient titles more robustly.
 - #55 Follow redirects when fetching KptnCook images for Mealie sync and avoid JSON parsing

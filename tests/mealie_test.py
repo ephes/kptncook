@@ -1,5 +1,6 @@
 import httpx
 
+from kptncook import _extract_mealie_detail_message
 from kptncook.mealie import MealieApiClient, Recipe
 from kptncook.models import Image
 
@@ -89,3 +90,27 @@ def test_upload_asset_follows_redirects(monkeypatch):
 
     assert seen["follow_redirects"] is True
     assert result["fileName"] == "step.jpg"
+
+
+def test_extract_mealie_detail_message_handles_list_response():
+    request = httpx.Request("PUT", "http://mealie.local/api/recipes/slug")
+    response = httpx.Response(
+        422,
+        request=request,
+        json=[{"loc": ["body", "image_url"], "msg": "missing", "type": "value_error"}],
+        headers={"content-type": "application/json"},
+    )
+
+    assert _extract_mealie_detail_message(response) is None
+
+
+def test_extract_mealie_detail_message_reads_detail_message():
+    request = httpx.Request("PUT", "http://mealie.local/api/recipes/slug")
+    response = httpx.Response(
+        409,
+        request=request,
+        json={"detail": {"message": "Recipe already exists"}},
+        headers={"content-type": "application/json"},
+    )
+
+    assert _extract_mealie_detail_message(response) == "Recipe already exists"
