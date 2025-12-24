@@ -336,7 +336,7 @@ class MealieApiClient:
 
     def create_recipe(self, recipe):
         slug = self._post_recipe_trunk_and_get_slug(recipe.name)
-        print(slug)
+        logger.debug("Created Mealie recipe slug: %s", slug)
         recipe.slug = slug
         self._scrape_image_for_recipe(recipe, slug)
         recipe = self._update_user_and_group_id(recipe, slug)
@@ -473,5 +473,5 @@ def kptncook_to_mealie(
         "tags": kptncook_to_mealie_tags(kcin.active_tags),
         "extras": {"kptncook_id": kcin.id.oid, "source": "kptncook"},
     }
-    print("kwargs: ", kwargs)
+    logger.debug("Mealie recipe payload kwargs: %s", kwargs)
     return RecipeWithImage(**kwargs)

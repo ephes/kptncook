@@ -11,6 +11,7 @@ import base64
 import glob
 import gzip
 import json
+import logging
 import os
 import re
 import secrets
@@ -54,6 +55,8 @@ PAPRIKA_RECIPE_TEMPLATE = """{
    "categories":["Kptncook"]
 }
 """  # noqa: E501
+
+logger = logging.getLogger(__name__)
 
 
 class GeneratedData:
@@ -153,7 +156,7 @@ class PaprikaExporter:
                 recipe_as_json = self.get_recipe_as_json_string(recipe=recipe)
                 export_data[str(recipe.id.oid)] = recipe_as_json
             except json.JSONDecodeError as e:
-                print(f"Could not parse recipe {recipe.id.oid}: {e}")
+                logger.warning("Could not parse recipe %s: %s", recipe.id.oid, e)
         return export_data
 
     def move_to_target_dir(self, source: str, target: str) -> str:
@@ -177,7 +180,7 @@ class PaprikaExporter:
             filename_full_path, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True
         ) as zip_file:
             gz_files = glob.glob(os.path.join(directory, "*.paprikarecipe"))
-            print(gz_files)
+            logger.debug("Paprika export files: %s", gz_files)
             for gz_file in gz_files:
                 zip_file.write(gz_file, arcname=os.path.basename(gz_file))
         return filename_full_path
@@ -197,10 +200,12 @@ class PaprikaExporter:
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 title = localized_fallback(recipe.localized_title) or "kptncook-recipe"
-                print(f'Cover image for "{title}" not found online any more.')
+                logger.warning('Cover image for "%s" not found online any more.', title)
             else:
-                print(
-                    f"While trying to fetch the cover img a HTTP error occurred: {exc.response.status_code}: {exc}"
+                logger.error(
+                    "HTTP error while fetching cover image (%s): %s",
+                    exc.response.status_code,
+                    exc,
                 )
             return None, None
         return cover.name, base64.b64encode(response.content).decode("utf-8")

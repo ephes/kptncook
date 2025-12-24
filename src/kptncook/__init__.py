@@ -84,13 +84,8 @@ def get_kptncook_recipes_from_repository() -> list[Recipe]:
         # recipes.append(Recipe.model_validate(repo_recipe.data))
         try:
             recipes.append(Recipe.model_validate(repo_recipe.data))
-        except Exception as e:
-            print(f"Could not parse recipe {repo_recipe.id}: {e}")
-            for ingredient in repo_recipe.data.get("ingredients"):
-                uncountable_title = ingredient["ingredient"].get("uncountableTitle")
-                if uncountable_title is None:
-                    print("ingredient: ", ingredient["ingredient"])
-            # return []
+        except Exception:
+            continue
     return recipes
 
 

@@ -20,6 +20,7 @@ Unreleased
   on non-JSON error responses.
 - #818 Apply locale fallback (de -> en -> any) for exporter localized strings instead of
   hard-coding German.
+- Replaced raw debug prints with logging for cleaner CLI output during exports/sync.
 
 ### Infrastructure
 - Added a justfile with common dev commands and beadsflow helpers.
