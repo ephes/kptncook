@@ -15,7 +15,7 @@ from rich.pretty import pprint
 from .api import KptnCookClient, parse_id
 from .config import settings
 from .mealie import MealieApiClient, kptncook_to_mealie
-from .models import Recipe
+from .models import Recipe, localized_fallback
 from .paprika import PaprikaExporter
 from .tandoor import TandoorExporter
 from .repositories import RecipeInDb, RecipeRepository
@@ -491,7 +491,8 @@ def list_recipes():
     """
     recipes = get_kptncook_recipes_from_repository()
     for num, recipe in enumerate(recipes):
-        rprint(num, recipe.localized_title.de, recipe.id.oid)
+        title = localized_fallback(recipe.localized_title) or "Unknown title"
+        rprint(num, title, recipe.id.oid)
 
 
 @cli.command(name="discovery-screen")
@@ -823,14 +824,7 @@ def delete_recipes(
         if recipe is None:
             rprint(f"- {oid}")
             continue
-        title = (
-            recipe.localized_title.de
-            or recipe.localized_title.en
-            or recipe.localized_title.fr
-            or recipe.localized_title.es
-            or recipe.localized_title.pt
-            or "Unknown title"
-        )
+        title = localized_fallback(recipe.localized_title) or "Unknown title"
         rprint(f"- {title} ({oid})")
 
     if not force and not typer.confirm("Delete these recipes from local storage?"):

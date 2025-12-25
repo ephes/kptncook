@@ -15,18 +15,21 @@ import logging
 import os
 import re
 import secrets
-import shutil
 import tempfile
-import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import httpx
 from jinja2 import Template
-from unidecode import unidecode
 
 from kptncook.config import settings
+from kptncook.exporter_utils import (
+    asciify_string,
+    get_cover,
+    move_to_target_dir,
+    write_zip,
+)
 from kptncook.ingredient_groups import iter_ingredient_groups
 from kptncook.models import Image, Ingredient, Recipe, localized_fallback
 
@@ -81,7 +84,7 @@ class PaprikaExporter:
         filename_full_path = self.save_recipes(
             export_data=export_data, directory=tmp_dir, filename=filename
         )
-        self.move_to_target_dir(
+        move_to_target_dir(
             source=filename_full_path, target=os.path.join(str(Path.cwd()), filename)
         )
         return filename
@@ -91,7 +94,7 @@ class PaprikaExporter:
     ) -> str:
         if len(export_data) == 1:
             return (
-                self.asciify_string(
+                asciify_string(
                     s=localized_fallback(recipes[0].localized_title) or "recipe"
                 )
                 + ".paprikarecipes"
@@ -159,15 +162,6 @@ class PaprikaExporter:
                 logger.warning("Could not parse recipe %s: %s", recipe.id.oid, e)
         return export_data
 
-    def move_to_target_dir(self, source: str, target: str) -> str:
-        return shutil.move(source, target)
-
-    def asciify_string(self, s) -> str:
-        s = unidecode(s)
-        s = re.sub(r"[^\w\s]", "_", s)
-        s = re.sub(r"\s+", "_", s)
-        return s
-
     def save_recipes(
         self, export_data: dict[str, Any], filename: str, directory: str
     ) -> str:
@@ -176,19 +170,16 @@ class PaprikaExporter:
             with gzip.open(recipe_as_gz, "wb") as f:
                 f.write(recipe_as_json.encode("utf-8"))
         filename_full_path = os.path.join(directory, filename)
-        with zipfile.ZipFile(
-            filename_full_path, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True
-        ) as zip_file:
-            gz_files = glob.glob(os.path.join(directory, "*.paprikarecipe"))
-            logger.debug("Paprika export files: %s", gz_files)
-            for gz_file in gz_files:
-                zip_file.write(gz_file, arcname=os.path.basename(gz_file))
+        gz_files = glob.glob(os.path.join(directory, "*.paprikarecipe"))
+        logger.debug("Paprika export files: %s", gz_files)
+        entries = [(Path(gz_file).name, Path(gz_file)) for gz_file in gz_files]
+        write_zip(Path(filename_full_path), entries)
         return filename_full_path
 
     def get_cover_img_as_base64_string(
         self, recipe: Recipe
     ) -> tuple[str | None, str | None]:
-        cover = self.get_cover(image_list=recipe.image_list)
+        cover = get_cover(image_list=recipe.image_list)
         if cover is None:
             raise ValueError("No cover image found")
         cover_url = recipe.get_image_url(api_key=settings.kptncook_api_key)
@@ -210,11 +201,10 @@ class PaprikaExporter:
             return None, None
         return cover.name, base64.b64encode(response.content).decode("utf-8")
 
-    def get_cover(self, image_list: list[Image]) -> Image | None:
+    def asciify_string(self, s: str) -> str:
+        return asciify_string(s)
+
+    def get_cover(self, image_list: list[Image] | None) -> Image | None:
         if not isinstance(image_list, list):
             raise ValueError("Parameter image_list must be a list")
-        try:
-            [cover] = [i for i in image_list if i.type == "cover"]
-        except ValueError:
-            return None
-        return cover
+        return get_cover(image_list)

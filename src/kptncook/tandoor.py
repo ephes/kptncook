@@ -6,20 +6,22 @@ Tandoor expects a zip archive with a recipe.json file and an optional image.jpg.
 
 import json
 import logging
-import re
-import shutil
 import tempfile
-import zipfile
 from pathlib import Path
 from typing import Any
 
 import httpx
-from unidecode import unidecode
 
 from kptncook.config import settings
+from kptncook.exporter_utils import (
+    asciify_string,
+    get_cover,
+    move_to_target_dir,
+    write_zip,
+    ZipContent,
+)
 from kptncook.ingredient_groups import iter_ingredient_groups
 from kptncook.models import (
-    Image,
     Ingredient,
     localized_fallback,
     Recipe,
@@ -44,29 +46,24 @@ class TandoorExporter:
         image_bytes = self.get_cover_image_bytes(recipe=recipe)
         with tempfile.TemporaryDirectory() as tmp_dir:
             zip_path = Path(tmp_dir) / filename
-            with zipfile.ZipFile(
-                zip_path, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True
-            ) as zip_file:
-                zip_file.writestr(
-                    "recipe.json", json.dumps(payload, ensure_ascii=False, indent=2)
+            entries: list[tuple[str, ZipContent]] = [
+                (
+                    "recipe.json",
+                    json.dumps(payload, ensure_ascii=False, indent=2),
                 )
-                if image_bytes is not None:
-                    zip_file.writestr("image.jpg", image_bytes)
-            shutil.move(zip_path, Path.cwd() / filename)
+            ]
+            if image_bytes is not None:
+                entries.append(("image.jpg", image_bytes))
+            write_zip(zip_path, entries)
+            move_to_target_dir(zip_path, Path.cwd() / filename)
         return filename
 
     def get_export_filename(self, recipe: Recipe) -> str:
         title = localized_fallback(recipe.localized_title) or "kptncook-recipe"
-        return f"{self.asciify_string(title)}.zip"
-
-    def asciify_string(self, s: str) -> str:
-        s = unidecode(s)
-        s = re.sub(r"[^\w\s]", "_", s)
-        s = re.sub(r"\s+", "_", s)
-        return s
+        return f"{asciify_string(title)}.zip"
 
     def get_cover_image_bytes(self, recipe: Recipe) -> bytes | None:
-        cover = self.get_cover(image_list=recipe.image_list)
+        cover = get_cover(image_list=recipe.image_list)
         if cover is None:
             return None
         cover_url = recipe.get_image_url(api_key=settings.kptncook_api_key)
@@ -95,15 +92,6 @@ class TandoorExporter:
             )
             return None
         return response.content
-
-    def get_cover(self, image_list: list[Image] | None) -> Image | None:
-        if not isinstance(image_list, list):
-            return None
-        try:
-            [cover] = [i for i in image_list if i.type == "cover"]
-        except ValueError:
-            return None
-        return cover
 
     def get_recipe_payload(self, recipe: Recipe) -> dict[str, Any]:
         return {
