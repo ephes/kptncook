@@ -1,6 +1,9 @@
 Unreleased
 ==========
 
+0.0.26 - 2025-12-25
+===================
+
 ### Features
 - Added `discovery-screen` command to list discovery lists and quick search entries.
 - Added `discovery-list` command to fetch discovery list recipes (latest/recommended or curated/automated list IDs).
