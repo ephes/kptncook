@@ -3,6 +3,7 @@ Unreleased
 
 ### Features
 - Export step ingredient references to Mealie for cooking mode linking.
+- Added `MEALIE_API_TOKEN` support as an alternative to username/password for Mealie sync.
 
 0.0.26 - 2025-12-25
 ===================

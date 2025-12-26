@@ -119,8 +119,17 @@ def list_kptncook_dailies(
 
 def get_mealie_client() -> MealieApiClient:
     client = MealieApiClient(settings.mealie_url)
-    client.login(settings.mealie_username, settings.mealie_password)
-    return client
+    if settings.mealie_api_token:
+        client.login_with_token(settings.mealie_api_token)
+        return client
+    if settings.mealie_username and settings.mealie_password:
+        client.login(settings.mealie_username, settings.mealie_password)
+        return client
+    rprint(
+        "[red]Mealie authentication required. "
+        "Set MEALIE_API_TOKEN or MEALIE_USERNAME/MEALIE_PASSWORD.[/red]"
+    )
+    sys.exit(1)
 
 
 def get_kptncook_recipes_from_mealie(client):

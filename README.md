@@ -27,7 +27,8 @@ $ docker build -t kptncook .
 ```
 
 The container sets `KPTNCOOK_HOME=/data`. Mount that directory and provide the
-required environment variables:
+required environment variables. For Mealie auth, set `MEALIE_API_TOKEN` or
+`MEALIE_USERNAME`/`MEALIE_PASSWORD`:
 
 ```shell
 $ docker run --rm -v ~/.kptncook:/data \
@@ -37,6 +38,9 @@ $ docker run --rm -v ~/.kptncook:/data \
     -e MEALIE_PASSWORD=pass \
     kptncook sync
 ```
+
+Alternatively, set `MEALIE_API_TOKEN=...` instead of `MEALIE_USERNAME` and
+`MEALIE_PASSWORD`.
 
 To back up favorites, also set `KPTNCOOK_ACCESS_TOKEN`:
 
@@ -197,7 +201,7 @@ $ mkdir -p ~/.kptncook
 $ touch ~/.kptncook/.env
 ```
 
-Then set environment variables in the `~/.kptncook/.env` file (or directly in your shell). You'll need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie, you also have to set some additional variables.
+Then set environment variables in the `~/.kptncook/.env` file (or directly in your shell). You'll need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie, set `MEALIE_API_TOKEN` or `MEALIE_USERNAME`/`MEALIE_PASSWORD`.
 
 **Important:** The `.env` file must be created in the `~/.kptncook/` directory, NOT in the installation directory or by editing the `kptncook` executable.
 
@@ -245,6 +249,9 @@ KPTNCOOK_INGREDIENT_GROUP_LABELS="regular:You need,basic:Pantry"
 KPTNCOOK_API_KEY=6q7QNKy-oIgk-IMuWisJ-jfN7s6
 KPTNCOOK_ACCESS_TOKEN=9353xxxx-xxxx-4fe1-xxxx-xxx4a173805  # replace with correct token
 MEALIE_URL=https://mealie.staging.django-cast.com/api
+# Mealie auth (choose one)
+MEALIE_API_TOKEN=mealie-api-token
+# or:
 MEALIE_USERNAME=jochen
 MEALIE_PASSWORD=password  # replace with correct password
 

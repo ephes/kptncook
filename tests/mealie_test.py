@@ -1,6 +1,9 @@
 import httpx
+import pytest
 
+import kptncook
 from kptncook import _extract_mealie_detail_message
+from kptncook.config import settings
 from kptncook.mealie import MealieApiClient, Recipe
 from kptncook.models import Image
 
@@ -90,6 +93,63 @@ def test_upload_asset_follows_redirects(monkeypatch):
 
     assert seen["follow_redirects"] is True
     assert result["fileName"] == "step.jpg"
+
+
+def test_get_mealie_client_uses_token(monkeypatch):
+    called = {}
+
+    class FakeClient:
+        def __init__(self, base_url):
+            self.base_url = base_url
+
+        def login_with_token(self, token):
+            called["token"] = token
+
+        def login(self, username, password):
+            called["login"] = (username, password)
+
+    monkeypatch.setattr(kptncook, "MealieApiClient", FakeClient)
+    monkeypatch.setattr(settings, "mealie_api_token", "token-123")
+    monkeypatch.setattr(settings, "mealie_username", "user")
+    monkeypatch.setattr(settings, "mealie_password", "pass")
+
+    client = kptncook.get_mealie_client()
+
+    assert isinstance(client, FakeClient)
+    assert called == {"token": "token-123"}
+
+
+def test_get_mealie_client_uses_username_password(monkeypatch):
+    called = {}
+
+    class FakeClient:
+        def __init__(self, base_url):
+            self.base_url = base_url
+
+        def login_with_token(self, token):
+            called["token"] = token
+
+        def login(self, username, password):
+            called["login"] = (username, password)
+
+    monkeypatch.setattr(kptncook, "MealieApiClient", FakeClient)
+    monkeypatch.setattr(settings, "mealie_api_token", None)
+    monkeypatch.setattr(settings, "mealie_username", "user")
+    monkeypatch.setattr(settings, "mealie_password", "pass")
+
+    client = kptncook.get_mealie_client()
+
+    assert isinstance(client, FakeClient)
+    assert called == {"login": ("user", "pass")}
+
+
+def test_get_mealie_client_exits_without_credentials(monkeypatch):
+    monkeypatch.setattr(settings, "mealie_api_token", None)
+    monkeypatch.setattr(settings, "mealie_username", None)
+    monkeypatch.setattr(settings, "mealie_password", None)
+
+    with pytest.raises(SystemExit):
+        kptncook.get_mealie_client()
 
 
 def test_extract_mealie_detail_message_handles_list_response():

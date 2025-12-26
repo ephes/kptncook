@@ -205,6 +205,9 @@ class MealieApiClient:
         access_token = self.fetch_api_token(username, password)
         self.headers = {"authorization": f"Bearer {access_token}"}
 
+    def login_with_token(self, token: str):
+        self.headers = {"authorization": f"Bearer {token}"}
+
     def upload_asset(self, recipe_slug, image: Image):
         # download image
         r = httpx.get(image.url, follow_redirects=True)

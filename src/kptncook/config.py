@@ -24,8 +24,9 @@ class Settings(BaseSettings):
     kptncook_store: str = "de"
     kptncook_preferences: str | None = None
     mealie_url: AnyHttpUrl = AnyHttpUrl("http://localhost:9000/api")
-    mealie_username: str
-    mealie_password: str
+    mealie_username: str | None = None
+    mealie_password: str | None = None
+    mealie_api_token: str | None = None
 
     # Password manager integration
     kptncook_username_command: str | None = None
