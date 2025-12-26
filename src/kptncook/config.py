@@ -34,7 +34,8 @@ class Settings(BaseSettings):
     kptncook_ingredient_group_labels: str | None = None
 
     @field_validator("root", mode="before")
-    def root_must_exist(cls, path: Path) -> Path:
+    def root_must_exist(cls, path) -> Path:
+        path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
         return path
 
