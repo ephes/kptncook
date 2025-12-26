@@ -78,9 +78,14 @@ class Image(BaseModel):
         return Image(**kwargs)
 
 
+class RecipeId(BaseModel):
+    oid: str = Field(..., alias="$oid")
+
+
 class IngredientDetails(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel)
 
+    id: RecipeId | None = Field(None, alias="_id")
     typ: str
     localized_title: LocalizedString
     number_title: LocalizedString
@@ -125,10 +130,6 @@ class Ingredient(BaseModel):
     ingredient: IngredientDetails
 
 
-class RecipeId(BaseModel):
-    oid: str = Field(..., alias="$oid")
-
-
 class StepIngredientDetails(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel)
 
@@ -163,6 +164,7 @@ class StepIngredient(BaseModel):
     quantity: float | None = None
     unit: StepIngredientUnit | None = None
     ingredient: StepIngredientDetails | None = None
+    ingredient_id: str | None = Field(None, alias="ingredientId")
 
     @model_validator(mode="before")
     def normalize_fields(cls, values):
@@ -171,6 +173,17 @@ class StepIngredient(BaseModel):
                 values["quantity"] = values["amount"]
             if values.get("unit") is None and values.get("measure") is not None:
                 values["unit"] = values["measure"]
+            if values.get("ingredientId") is None and isinstance(
+                values.get("ingredient"), dict
+            ):
+                ingredient = values["ingredient"]
+                ingredient_id = None
+                if isinstance(ingredient.get("_id"), dict):
+                    ingredient_id = ingredient["_id"].get("$oid")
+                elif isinstance(ingredient.get("id"), dict):
+                    ingredient_id = ingredient["id"].get("$oid")
+                if ingredient_id is not None:
+                    values["ingredientId"] = ingredient_id
         return values
 
 

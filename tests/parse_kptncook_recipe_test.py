@@ -42,6 +42,29 @@ def test_parse_recipe_active_tags_missing(minimal):
     assert recipe.active_tags is None
 
 
+def test_parse_ingredient_details_id(full_recipe):
+    recipe = Recipe.model_validate(full_recipe)
+    raw_id = full_recipe["ingredients"][0]["ingredient"]["_id"]["$oid"]
+
+    assert recipe.ingredients[0].ingredient.id is not None
+    assert recipe.ingredients[0].ingredient.id.oid == raw_id
+
+
+def test_parse_step_ingredient_id(full_recipe):
+    recipe = Recipe.model_validate(full_recipe)
+    raw_steps = full_recipe["steps"]
+    step_index = next(
+        index for index, step in enumerate(raw_steps) if step["ingredients"]
+    )
+    raw_ingredient_id = raw_steps[step_index]["ingredients"][0]["ingredientId"]
+
+    parsed_step = recipe.steps[step_index]
+    assert parsed_step.ingredients is not None
+    parsed_ingredient = parsed_step.ingredients[0]
+    assert parsed_ingredient is not None
+    assert parsed_ingredient.ingredient_id == raw_ingredient_id
+
+
 def test_ingredient_details_without_uncountable_title():
     ingredient_details = {
         "typ": "ingredient",

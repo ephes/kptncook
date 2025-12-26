@@ -2,6 +2,7 @@ import datetime
 import io
 import json
 import logging
+import uuid
 from getpass import getpass
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,12 @@ from pydantic import UUID4, BaseModel, ConfigDict, Field, ValidationError, parse
 
 from .config import settings
 from .ingredient_groups import iter_ingredient_groups
-from .models import Image, localized_fallback
+from .models import (
+    Image,
+    Ingredient,
+    RecipeStep as KptnCookRecipeStep,
+    localized_fallback,
+)
 from .models import Recipe as KptnCookRecipe
 
 logger = logging.getLogger(__name__)
@@ -62,10 +68,11 @@ class RecipeUnit(UnitFoodBase):
 
 
 class RecipeIngredient(BaseModel):
+    referenceId: UUID4 | None = None
     title: str | None = None
     note: str | None = None
     unit: RecipeUnit | None
-    food: RecipeUnit | None
+    food: RecipeFood | None
     disable_amount: bool = True
     quantity: float | None = 1
 
@@ -100,10 +107,14 @@ class RecipeSummary(BaseModel):
     date_updated: datetime.datetime | None = None
 
 
+class IngredientReference(BaseModel):
+    referenceId: UUID4 | None = None
+
+
 class RecipeStep(BaseModel):
     title: str | None = ""
     text: str
-    ingredientReferences: list[Any] = []
+    ingredientReferences: list[IngredientReference] = []
     image: Image | None = None
 
 
@@ -388,8 +399,11 @@ class MealieApiClient:
         return Recipe.model_validate(r.json())
 
 
-def kptncook_to_mealie_ingredients(kptncook_ingredients):
+def kptncook_to_mealie_ingredients(
+    kptncook_ingredients: list[Ingredient] | None,
+) -> tuple[list[RecipeIngredient], dict[str, list[UUID4]]]:
     mealie_ingredients = []
+    ingredient_id_to_reference_ids: dict[str, list[UUID4]] = {}
     groups = iter_ingredient_groups(kptncook_ingredients or [])
     for group_label, ingredients in groups:
         for ingredient in ingredients:
@@ -401,32 +415,70 @@ def kptncook_to_mealie_ingredients(kptncook_ingredients):
                 ingredient_title, note, *_ = (
                     p.strip() for p in ingredient_title.split(",")
                 )
-            food = {"name": ingredient_title}
+            food = RecipeFood(name=ingredient_title)
             quantity = ingredient.quantity
             measure = None
             if hasattr(ingredient, "measure"):
                 if ingredient.measure is not None:
-                    measure = {"name": ingredient.measure}
+                    measure = RecipeUnit(name=ingredient.measure)
+            reference_id = uuid.uuid4()
             mealie_ingredient = RecipeIngredient(
                 title=group_label or None,
                 quantity=quantity,
                 unit=measure,
                 note=note,
                 food=food,
+                referenceId=reference_id,
             )
             mealie_ingredients.append(mealie_ingredient)
-    return mealie_ingredients
+            ingredient_id = None
+            if ingredient.ingredient.id is not None:
+                ingredient_id = ingredient.ingredient.id.oid
+            if ingredient_id:
+                ingredient_id_to_reference_ids.setdefault(ingredient_id, []).append(
+                    reference_id
+                )
+    return mealie_ingredients, ingredient_id_to_reference_ids
 
 
-def kptncook_to_mealie_steps(steps, api_key):
+def kptncook_to_mealie_steps(
+    steps: list[KptnCookRecipeStep],
+    api_key: str,
+    ingredient_id_to_reference_ids: dict[str, list[UUID4]],
+):
     mealie_instructions = []
     for step in steps:
         image = step.image.get_image_with_api_key_url(api_key)
+        reference_ids: list[UUID4] = []
+        if step.ingredients:
+            for ingredient in step.ingredients:
+                if ingredient is None:
+                    continue
+                ingredient_id = ingredient.ingredient_id
+                if (
+                    ingredient_id is None
+                    and ingredient.ingredient is not None
+                    and ingredient.ingredient.id is not None
+                ):
+                    ingredient_id = ingredient.ingredient.id.oid
+                if ingredient_id is None:
+                    continue
+                reference_ids.extend(
+                    ingredient_id_to_reference_ids.get(ingredient_id, [])
+                )
+        seen = set()
+        ingredient_references = []
+        for reference_id in reference_ids:
+            if reference_id in seen:
+                continue
+            seen.add(reference_id)
+            ingredient_references.append(IngredientReference(referenceId=reference_id))
         mealie_instructions.append(
             RecipeStep(
                 title=None,
                 text=localized_fallback(step.title) or "",
                 image=image,
+                ingredientReferences=ingredient_references,
             )
         )
     return mealie_instructions
@@ -450,6 +502,9 @@ def kptncook_to_mealie_tags(active_tags: list[str] | None) -> list[RecipeTag]:
 def kptncook_to_mealie(
     kcin: KptnCookRecipe, api_key: str = settings.kptncook_api_key
 ) -> RecipeWithImage:
+    ingredients, ingredient_id_to_reference_ids = kptncook_to_mealie_ingredients(
+        kcin.ingredients
+    )
     kwargs = {
         "name": localized_fallback(kcin.localized_title),
         "notes": [
@@ -467,8 +522,10 @@ def kptncook_to_mealie(
         "prep_time": kcin.preparation_time,
         "cook_time": kcin.cooking_time,
         "recipe_yield": "1 Portionen",
-        "recipe_instructions": kptncook_to_mealie_steps(kcin.steps, api_key),
-        "recipe_ingredient": kptncook_to_mealie_ingredients(kcin.ingredients),
+        "recipe_instructions": kptncook_to_mealie_steps(
+            kcin.steps, api_key, ingredient_id_to_reference_ids
+        ),
+        "recipe_ingredient": ingredients,
         "image_url": kcin.get_image_url(api_key),
         "tags": kptncook_to_mealie_tags(kcin.active_tags),
         "extras": {"kptncook_id": kcin.id.oid, "source": "kptncook"},
