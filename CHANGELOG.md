@@ -5,6 +5,10 @@ Unreleased
 - Export step ingredient references to Mealie for cooking mode linking.
 - Added `MEALIE_API_TOKEN` support as an alternative to username/password for Mealie sync.
 
+### Fixes
+- #61 Fix crash when `KPTNCOOK_HOME` is set by normalizing and expanding the configured root path
+  (thanks @alexdetsch).
+
 0.0.26 - 2025-12-25
 ===================
 
