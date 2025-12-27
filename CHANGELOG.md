@@ -4,6 +4,10 @@ Unreleased
 ### Features
 - Export step ingredient references to Mealie for cooking mode linking.
 
+### Fixes
+- #61 Fix crash when `KPTNCOOK_HOME` is set by normalizing and expanding the configured root path
+  (thanks @alexdetsch).
+
 0.0.26 - 2025-12-25
 ===================
 
