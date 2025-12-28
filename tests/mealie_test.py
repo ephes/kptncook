@@ -1,11 +1,18 @@
+from types import SimpleNamespace
+
 import httpx
 import pytest
 
 import kptncook
 from kptncook import _extract_mealie_detail_message
 from kptncook.config import settings
-from kptncook.mealie import MealieApiClient, Recipe
-from kptncook.models import Image
+from kptncook.mealie import (
+    MealieApiClient,
+    Recipe,
+    RecipeWithImage,
+    kptncook_to_mealie,
+)
+from kptncook.models import Image, LocalizedString, RecipeId
 
 
 def test_parse_empty_mealie_recipe_is_valid():
@@ -174,3 +181,57 @@ def test_extract_mealie_detail_message_reads_detail_message():
     )
 
     assert _extract_mealie_detail_message(response) == "Recipe already exists"
+
+
+def test_kptncook_to_mealie_allows_missing_image_url():
+    fake_recipe = SimpleNamespace(
+        ingredients=[],
+        localized_title=LocalizedString(de="Test title"),
+        author_comment=LocalizedString(de="Test note"),
+        recipe_nutrition=SimpleNamespace(calories=1, protein=2, fat=3, carbohydrate=4),
+        preparation_time=10,
+        cooking_time=5,
+        steps=[],
+        active_tags=None,
+        id=RecipeId.model_validate({"$oid": "abc123"}),
+        get_image_url=lambda _api_key: None,
+    )
+
+    mealie_recipe = kptncook_to_mealie(fake_recipe, api_key="test")
+
+    assert mealie_recipe.image_url is None
+
+
+def test_create_recipe_skips_scrape_without_image_url(monkeypatch):
+    client = MealieApiClient("http://mealie.local/api")
+    recipe = RecipeWithImage(name="Test recipe", image_url=None)
+    called = {"scrape": False}
+
+    def fake_post_recipe_trunk_and_get_slug(_recipe_name):
+        return "recipe-slug"
+
+    def passthrough(recipe_obj, *_args, **_kwargs):
+        return recipe_obj
+
+    def passthrough_update_tag_ids(recipe_obj):
+        return recipe_obj
+
+    def fake_post(path, **_kwargs):
+        called["scrape"] = True
+        request = httpx.Request("POST", f"http://mealie.local/api{path}")
+        return httpx.Response(200, request=request, json={})
+
+    monkeypatch.setattr(
+        client, "_post_recipe_trunk_and_get_slug", fake_post_recipe_trunk_and_get_slug
+    )
+    client.post = fake_post
+    monkeypatch.setattr(client, "_update_user_and_group_id", passthrough)
+    monkeypatch.setattr(client, "_update_item_ids", passthrough)
+    monkeypatch.setattr(client, "_update_tag_ids", passthrough_update_tag_ids)
+    monkeypatch.setattr(client, "enrich_recipe_with_step_images", passthrough)
+    monkeypatch.setattr(client, "_update_recipe", passthrough)
+
+    result = client.create_recipe(recipe)
+
+    assert called["scrape"] is False
+    assert result.slug == "recipe-slug"

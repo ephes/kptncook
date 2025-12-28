@@ -8,6 +8,7 @@ Unreleased
 ### Fixes
 - #61 Fix crash when `KPTNCOOK_HOME` is set by normalizing and expanding the configured root path
   (thanks @alexdetsch).
+- #36 Handle recipes without cover images in Mealie sync (avoid crash).
 
 0.0.26 - 2025-12-25
 ===================
