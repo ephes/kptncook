@@ -43,15 +43,22 @@ class MarkdownExporter:
 
         fm_lines.append(f"prepTime: {prep}")
         fm_lines.append(f"cookTime: {cook}")
-        fm_lines.append("author: ")
-        fm_lines.append(f"url: https://mobile.kptncook.com/recipe/pinterest/{recipe.uid}")        
-        
+        fm_lines.append("author: KptnCook")
+        fm_lines.append(
+            f"url: https://mobile.kptncook.com/recipe/pinterest/{recipe.uid}"
+        )
+
         fm_lines.append("tags:")
         if recipe.active_tags:
             for tag in recipe.active_tags:
-                if not (tag.startswith("diet_") or tag.startswith("budget_") or tag.startswith("main_ingredient_")):
-                   fm_lines.append(f"- {tag}")
-        
+                if not (
+                    tag.startswith("diet_")
+                    or tag.startswith("budget_")
+                    or tag.startswith("main_ingredient_")
+                    or tag.startswith("calories_")
+                ):
+                    fm_lines.append(f"- {tag}")
+
         fm_lines.append("---")
         fm_lines.append("")
 
@@ -69,7 +76,7 @@ class MarkdownExporter:
         if image is not None:
             image_url = f"{image.url}?kptnkey={settings.kptncook_api_key}"
             if isinstance(image_url, str) and image_url:
-                lines.append(f"![Image]({image_url})")
+                lines.append(f"![Rezeptbild]({image_url})")
                 lines.append("")
 
         # Ingredients
@@ -77,7 +84,7 @@ class MarkdownExporter:
         lines.append("")
         ing_lines = self.get_ingredients_lines(recipe.ingredients)
         if ing_lines:
-            lines.extend([f"- {l}" for l in ing_lines])
+            lines.extend(ing_lines)
         else:
             lines.append("- ")
         lines.append("")
@@ -87,6 +94,8 @@ class MarkdownExporter:
         lines.append("")
         for step in recipe.steps:
             step_text = localized_fallback(step.title) or ""
+            if step_text == "Alles parat?":
+                continue
             # normalize internal newlines
             step_text = step_text.replace("\n", " ")
             # replace <timer> placeholders with timers from the step (use minOrExact)
@@ -108,7 +117,8 @@ class MarkdownExporter:
             for ingredient in group_ingredients:
                 text = self.format_ingredient_line(ingredient)
                 if text:
-                    lines.append(text)
+                    lines.append(f"- {text}")
+            lines.append("")
         return lines
 
     def format_ingredient_line(self, ingredient: Ingredient) -> str:
