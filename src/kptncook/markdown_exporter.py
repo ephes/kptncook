@@ -37,12 +37,8 @@ class MarkdownExporter:
         fm_lines.append(f"date: {_date.today().isoformat()}")
         fm_lines.append(f"yield: {SERVINGS_FACTOR}")
 
-        # cookTime and totalTime
-        cook = f"{recipe.cooking_time}m" if recipe.cooking_time else ""
-        prep = f"{recipe.preparation_time}m" if recipe.preparation_time else ""
-
-        fm_lines.append(f"prepTime: {prep}")
-        fm_lines.append(f"cookTime: {cook}")
+        fm_lines.append(f"prepTime: {recipe.preparation_time}m")
+        fm_lines.append(f"cookTime: {recipe.cooking_time}m")
         fm_lines.append("author: KptnCook")
         fm_lines.append(
             f"url: https://mobile.kptncook.com/recipe/pinterest/{recipe.uid}"
