@@ -43,20 +43,15 @@ class MarkdownExporter:
 
         fm_lines.append(f"prepTime: {prep}")
         fm_lines.append(f"cookTime: {cook}")
-
-        # author, url, video - not present on model
         fm_lines.append("author: ")
-        fm_lines.append("url: ")
-        fm_lines.append("video: ")
-
-        # cuisine - leave empty list
-        fm_lines.append("cuisine:")
-
-        # category - use active_tags if available
-        fm_lines.append("category:")
+        fm_lines.append(f"url: https://mobile.kptncook.com/recipe/pinterest/{recipe.uid}")        
+        
+        fm_lines.append("tags:")
         if recipe.active_tags:
             for tag in recipe.active_tags:
-                fm_lines.append(f"- {tag}")
+                if not (tag.startswith("diet_") or tag.startswith("budget_") or tag.startswith("main_ingredient_")):
+                   fm_lines.append(f"- {tag}")
+        
         fm_lines.append("---")
         fm_lines.append("")
 
