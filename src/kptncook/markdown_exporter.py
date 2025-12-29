@@ -10,9 +10,10 @@ from typing import Iterable, List
 from .config import settings
 from .ingredient_groups import iter_ingredient_groups
 from .models import Ingredient, Recipe, localized_fallback
-from .exporter_utils import get_cover
+from .exporter_utils import get_cover, replace_timers_in_step
 from pathvalidate import sanitize_filename
 
+SERVINGS_FACTOR = 4
 
 class MarkdownExporter:
     def export(self, recipes: Iterable[Recipe]) -> List[Path]:
@@ -32,27 +33,16 @@ class MarkdownExporter:
         title = localized_fallback(recipe.localized_title) or "recipe"
         comment = localized_fallback(recipe.author_comment) or ""
 
-        # frontmatter
         fm_lines: list[str] = ["---"]
         fm_lines.append(f"date: {_date.today().isoformat()}")
-
-        # yield (servings) - not available on model, leave empty
-        fm_lines.append("yield: ")
+        fm_lines.append(f"yield: {SERVINGS_FACTOR}")
 
         # cookTime and totalTime
         cook = f"{recipe.cooking_time}m" if recipe.cooking_time else ""
         prep = f"{recipe.preparation_time}m" if recipe.preparation_time else ""
-        if cook and prep:
-            try:
-                # try to compute totals in minutes (assumes ints)
-                total_minutes = (recipe.cooking_time or 0) + (recipe.preparation_time or 0)
-                total = f"{total_minutes}m"
-            except Exception:
-                total = ""
-        else:
-            total = ""
+
+        fm_lines.append(f"prepTime: {prep}")
         fm_lines.append(f"cookTime: {cook}")
-        fm_lines.append(f"totalTime: {total}")
 
         # author, url, video - not present on model
         fm_lines.append("author: ")
@@ -79,16 +69,16 @@ class MarkdownExporter:
             lines.append(comment)
             lines.append("")
 
-        # cover image (use cover url if available)
-        cover = get_cover(recipe.image_list)
-        if cover is not None:
-            cover_url = recipe.get_image_url(api_key=settings.kptncook_api_key)
-            if isinstance(cover_url, str) and cover_url:
-                lines.append(f"![Image]({cover_url})")
+        # cover image (use last step image, else cover image)
+        image = recipe.steps[-1].image or get_cover(recipe.image_list)
+        if image is not None:
+            image_url = f"{image.url}?kptnkey={settings.kptncook_api_key}"
+            if isinstance(image_url, str) and image_url:
+                lines.append(f"![Image]({image_url})")
                 lines.append("")
 
         # Ingredients
-        lines.append("### Ingredients")
+        lines.append("### Zutaten")
         lines.append("")
         ing_lines = self.get_ingredients_lines(recipe.ingredients)
         if ing_lines:
@@ -98,23 +88,21 @@ class MarkdownExporter:
         lines.append("")
 
         # Instructions
-        lines.append("### Instructions")
+        lines.append("### Zubereitung")
         lines.append("")
         for step in recipe.steps:
             step_text = localized_fallback(step.title) or ""
             # normalize internal newlines
             step_text = step_text.replace("\n", " ")
+            # replace <timer> placeholders with timers from the step (use minOrExact)
+            step_text = replace_timers_in_step(step, step_text)
             lines.append(f"- {step_text}")
         lines.append("")
 
         # Notizen / Empfehlungen
         lines.append("### Notizen / Empfehlungen")
         lines.append("")
-        if comment:
-            lines.append(comment)
-        else:
-            lines.append("")
-
+        
         return "\n".join(lines)
 
     def get_ingredients_lines(self, ingredients: list[Ingredient]) -> list[str]:
@@ -131,7 +119,7 @@ class MarkdownExporter:
     def format_ingredient_line(self, ingredient: Ingredient) -> str:
         parts: list[str] = []
         if ingredient.quantity:
-            parts.append("{0:g}".format(ingredient.quantity))
+            parts.append("{0:g}".format(ingredient.quantity * SERVINGS_FACTOR))
         if ingredient.measure:
             parts.append(ingredient.measure)
         ingredient_name = (
