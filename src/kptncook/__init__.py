@@ -33,6 +33,7 @@ from .cli import (
 )
 from .http_errors import extract_mealie_detail_message as _extract_mealie_detail_message
 from .mealie import MealieApiClient
+from .markdown_exporter import MarkdownExporter
 from .services.discovery import (
     _extract_ingredient_name,
     _extract_quick_search_entries,
@@ -81,6 +82,7 @@ __all__ = [
     "list_recipes",
     "list_recipes_alias",
     "list_recipes_with_ingredients",
+    "MarkdownExporter",
     "parse_id",
     "save_todays_recipes",
     "search_kptncook_recipe_by_id",
