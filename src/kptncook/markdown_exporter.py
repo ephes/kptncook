@@ -10,7 +10,8 @@ from typing import Iterable, List
 from .config import settings
 from .ingredient_groups import iter_ingredient_groups
 from .models import Ingredient, Recipe, localized_fallback
-from .exporter_utils import asciify_string, get_cover
+from .exporter_utils import get_cover
+from pathvalidate import sanitize_filename
 
 
 class MarkdownExporter:
@@ -18,7 +19,7 @@ class MarkdownExporter:
         written: List[Path] = []
         for recipe in recipes:
             title = localized_fallback(recipe.localized_title) or "recipe"
-            filename = asciify_string(title) + ".md"
+            filename = sanitize_filename(title) + ".md"
             out_path = Path(settings.root) / filename
             contents = self.render_recipe(recipe)
             out_path.write_text(contents, encoding="utf-8")

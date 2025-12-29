@@ -40,7 +40,8 @@ dependencies = [
     "typer >= 0.4",
     "click",
     "unidecode",
-    "jinja2"
+    "jinja2",
+    "pathvalidate"
 ]
 
 [dependency-groups]
