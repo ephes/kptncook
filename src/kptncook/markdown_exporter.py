@@ -4,6 +4,7 @@ Writes one `.md` file per recipe to `settings.root`.
 """
 from __future__ import annotations
 
+from datetime import date, datetime
 from pathlib import Path
 from typing import Iterable, List
 
@@ -18,23 +19,26 @@ SERVINGS_FACTOR = 4
 class MarkdownExporter:
     def export(self, recipes: Iterable[Recipe]) -> List[Path]:
         written: List[Path] = []
+
+        # Create export directory if it doesn't exist
+        out_dir = Path(settings.root / "export_md")
+        out_dir.mkdir(exist_ok=True)
+
         for recipe in recipes:
             title = localized_fallback(recipe.localized_title) or "recipe"
             filename = sanitize_filename(title) + ".md"
-            out_path = Path(settings.root) / filename
+            out_path = out_dir / filename
             contents = self.render_recipe(recipe)
             out_path.write_text(contents, encoding="utf-8")
             written.append(out_path)
         return written
 
     def render_recipe(self, recipe: Recipe) -> str:
-        from datetime import date as _date
-
         title = localized_fallback(recipe.localized_title) or "recipe"
         comment = localized_fallback(recipe.author_comment) or ""
 
         fm_lines: list[str] = ["---"]
-        fm_lines.append(f"date: {_date.today().isoformat()}")
+        fm_lines.append(f"date: {date.today().isoformat()}")
         fm_lines.append(f"yield: {SERVINGS_FACTOR}")
 
         fm_lines.append(f"prepTime: {recipe.preparation_time}m")
