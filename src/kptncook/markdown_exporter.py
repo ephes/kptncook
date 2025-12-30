@@ -39,23 +39,30 @@ class MarkdownExporter:
 
         fm_lines: list[str] = ["---"]
         fm_lines.append(f"date: {date.today().isoformat()}")
-        fm_lines.append(f"yield: {SERVINGS_FACTOR}")
+        fm_lines.append(f"servings: {SERVINGS_FACTOR}")
 
         fm_lines.append(f"prepTime: {recipe.preparation_time}m")
         fm_lines.append(f"cookTime: {recipe.cooking_time}m")
         fm_lines.append("author: KptnCook")
         fm_lines.append(
-            f"url: https://mobile.kptncook.com/recipe/pinterest/{recipe.uid}"
+            f"link: https://mobile.kptncook.com/recipe/pinterest/{recipe.uid}"
         )
+
+        # cover image (use last step image, else cover image)
+        image = (recipe.steps[-1].image or get_cover(recipe.image_list))
+        image_url = f"{image.url}?kptnkey={settings.kptncook_api_key}" if image else None
+
+        if image_url:
+            fm_lines.append(f"image: {image_url}")
 
         fm_lines.append("tags:")
         if recipe.active_tags:
             for tag in recipe.active_tags:
                 if not (
                     tag.startswith("diet_")
-                    or tag.startswith("budget_")
                     or tag.startswith("main_ingredient_")
-                    or tag.startswith("calories_")
+                    or "under_" in tag
+                    or "above_" in tag
                 ):
                     fm_lines.append(f"- {tag}")
 
@@ -71,13 +78,9 @@ class MarkdownExporter:
             lines.append(comment)
             lines.append("")
 
-        # cover image (use last step image, else cover image)
-        image = recipe.steps[-1].image or get_cover(recipe.image_list)
-        if image is not None:
-            image_url = f"{image.url}?kptnkey={settings.kptncook_api_key}"
-            if isinstance(image_url, str) and image_url:
-                lines.append(f"![Rezeptbild]({image_url})")
-                lines.append("")
+        if image_url is not None:
+            lines.append(f"![Rezeptbild]({image_url})")
+            lines.append("")
 
         # Ingredients
         lines.append("### Zutaten")
