@@ -56,16 +56,35 @@ class MarkdownExporter:
             fm_lines.append(f"image: {image_url}")
 
         fm_lines.append("tags:")
-        if recipe.active_tags:
-            for tag in recipe.active_tags:
-                if not (
-                    tag.startswith("diet_")
-                    or tag.startswith("main_ingredient_")
-                    or "under_" in tag
-                    or "above_" in tag
-                ):
-                    fm_lines.append(f"- {tag}")
 
+        if recipe.rtype == "Vegan":
+            fm_lines.append(f"  - vegan")
+
+        if recipe.active_tags:
+            # filter out unwanted tags
+            filtered_tags = [tag for tag in recipe.active_tags if not (
+                tag.startswith("diet_")
+                or tag.startswith("main_ingredient_")
+                or "under_" in tag
+                or "above_" in tag
+                or "below_" in tag
+                or "_friendly" in tag
+            )]
+
+            # transform some tags
+            for i, tag in enumerate(filtered_tags):
+                if tag in {"spring", "summer", "fall", "winter"}:
+                    filtered_tags[i] = f"season/{tag}"
+                if tag == "dessert_sweet":
+                    filtered_tags[i] = "dessert"
+                if tag == "comfort_foot":
+                    filtered_tags[i] = "comfort_food"
+
+            fm_lines.extend(f"  - {tag}" for tag in filtered_tags)
+
+            if "cooking_time_under_20" in recipe.active_tags or "under_five_ingredient" in recipe.active_tags:
+                fm_lines.append("simple: true")
+        
         fm_lines.append("---")
         fm_lines.append("")
 
