@@ -90,9 +90,6 @@ class MarkdownExporter:
 
         lines: list[str] = fm_lines
 
-        # Title and optional comment
-        lines.append(f"# {title}")
-        lines.append("")
         if comment:
             lines.append(comment)
             lines.append("")
