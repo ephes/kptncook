@@ -125,6 +125,7 @@ class MarkdownExporter:
         # Notizen / Empfehlungen
         lines.append("### Notizen / Empfehlungen")
         lines.append("")
+        lines.append("- ")
         
         return "\n".join(lines)
 
