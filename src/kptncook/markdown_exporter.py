@@ -14,7 +14,7 @@ from .models import Ingredient, Recipe, localized_fallback
 from .exporter_utils import get_cover, replace_timers_in_step
 from pathvalidate import sanitize_filename
 
-SERVINGS_FACTOR = 4
+DEFAULT_SERVINGS = 4
 
 class MarkdownExporter:
     def export(self, recipes: Iterable[Recipe]) -> List[Path]:
@@ -39,7 +39,9 @@ class MarkdownExporter:
 
         fm_lines: list[str] = ["---"]
         fm_lines.append(f"date: {date.today().isoformat()}")
-        fm_lines.append(f"servings: {SERVINGS_FACTOR}")
+
+        servings = recipe.fixedPortionCount or DEFAULT_SERVINGS
+        fm_lines.append(f"servings: {servings}")
 
         fm_lines.append(f"prepTime: {recipe.preparation_time}m")
         fm_lines.append(f"cookTime: {recipe.cooking_time}m")
@@ -101,7 +103,7 @@ class MarkdownExporter:
         # Ingredients
         lines.append("### Zutaten")
         lines.append("")
-        ing_lines = self.get_ingredients_lines(recipe.ingredients)
+        ing_lines = self.get_ingredients_lines(recipe.ingredients, servings)
         if ing_lines:
             lines.extend(ing_lines)
         else:
@@ -129,22 +131,23 @@ class MarkdownExporter:
         
         return "\n".join(lines)
 
-    def get_ingredients_lines(self, ingredients: list[Ingredient]) -> list[str]:
+    def get_ingredients_lines(self, ingredients: list[Ingredient], servings_factor: int) -> list[str]:
         lines: list[str] = []
         for group_label, group_ingredients in iter_ingredient_groups(ingredients):
             if group_label:
                 lines.append(f"{group_label}:")
             for ingredient in group_ingredients:
-                text = self.format_ingredient_line(ingredient)
+                text = self.format_ingredient_line(ingredient, servings_factor)
                 if text:
                     lines.append(f"- {text}")
             lines.append("")
         return lines
 
-    def format_ingredient_line(self, ingredient: Ingredient) -> str:
+    def format_ingredient_line(self, ingredient: Ingredient, servings_factor: int) -> str:
         parts: list[str] = []
         if ingredient.quantity:
-            parts.append("{0:g}".format(ingredient.quantity * SERVINGS_FACTOR))
+            ingredient_amount = round(ingredient.quantity * servings_factor, 2)
+            parts.append("{0:g}".format(ingredient_amount))
         if ingredient.measure:
             parts.append(ingredient.measure)
         ingredient_name = (
