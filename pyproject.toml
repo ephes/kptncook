@@ -58,6 +58,7 @@ Home = "https://github.com/ephes/kptncook"
 
 [project.scripts]
 kptncook = "kptncook:cli"
+kptncook-setup = "kptncook_setup:cli"
 
 [tool.pytest.ini_options]
 minversion = "6.0"

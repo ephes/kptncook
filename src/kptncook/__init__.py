@@ -14,6 +14,7 @@ from rich.pretty import pprint
 
 from .api import KptnCookClient, parse_id
 from .config import settings
+from .env import ENV_PATH
 from .mealie import MealieApiClient, kptncook_to_mealie
 from .models import Recipe, localized_fallback
 from .paprika import PaprikaExporter
@@ -393,7 +394,7 @@ def _normalize_ingredient_ids(ingredient_ids: list[str]) -> list[str]:
 
 def _require_access_token() -> None:
     if settings.kptncook_access_token is None:
-        rprint("Please set KPTNCOOK_ACCESS_TOKEN in your environment or .env file")
+        rprint(f"Please set KPTNCOOK_ACCESS_TOKEN in your environment or {ENV_PATH}")
         sys.exit(1)
 
 
@@ -488,8 +489,22 @@ def get_kptncook_access_token():
         access_token = client.get_access_token(username, password)
         rprint("[green]✓ Access token retrieved successfully[/green]")
         rprint("Your access token: ", access_token)
-    except Exception as e:
-        rprint(f"[red]Failed to get access token: {e}[/red]")
+        rprint(f"Add it to {ENV_PATH} as KPTNCOOK_ACCESS_TOKEN=...")
+    except httpx.HTTPStatusError as exc:
+        detail = _extract_http_error_message(exc.response)
+        if exc.response.status_code == 401:
+            message = (
+                "Login failed (HTTP 401). Check your email/password and make sure "
+                "KPTNCOOK_API_KEY is set to your real API key (not a placeholder)."
+            )
+        else:
+            message = f"HTTP {exc.response.status_code} while getting access token"
+            if detail:
+                message = f"{message}: {detail}"
+        rprint(f"[red]{message}[/red]")
+        sys.exit(1)
+    except httpx.HTTPError as exc:
+        rprint(f"[red]Request failed: {exc}[/red]")
         sys.exit(1)
 
 
@@ -776,10 +791,10 @@ def list_onboarding_recipes(
 
 @cli.command(name="delete-recipes")
 def delete_recipes(
-    indices: Optional[list[int]] = typer.Argument(
+    indices: list[int] | None = typer.Argument(
         None, help="Indices from list-recipes to delete."
     ),
-    oids: Optional[list[str]] = typer.Option(
+    oids: list[str] | None = typer.Option(
         None, "--oid", "-o", help="Recipe oid to delete (repeatable)."
     ),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation."),
