@@ -4,11 +4,16 @@ Unreleased
 ### Features
 - Export step ingredient references to Mealie for cooking mode linking.
 - Added `MEALIE_API_TOKEN` support as an alternative to username/password for Mealie sync.
+- Added `kptncook-setup` helper to scaffold the `.env` file with the default API key
+  and optionally fetch an access token.
 
 ### Fixes
 - #61 Fix crash when `KPTNCOOK_HOME` is set by normalizing and expanding the configured root path
   (thanks @alexdetsch).
 - #36 Handle recipes without cover images in Mealie sync (avoid crash).
+- Improve first-run configuration errors by scaffolding `~/.kptncook/.env` and guiding
+  missing `KPTNCOOK_API_KEY` setup.
+- Provide clearer error messaging for access token retrieval failures.
 
 0.0.26 - 2025-12-25
 ===================

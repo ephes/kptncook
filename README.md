@@ -201,6 +201,13 @@ $ mkdir -p ~/.kptncook
 $ touch ~/.kptncook/.env
 ```
 
+Alternatively, you can run the setup helper to create the `.env` file, prefill the
+default API key, and optionally fetch an access token:
+
+```shell
+$ kptncook-setup
+```
+
 Then set environment variables in the `~/.kptncook/.env` file (or directly in your shell). You'll need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie, set `MEALIE_API_TOKEN` or `MEALIE_USERNAME`/`MEALIE_PASSWORD`.
 
 **Important:** The `.env` file must be created in the `~/.kptncook/` directory, NOT in the installation directory or by editing the `kptncook` executable.
