@@ -41,7 +41,7 @@ __all__ = [
     "export_recipes_to_tandoor",
 ]
 
-__version__ = "0.0.26"
+__version__ = "0.0.27"
 cli = typer.Typer()
 
 

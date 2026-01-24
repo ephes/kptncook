@@ -1,5 +1,5 @@
-Unreleased
-==========
+0.0.27 - 2026-01-24
+===================
 
 ### Features
 - Export step ingredient references to Mealie for cooking mode linking.
