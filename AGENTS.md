@@ -20,6 +20,7 @@
 
 ## Documentation
 - Update `CHANGELOG.md` for user-visible changes.
+- Release process: see `README.md#release-process`.
 
 ## Beads workflow (required)
 - This repo uses Beads for issue tracking, and `.beads/` is committed.

@@ -74,6 +74,10 @@ uv run pytest
 - Type hints encouraged
 - Follow existing patterns in codebase
 
+### Release Process
+
+See `README.md#release-process` for the step-by-step release checklist.
+
 ## Environment Configuration
 
 Create `~/.kptncook/.env`:

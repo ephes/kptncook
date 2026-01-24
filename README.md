@@ -372,7 +372,18 @@ $ just beads-import-gh-issues --repo OWNER/REPO --state open --limit 500
 $ just beads-import-gh-issues --dry-run
 ```
 
-## Publish a Release
+## Release Process
+
+1. Update `CHANGELOG.md` (move Unreleased entries into a dated release header).
+2. Bump `__version__` in `src/kptncook/__init__.py`.
+3. Run quality gates: `just lint`, `just typecheck`, `just test`.
+4. Commit changes and create a tag (e.g., `git tag -a v0.0.27 -m "v0.0.27"`).
+5. Push commits and tags.
+6. Draft a GitHub release from the changelog, crediting issue authors when applicable:
+   `gh release create v0.0.27 --draft --notes "..."`.
+7. Publish the release when ready.
+
+## Publish Packages
 
 After running the tests, publish the package to PyPI using uv:
 
