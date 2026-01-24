@@ -375,7 +375,7 @@ $ just beads-import-gh-issues --dry-run
 ## Release Process
 
 1. Update `CHANGELOG.md` (move Unreleased entries into a dated release header).
-2. Bump `__version__` in `src/kptncook/__init__.py`.
+2. Bump `__version__` in `src/kptncook/__init__.py` and `version` in `pyproject.toml`.
 3. Run quality gates: `just lint`, `just typecheck`, `just test`.
 4. Commit changes and create a tag (e.g., `git tag -a v0.0.27 -m "v0.0.27"`).
 5. Push commits and tags.
