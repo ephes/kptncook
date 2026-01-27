@@ -41,6 +41,7 @@ def _render_missing_settings_message(
     rprint("Add your KptnCook API key to the .env file or your shell:")
     rprint(f"  {env_path}")
     rprint("  KPTNCOOK_API_KEY=your-api-key-here")
+    rprint("Then re-run the command, or use `kptncook-setup` for guided setup.")
     rprint("See README.md for details.")
 
 

@@ -1,3 +1,10 @@
+Unreleased
+==========
+
+### Fixes
+- Clarify first-run configuration messaging and note that commands should be
+  re-run after scaffolding the `.env` file.
+
 0.0.28 - 2026-01-27
 ===================
 
