@@ -1,5 +1,5 @@
-Unreleased
-==========
+0.0.28 - 2026-01-27
+===================
 
 ### Fixes
 - #66 Package the `kptncook-setup` entrypoint module so setup works after install.

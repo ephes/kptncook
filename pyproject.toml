@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "kptncook"
-version = "0.0.27"
+version = "0.0.28"
 description = "kptncook is a little command line utility to download new recipes."
 authors = [
     {name = "Jochen Wersdörfer", email = "jochen-kptncook@wersdoerfer.de"},
@@ -28,6 +28,8 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "httpx >= 0.22",
