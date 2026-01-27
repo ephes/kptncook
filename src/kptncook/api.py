@@ -112,6 +112,33 @@ def _extract_discovery_list_payload(payload: object) -> list[object]:
     return []
 
 
+_FAVORITES_KEYS = ("favorites", "items", "recipes", "data", "results")
+
+
+def _extract_favorites_payload(
+    payload: object,
+) -> tuple[list[object], bool, bool]:
+    if isinstance(payload, list):
+        return payload, True, False
+    if isinstance(payload, dict):
+        for key in _FAVORITES_KEYS:
+            if key in payload:
+                value = payload.get(key)
+                if isinstance(value, list):
+                    return value, True, False
+                if isinstance(value, dict):
+                    nested, found, invalid = _extract_favorites_payload(value)
+                    if found:
+                        return nested, True, invalid
+                return [], True, True
+        for value in payload.values():
+            if isinstance(value, dict):
+                nested, found, invalid = _extract_favorites_payload(value)
+                if found:
+                    return nested, True, invalid
+    return [], False, False
+
+
 class KptnCookClient:
     """
     Client for the kptncook api.
@@ -230,13 +257,29 @@ class KptnCookClient:
         token_data = response.json()
         return token_data["accessToken"]
 
-    def list_favorites(self) -> list[str]:
+    def list_favorites(self) -> list[object]:
         """
         Get a list of favorite recipes.
         """
-        response = self.get("/favorites")
+        params = self._standard_query_params()
+        response = self.get("/favorites", params=params)
         response.raise_for_status()
-        return response.json()["favorites"]
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise ValueError("Favorites response was not valid JSON") from exc
+        favorites, found, invalid = _extract_favorites_payload(payload)
+        if found and not invalid:
+            return favorites
+        if invalid:
+            raise ValueError("Favorites response did not contain a list of favorites.")
+        if isinstance(payload, dict):
+            available_keys = ", ".join(sorted(payload.keys()))
+            raise ValueError(
+                "Favorites response missing favorites list. "
+                f"Response keys: {available_keys}"
+            )
+        raise ValueError("Favorites response missing favorites list.")
 
     def get_by_ids(self, ids: list[RecipeIdentifier]) -> list[RecipeInDb]:
         """

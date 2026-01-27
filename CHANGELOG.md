@@ -1,3 +1,11 @@
+Unreleased
+==========
+
+### Fixes
+- #66 Package the `kptncook-setup` entrypoint module so setup works after install.
+- #67 Make favorites backup tolerant of API response shape changes and improve
+  identifier extraction.
+
 0.0.27 - 2026-01-24
 ===================
 

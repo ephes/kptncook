@@ -12,7 +12,7 @@ import typer
 from rich import print as rprint
 from rich.pretty import pprint
 
-from .api import KptnCookClient, parse_id
+from .api import KptnCookClient, _collect_recipe_identifiers, parse_id
 from .config import settings
 from .env import ENV_PATH
 from .mealie import MealieApiClient, kptncook_to_mealie
@@ -447,10 +447,17 @@ def backup_kptncook_favorites():
     """
     _require_access_token()
     client = KptnCookClient()
-    favorites = client.list_favorites()
+    try:
+        favorites = client.list_favorites()
+    except ValueError as exc:
+        rprint(f"[red]{exc}[/red]")
+        sys.exit(1)
     rprint(f"Found {len(favorites)} favorites")
-    ids = [("oid", oid["identifier"]) for oid in favorites]
-    recipes = client.get_by_ids(ids)
+    identifiers = _collect_recipe_identifiers(favorites)
+    if not identifiers:
+        rprint("Could not find any favorites")
+        sys.exit(1)
+    recipes = client.get_by_ids(identifiers)
     if len(recipes) == 0:
         rprint("Could not find any favorites")
         sys.exit(1)

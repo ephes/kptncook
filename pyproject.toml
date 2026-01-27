@@ -60,6 +60,9 @@ Home = "https://github.com/ephes/kptncook"
 kptncook = "kptncook:cli"
 kptncook-setup = "kptncook_setup:cli"
 
+[tool.uv.build-backend]
+module-name = ["kptncook", "kptncook_setup"]
+
 [tool.pytest.ini_options]
 minversion = "6.0"
 testpaths = "tests"
