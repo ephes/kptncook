@@ -21,6 +21,7 @@
 ## Documentation
 - Update `CHANGELOG.md` for user-visible changes.
 - Release process: see `README.md#release-process`.
+- Files in `specs/` are ephemeral and for local consumption only. Do not track or commit them.
 
 ## Beads workflow (required)
 - This repo uses Beads for issue tracking, and `.beads/` is committed.
