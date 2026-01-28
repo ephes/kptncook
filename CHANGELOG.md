@@ -1,11 +1,15 @@
 Unreleased
 ==========
 
+### Features
+- Add a `help` command (with `--all`) and an `ls` alias for `list-recipes`.
+
 ### Fixes
 - Clarify first-run configuration messaging and note that commands should be
   re-run after scaffolding the `.env` file.
 - Skip step image upload failures during Mealie sync while still persisting
   recipe metadata for de-duplication.
+- Improve error handling when resolving share URLs in `search-by-id`.
 
 0.0.28 - 2026-01-27
 ===================

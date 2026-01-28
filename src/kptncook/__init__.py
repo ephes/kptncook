@@ -7,10 +7,12 @@ import sys
 from datetime import date
 from typing import Any, Optional
 
+import click
 import httpx
 import typer
 from rich import print as rprint
 from rich.pretty import pprint
+from typer.main import get_command
 
 from .api import KptnCookClient, _collect_recipe_identifiers, parse_id
 from .config import settings
@@ -43,6 +45,52 @@ __all__ = [
 
 __version__ = "0.0.28"
 cli = typer.Typer()
+
+
+@cli.command(name="help")
+def help_command(
+    command: str | None = typer.Argument(
+        None, help="Command to show help for (optional)."
+    ),
+    all_commands: bool = typer.Option(
+        False, "--all", "-a", help="Show help for all commands."
+    ),
+):
+    """
+    Show help for the CLI or a specific command.
+    """
+    root_command = get_command(cli)
+    root_ctx = click.Context(root_command)
+    if not isinstance(root_command, click.Group):
+        typer.echo(root_command.get_help(root_ctx))
+        return
+    root_group = root_command
+
+    if all_commands:
+        for name, cmd in root_group.commands.items():
+            typer.echo(
+                cmd.get_help(click.Context(cmd, info_name=name, parent=root_ctx))
+            )
+            typer.echo("")
+        return
+
+    if command is None:
+        typer.echo(root_command.get_help(root_ctx))
+        typer.echo(
+            "\nTip: run `kptncook help <command>` or `kptncook <command> --help` "
+            "for command-specific options."
+        )
+        return
+
+    selected_command = root_group.commands.get(command)
+    if selected_command is None:
+        rprint(f"[red]Unknown command: {command}[/red]")
+        sys.exit(1)
+    typer.echo(
+        selected_command.get_help(
+            click.Context(selected_command, info_name=command, parent=root_ctx)
+        )
+    )
 
 
 @cli.command(name="kptncook-today")
@@ -526,6 +574,14 @@ def list_recipes():
         rprint(num, title, recipe.id.oid)
 
 
+@cli.command(name="ls")
+def list_recipes_alias():
+    """
+    Alias for list-recipes.
+    """
+    list_recipes()
+
+
 @cli.command(name="discovery-screen")
 def list_discovery_screen(
     show_quick_search: bool = typer.Option(
@@ -877,11 +933,21 @@ def search_kptncook_recipe_by_id(id_: str):
     if id_.startswith(
         "https://share.kptncook.com/"
     ):  # sharing url -> use redirect location
-        r = httpx.get(id_)
-        if r.status_code not in (301, 302):
-            rprint("Could not get redirect location")
+        try:
+            r = httpx.get(id_)
+        except httpx.HTTPError as exc:
+            rprint(f"[red]Request failed while resolving share URL: {exc}[/red]")
             sys.exit(1)
-        id_ = r.headers["location"]
+        if r.status_code not in (301, 302):
+            rprint(
+                f"[red]Could not get redirect location (HTTP {r.status_code}).[/red]"
+            )
+            sys.exit(1)
+        location = r.headers.get("location")
+        if not location:
+            rprint("[red]Share URL did not include a redirect location.[/red]")
+            sys.exit(1)
+        id_ = location
     parsed = parse_id(id_)
     if parsed is None:
         rprint("Could not parse id")
