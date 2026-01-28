@@ -12,6 +12,7 @@ Unreleased
 - Avoid printing recipe JSON when `--save` is used for discovery lists,
   ingredient-based searches, and onboarding.
 - Improve error handling when resolving share URLs in `search-by-id`.
+- Expand the `.env` template with commented Mealie settings and optional config.
 
 0.0.28 - 2026-01-27
 ===================

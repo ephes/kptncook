@@ -29,9 +29,24 @@ KPTNCOOK_API_KEY={DEFAULT_API_KEY}
 # Optional: access token for favorites
 KPTNCOOK_ACCESS_TOKEN=
 #
+# Optional: Mealie sync
+# MEALIE_URL=https://mealie.example.com/api
+# MEALIE_API_TOKEN=
+# MEALIE_USERNAME=
+# MEALIE_PASSWORD=
+#
+# Optional: API defaults
+# KPTNCOOK_LANG=de
+# KPTNCOOK_STORE=de
+# KPTNCOOK_PREFERENCES=rt:diet_vegetarian,
+#
 # Optional: password manager integration
 # KPTNCOOK_USERNAME_COMMAND="op read op://Personal/KptnCook/username"
 # KPTNCOOK_PASSWORD_COMMAND="op read op://Personal/KptnCook/password"
+#
+# Optional: ingredient grouping
+# KPTNCOOK_GROUP_INGREDIENTS_BY_TYP=true
+# KPTNCOOK_INGREDIENT_GROUP_LABELS="regular:You need,basic:Pantry"
 """
 
 DEFAULT_HEADERS = {

@@ -1,4 +1,6 @@
+from kptncook.env import ENV_TEMPLATE as MAIN_ENV_TEMPLATE
 from kptncook.env import read_env_values, upsert_env_value
+from kptncook_setup import ENV_TEMPLATE as SETUP_ENV_TEMPLATE
 
 
 def test_read_env_values_skips_comments(tmp_path):
@@ -31,3 +33,7 @@ def test_upsert_env_value_appends_missing(tmp_path):
     assert (
         env_path.read_text() == "KPTNCOOK_API_KEY=abc\n\nKPTNCOOK_ACCESS_TOKEN=token\n"
     )
+
+
+def test_env_templates_are_kept_in_sync():
+    assert MAIN_ENV_TEMPLATE == SETUP_ENV_TEMPLATE
