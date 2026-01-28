@@ -9,6 +9,8 @@ Unreleased
   re-run after scaffolding the `.env` file.
 - Skip step image upload failures during Mealie sync while still persisting
   recipe metadata for de-duplication.
+- Avoid printing recipe JSON when `--save` is used for discovery lists,
+  ingredient-based searches, and onboarding.
 - Improve error handling when resolving share URLs in `search-by-id`.
 
 0.0.28 - 2026-01-27

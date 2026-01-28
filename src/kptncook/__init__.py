@@ -158,8 +158,9 @@ def list_kptncook_dailies(
     if not recipes:
         rprint("No recipes found.")
         return
-    for recipe in recipes:
-        pprint(recipe)
+    if not save:
+        for recipe in recipes:
+            pprint(recipe)
     if save:
         fs_repo = RecipeRepository(settings.root)
         fs_repo.add_list(recipes)
@@ -692,8 +693,9 @@ def list_discovery_list(
         rprint("No recipes found.")
         return
 
-    for recipe in recipes:
-        pprint(recipe)
+    if not save:
+        for recipe in recipes:
+            pprint(recipe)
 
     if save:
         fs_repo = RecipeRepository(settings.root)
@@ -791,8 +793,9 @@ def list_recipes_with_ingredients(
         rprint("No recipes found.")
         return
 
-    for recipe in recipes:
-        pprint(recipe)
+    if not save:
+        for recipe in recipes:
+            pprint(recipe)
 
     if save:
         fs_repo = RecipeRepository(settings.root)
@@ -843,8 +846,9 @@ def list_onboarding_recipes(
         rprint("No recipes found.")
         return
 
-    for recipe in recipes:
-        pprint(recipe)
+    if not save:
+        for recipe in recipes:
+            pprint(recipe)
 
     if save:
         fs_repo = RecipeRepository(settings.root)
