@@ -9,6 +9,7 @@ from kptncook.config import settings
 from kptncook.mealie import (
     MealieApiClient,
     Recipe,
+    RecipeStep,
     RecipeWithImage,
     kptncook_to_mealie,
 )
@@ -235,3 +236,50 @@ def test_create_recipe_skips_scrape_without_image_url(monkeypatch):
 
     assert called["scrape"] is False
     assert result.slug == "recipe-slug"
+
+
+def test_create_recipe_continues_when_step_images_fail(monkeypatch):
+    client = MealieApiClient("http://mealie.local/api")
+    recipe = RecipeWithImage(
+        name="Test recipe",
+        image_url=None,
+        recipe_instructions=[
+            RecipeStep(
+                text="Step 1",
+                image=Image(name="step.jpg", url="http://images.kptncook.com/step.jpg"),
+            )
+        ],
+        extras={"kptncook_id": "abc123"},
+    )
+    called = {"update": False}
+
+    def fake_post_recipe_trunk_and_get_slug(_recipe_name):
+        return "recipe-slug"
+
+    def passthrough(recipe_obj, *_args, **_kwargs):
+        return recipe_obj
+
+    def passthrough_update_tag_ids(recipe_obj):
+        return recipe_obj
+
+    def fake_update_recipe(recipe_obj, _slug):
+        called["update"] = True
+        return recipe_obj
+
+    def fail_upload_asset(_slug, _image):
+        raise httpx.HTTPError("boom")
+
+    monkeypatch.setattr(
+        client, "_post_recipe_trunk_and_get_slug", fake_post_recipe_trunk_and_get_slug
+    )
+    monkeypatch.setattr(client, "_update_user_and_group_id", passthrough)
+    monkeypatch.setattr(client, "_update_item_ids", passthrough)
+    monkeypatch.setattr(client, "_update_tag_ids", passthrough_update_tag_ids)
+    monkeypatch.setattr(client, "_update_recipe", fake_update_recipe)
+    monkeypatch.setattr(client, "upload_asset", fail_upload_asset)
+
+    result = client.create_recipe(recipe)
+
+    assert called["update"] is True
+    assert result.slug == "recipe-slug"
+    assert result.extras["kptncook_id"] == "abc123"

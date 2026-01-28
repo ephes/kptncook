@@ -4,6 +4,8 @@ Unreleased
 ### Fixes
 - Clarify first-run configuration messaging and note that commands should be
   re-run after scaffolding the `.env` file.
+- Skip step image upload failures during Mealie sync while still persisting
+  recipe metadata for de-duplication.
 
 0.0.28 - 2026-01-27
 ===================

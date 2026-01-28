@@ -238,7 +238,19 @@ class MealieApiClient:
     def enrich_recipe_with_step_images(self, recipe):
         assets = []
         for instruction in recipe.recipe_instructions:
-            asset_properties = self.upload_asset(recipe.slug, instruction.image)
+            try:
+                asset_properties = self.upload_asset(recipe.slug, instruction.image)
+            except httpx.HTTPError as exc:
+                logger.warning(
+                    "Skipping step image upload for recipe %s: %s", recipe.slug, exc
+                )
+                continue
+            except Exception:
+                logger.exception(
+                    "Skipping step image upload for recipe %s due to unexpected error",
+                    recipe.slug,
+                )
+                continue
             uploaded_image_name = asset_properties["fileName"]
             instruction.text = self._build_recipestep_text(
                 recipe.id, instruction.text, uploaded_image_name
