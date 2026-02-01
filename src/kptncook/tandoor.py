@@ -16,6 +16,7 @@ from kptncook.config import settings
 from kptncook.exporter_utils import (
     asciify_string,
     get_cover,
+    get_step_text,
     move_to_target_dir,
     write_zip,
     ZipContent,
@@ -127,7 +128,7 @@ class TandoorExporter:
         for step in recipe.steps:
             steps.append(
                 {
-                    "instruction": localized_fallback(step.title) or "",
+                    "instruction": get_step_text(step),
                     "ingredients": self.get_step_ingredients(step=step),
                 }
             )

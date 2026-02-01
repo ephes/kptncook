@@ -101,3 +101,23 @@ def test_mealie_export_handles_duplicate_ingredient_ids(minimal):
     assert len(ingredient_reference_ids) == 2
     assert len(set(ingredient_reference_ids)) == 2
     assert set(step_reference_ids) == set(ingredient_reference_ids)
+
+
+def test_mealie_export_expands_timer_placeholders(minimal):
+    recipe_data = {
+        **minimal,
+        "steps": [
+            {
+                "title": {"de": "Kartoffeln ca. <timer> in Wasser kochen."},
+                "ingredients": [],
+                "image": minimal["steps"][0]["image"],
+                "timers": [{"minOrExact": 15}],
+            }
+        ],
+    }
+    kc_recipe = Recipe.model_validate(recipe_data)
+    mealie_recipe = kptncook_to_mealie(kc_recipe)
+
+    step_text = mealie_recipe.recipe_instructions[0].text
+    assert "15 Min." in step_text
+    assert "<timer>" not in step_text

@@ -12,6 +12,7 @@ from pydantic import UUID4, BaseModel, ConfigDict, Field, ValidationError, parse
 
 from .config import settings
 from .ingredient_groups import iter_ingredient_groups
+from .exporter_utils import get_step_text
 from .models import (
     Image,
     Ingredient,
@@ -493,7 +494,7 @@ def kptncook_to_mealie_steps(
         mealie_instructions.append(
             RecipeStep(
                 title=None,
-                text=localized_fallback(step.title) or "",
+                text=get_step_text(step),
                 image=image,
                 ingredientReferences=ingredient_references,
             )
