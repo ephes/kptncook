@@ -27,6 +27,7 @@ from kptncook.config import settings
 from kptncook.exporter_utils import (
     asciify_string,
     get_cover,
+    get_step_text,
     move_to_target_dir,
     write_zip,
 )
@@ -36,7 +37,7 @@ from kptncook.models import Image, Ingredient, Recipe, localized_fallback
 PAPRIKA_RECIPE_TEMPLATE = """{
    "uid":"{{recipe.id.oid}}",
    "name":"{{localized_fallback(recipe.localized_title)|default('',true)}}",
-   "directions": "{% for step in recipe.steps %}{{localized_fallback(step.title)|default('',true)}}\\n{% endfor %}",
+   "directions": "{% for step in recipe.steps %}{{get_step_text(step)|default('',true)}}\\n{% endfor %}",
    "servings":"2",
    "rating":0,
    "difficulty":"",
@@ -115,6 +116,7 @@ class PaprikaExporter:
         recipe_as_json = self.template.render(
             recipe=recipe,
             localized_fallback=localized_fallback,
+            get_step_text=get_step_text,
             dtnow=generated.dtnow,
             cover_filename=generated.cover_filename,
             hash=generated.hash,
@@ -142,7 +144,7 @@ class PaprikaExporter:
     def format_ingredient_line(self, ingredient: Ingredient) -> str:
         parts: list[str] = []
         if ingredient.quantity:
-            parts.append("{0:g}".format(ingredient.quantity))
+            parts.append(f"{ingredient.quantity:g}")
         if ingredient.measure:
             parts.append(ingredient.measure)
         ingredient_name = (

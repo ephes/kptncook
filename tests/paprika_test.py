@@ -140,6 +140,31 @@ def test_render(minimal, mocker):
     assert actual == expected
 
 
+def test_render_expands_timer_placeholders(minimal, mocker):
+    recipe_data = {
+        **minimal,
+        "steps": [
+            {
+                "title": {"de": "Kartoffeln ca. <timer> kochen."},
+                "ingredients": [],
+                "image": minimal["steps"][0]["image"],
+                "timers": [{"minOrExact": 15}],
+            }
+        ],
+    }
+    recipe = Recipe.model_validate(recipe_data)
+    paprika_exporter = PaprikaExporter()
+    generated = GeneratedData("", "", "", "")
+    mocker.patch.object(
+        paprika_exporter, "get_generated_data", return_value=generated, autospec=True
+    )
+    export_data = paprika_exporter.get_export_data(recipes=[recipe])
+    [actual] = list(export_data.values())
+    data = json.loads(actual)
+    assert "15 Min." in data["directions"]
+    assert "<timer>" not in data["directions"]
+
+
 def test_filter_unescaped_newline(minimal):
     """
     Test that unescaped newlines are converted to a space.

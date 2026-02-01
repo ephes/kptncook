@@ -187,10 +187,22 @@ class StepIngredient(BaseModel):
         return values
 
 
+class StepTimer(BaseModel):
+    """Timer for a recipe step. Times are in minutes."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel, extra="ignore", populate_by_name=True
+    )
+
+    min_or_exact: int | None = None
+    max: int | None = None
+
+
 class RecipeStep(BaseModel):
     title: LocalizedString
     image: Image
     ingredients: list[StepIngredient | None] | None = None
+    timers: list[StepTimer] | None = None
 
 
 class Recipe(BaseModel):

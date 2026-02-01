@@ -117,3 +117,38 @@ def test_get_keywords_includes_active_tags_and_rtype(minimal):
     recipe = Recipe.model_validate(recipe_data)
 
     assert exporter.get_keywords(recipe) == ["kptncook", "quick", "dinner", "Fish"]
+
+
+def test_export_expands_timer_placeholders(minimal, mocker, tmp_path, monkeypatch):
+    exporter = TandoorExporter()
+    recipe_data = {
+        **minimal,
+        "steps": [
+            {
+                "title": {"de": "Kartoffeln ca. <timer> kochen."},
+                "ingredients": [],
+                "image": minimal["steps"][0]["image"],
+                "timers": [{"minOrExact": 15}],
+            }
+        ],
+    }
+    recipe = Recipe.model_validate(recipe_data)
+    monkeypatch.chdir(tmp_path)
+    mocker.patch.object(
+        Recipe,
+        "get_image_url",
+        autospec=True,
+        return_value="https://example.com/cover.jpg",
+    )
+    mocker.patch(
+        "kptncook.tandoor.httpx.get",
+        return_value=mocker.Mock(content=b"image", raise_for_status=mocker.Mock()),
+    )
+
+    filename = exporter.export_recipe(recipe=recipe)
+
+    with zipfile.ZipFile(tmp_path / filename) as zip_file:
+        payload = json.loads(zip_file.read("recipe.json").decode("utf-8"))
+    instruction = payload["steps"][0]["instruction"]
+    assert "15 Min." in instruction
+    assert "<timer>" not in instruction

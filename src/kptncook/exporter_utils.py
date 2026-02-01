@@ -2,11 +2,49 @@ import re
 import shutil
 import zipfile
 from pathlib import Path
-from typing import Iterable
+from collections.abc import Iterable
 
 from unidecode import unidecode
 
-from kptncook.models import Image
+from kptncook.models import Image, RecipeStep, StepTimer, localized_fallback
+
+TIMER_PLACEHOLDER = "<timer>"
+
+
+def format_timer(timer: StepTimer) -> str:
+    """Convert timer to human-readable German string (e.g. '15 Min.', '30–40 Min.')."""
+    if timer.min_or_exact is not None and timer.max is not None:
+        return f"{timer.min_or_exact}–{timer.max} Min."
+    if timer.min_or_exact is not None:
+        return f"{timer.min_or_exact} Min."
+    if timer.max is not None:
+        return f"bis zu {timer.max} Min."
+    return ""
+
+
+def expand_timer_placeholders(text: str, timers: list[StepTimer] | None) -> str:
+    """Replace <timer> placeholders with formatted timer values by position."""
+    if not text:
+        return text
+    if not timers:
+        return text.replace(TIMER_PLACEHOLDER, "")
+    timer_index = [0]
+
+    def replacer(_: re.Match) -> str:
+        idx = timer_index[0]
+        timer_index[0] += 1
+        if idx < len(timers):
+            return format_timer(timers[idx])
+        return ""
+
+    return re.sub(re.escape(TIMER_PLACEHOLDER), replacer, text)
+
+
+def get_step_text(step: RecipeStep) -> str:
+    """Get localized step text with timer placeholders expanded."""
+    raw = localized_fallback(step.title) or ""
+    return expand_timer_placeholders(raw, step.timers or [])
+
 
 ZipContent = bytes | str | Path
 
