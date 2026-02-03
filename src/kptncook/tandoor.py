@@ -1,12 +1,16 @@
 """
 Export recipes to Tandoor.
 
-Tandoor expects a zip archive with a recipe.json file and an optional image.jpg.
+Tandoor's Default importer expects an uploaded zip whose entries are .zip files
+(each entry = one recipe zip with recipe.json and optional image). We produce
+an outer zip containing a single inner recipe.zip (recipe.json + image.jpg).
 """
 
 import json
 import logging
 import tempfile
+import zipfile
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +23,6 @@ from kptncook.exporter_utils import (
     get_step_text,
     move_to_target_dir,
     write_zip,
-    ZipContent,
 )
 from kptncook.ingredient_groups import iter_ingredient_groups
 from kptncook.models import (
@@ -46,19 +49,28 @@ class TandoorExporter:
         filename = self.get_export_filename(recipe=recipe)
         payload = self.get_recipe_payload(recipe=recipe)
         image_bytes = self.get_cover_image_bytes(recipe=recipe)
+        inner_zip_bytes = self._build_recipe_zip(payload, image_bytes)
         with tempfile.TemporaryDirectory() as tmp_dir:
             zip_path = Path(tmp_dir) / filename
-            entries: list[tuple[str, ZipContent]] = [
-                (
-                    "recipe.json",
-                    json.dumps(payload, ensure_ascii=False, indent=2),
-                )
-            ]
-            if image_bytes is not None:
-                entries.append(("image.jpg", image_bytes))
-            write_zip(zip_path, entries)
+            write_zip(zip_path, [("recipe.zip", inner_zip_bytes)])
             move_to_target_dir(zip_path, Path.cwd() / filename)
         return filename
+
+    def _build_recipe_zip(
+        self, payload: dict[str, Any], image_bytes: bytes | None
+    ) -> bytes:
+        """Build the inner recipe zip (recipe.json + optional image.jpg)."""
+        buffer = BytesIO()
+        with zipfile.ZipFile(
+            buffer, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True
+        ) as zf:
+            zf.writestr(
+                "recipe.json",
+                json.dumps(payload, ensure_ascii=False, indent=2),
+            )
+            if image_bytes is not None:
+                zf.writestr("image.jpg", image_bytes)
+        return buffer.getvalue()
 
     def get_export_filename(self, recipe: Recipe) -> str:
         title = localized_fallback(recipe.localized_title) or "kptncook-recipe"
@@ -100,46 +112,129 @@ class TandoorExporter:
         return response.content
 
     def get_recipe_payload(self, recipe: Recipe) -> dict[str, Any]:
+        """Payload must match Tandoor RecipeExportSerializer (name, description, keywords, steps, working_time, waiting_time, internal, nutrition, servings, servings_text, source_url)."""
         return {
             "name": localized_fallback(recipe.localized_title) or "",
             "description": localized_fallback(recipe.author_comment) or "",
-            "servings": 3,
-            "source_url": self.get_source_url(recipe=recipe),
-            "working_time": recipe.preparation_time,
-            "waiting_time": recipe.cooking_time,
-            "keywords": self.get_keywords(recipe=recipe),
+            "keywords": self.get_keywords_export(recipe=recipe),
             "steps": self.get_steps(recipe=recipe),
-            "ingredients": self.get_ingredients(recipe=recipe),
+            "working_time": recipe.preparation_time,
+            "waiting_time": recipe.cooking_time or 0,
+            "internal": True,
+            "nutrition": None,
+            "servings": 3,
+            "servings_text": "",
+            "source_url": self.get_source_url(recipe=recipe),
         }
 
     def get_source_url(self, recipe: Recipe) -> str:
         source_id = recipe.uid or recipe.id.oid
         return f"https://share.kptncook.com/{source_id}"
 
-    def get_keywords(self, recipe: Recipe) -> list[dict[str, str]]:
-        keywords = [{"name": "kptncook"}]
+    def get_keywords(self, recipe: Recipe) -> list[str]:
+        keywords = ["kptncook"]
         if recipe.active_tags:
-            keywords.extend(
-                [{"name": tag} for tag in self._filter_active_tags(recipe.active_tags)]
-            )
+            keywords.extend(self._filter_active_tags(recipe.active_tags))
         if recipe.rtype:
-            keywords.append({"name": recipe.rtype})
+            keywords.append(recipe.rtype)
         return keywords
+
+    def get_keywords_export(self, recipe: Recipe) -> list[dict[str, Any]]:
+        """KeywordExportSerializer expects list of {name, description, created_at?, updated_at?}."""
+        return [
+            {"name": tag, "description": ""} for tag in self.get_keywords(recipe=recipe)
+        ]
 
     @staticmethod
     def _filter_active_tags(active_tags: list[str]) -> list[str]:
         return [tag for tag in active_tags if tag != "kptncook"]
 
     def get_steps(self, recipe: Recipe) -> list[dict[str, Any]]:
+        """StepExportSerializer expects name, instruction, ingredients, time, order, show_as_header, show_ingredients_table."""
         steps = []
+        order = 0
+        recipe_ingredients = self.get_recipe_ingredients_as_step_ingredients(
+            recipe=recipe
+        )
+        if recipe_ingredients:
+            steps.append(
+                {
+                    "name": "",
+                    "instruction": "",
+                    "ingredients": recipe_ingredients,
+                    "time": 0,
+                    "order": order,
+                    "show_as_header": True,
+                    "show_ingredients_table": True,
+                }
+            )
+            order += 1
         for step in recipe.steps:
             steps.append(
                 {
+                    "name": "",
                     "instruction": get_step_text(step),
                     "ingredients": self.get_step_ingredients(step=step),
+                    "time": 0,
+                    "order": order,
+                    "show_as_header": True,
+                    "show_ingredients_table": True,
                 }
             )
+            order += 1
         return steps
+
+    def get_recipe_ingredients_as_step_ingredients(
+        self, recipe: Recipe
+    ) -> list[dict[str, Any]]:
+        """Recipe-level ingredients as step-ingredient payloads (IngredientExportSerializer shape)."""
+        result = []
+        for group_label, group_ingredients in iter_ingredient_groups(
+            recipe.ingredients
+        ):
+            if group_label:
+                result.append(
+                    {
+                        "food": self._food_export(""),
+                        "unit": None,
+                        "amount": 0,
+                        "note": group_label,
+                        "order": 0,
+                        "is_header": True,
+                        "no_amount": True,
+                        "always_use_plural_unit": False,
+                        "always_use_plural_food": False,
+                    }
+                )
+            for ingredient in group_ingredients:
+                result.append(self._recipe_ingredient_to_step_payload(ingredient))
+        return result
+
+    def _recipe_ingredient_to_step_payload(
+        self, ingredient: Ingredient
+    ) -> dict[str, Any]:
+        """Single recipe-level ingredient as step-ingredient payload."""
+        name = self.get_ingredient_name(ingredient=ingredient) or ""
+        amount = ingredient.quantity if ingredient.quantity is not None else 0.0
+        unit_raw = self.get_unit_payload(measure=ingredient.measure)
+        unit: dict[str, Any] | None = None
+        if unit_raw and unit_raw.get("name"):
+            unit = {
+                "name": unit_raw["name"],
+                "plural_name": unit_raw["name"],
+                "description": None,
+            }
+        return {
+            "food": self._food_export(name),
+            "unit": unit,
+            "amount": amount,
+            "note": "",
+            "order": 0,
+            "is_header": False,
+            "no_amount": False,
+            "always_use_plural_unit": False,
+            "always_use_plural_food": False,
+        }
 
     def get_step_ingredients(self, step: RecipeStep) -> list[dict[str, Any]]:
         ingredients = []
@@ -154,18 +249,22 @@ class TandoorExporter:
     ) -> dict[str, Any] | None:
         if ingredient is None:
             return None
-        ingredient_name = self.get_step_ingredient_name(ingredient=ingredient)
-        if not ingredient_name:
-            logger.debug(
-                "Skipping Tandoor step ingredient without a resolvable food name."
-            )
+        ingredient_name = self.get_step_ingredient_name(ingredient=ingredient) or ""
+        if not ingredient_name.strip():
             return None
-        payload = {
-            "amount": ingredient.quantity,
-            "unit": self.get_step_unit_payload(unit=ingredient.unit),
-            "food": {"name": ingredient_name},
+        unit = self.get_step_unit_payload(unit=ingredient.unit)
+        amount = ingredient.quantity if ingredient.quantity is not None else 0.0
+        return {
+            "food": self._food_export(name=ingredient_name),
+            "unit": unit,
+            "amount": amount,
+            "note": "",
+            "order": 0,
+            "is_header": False,
+            "no_amount": False,
+            "always_use_plural_unit": False,
+            "always_use_plural_food": False,
         }
-        return {key: value for key, value in payload.items() if value is not None}
 
     def get_step_ingredient_name(self, ingredient: StepIngredient) -> str | None:
         details = ingredient.ingredient
@@ -187,7 +286,8 @@ class TandoorExporter:
 
     def get_step_unit_payload(
         self, unit: StepIngredientUnit | None
-    ) -> dict[str, str] | None:
+    ) -> dict[str, Any] | None:
+        """UnitExportSerializer: name, plural_name, description."""
         if unit is None:
             return None
         for candidate in (
@@ -196,8 +296,22 @@ class TandoorExporter:
             localized_fallback(unit.short_title),
         ):
             if candidate:
-                return {"name": candidate}
+                return {
+                    "name": candidate,
+                    "plural_name": candidate,
+                    "description": None,
+                }
         return None
+
+    @staticmethod
+    def _food_export(name: str) -> dict[str, Any]:
+        """FoodExportSerializer: name, plural_name, ignore_shopping, supermarket_category."""
+        return {
+            "name": name,
+            "plural_name": None,
+            "ignore_shopping": False,
+            "supermarket_category": None,
+        }
 
     def get_ingredients(self, recipe: Recipe) -> list[dict[str, Any]]:
         ingredients = []
