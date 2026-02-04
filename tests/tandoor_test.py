@@ -5,17 +5,57 @@ from io import BytesIO
 import httpx
 
 from kptncook.models import Recipe
-from kptncook.tandoor import IMAGE_DOWNLOAD_TIMEOUT, TandoorExporter
+from kptncook.tandoor import (
+    IMAGE_DOWNLOAD_TIMEOUT,
+    TANDOOR_BULK_EXPORT_FILENAME,
+    TandoorExporter,
+)
 
 
-def _read_recipe_from_export_zip(zip_path):
-    """Open outer zip, read inner recipe.zip, return (payload, inner_namelist)."""
+def _read_recipe_from_export_zip(zip_path, inner_name="recipe.zip"):
+    """Open outer zip, read inner recipe zip, return (payload, inner_namelist)."""
     with zipfile.ZipFile(zip_path) as outer:
-        assert set(outer.namelist()) == {"recipe.zip"}
-        inner_bytes = outer.read("recipe.zip")
+        inner_bytes = outer.read(inner_name)
     with zipfile.ZipFile(BytesIO(inner_bytes)) as inner:
         payload = json.loads(inner.read("recipe.json").decode("utf-8"))
         return payload, inner.namelist()
+
+
+def test_export_produces_single_bulk_zip(
+    full_recipe, minimal, mocker, tmp_path, monkeypatch
+):
+    exporter = TandoorExporter()
+    recipe1 = Recipe.model_validate(full_recipe)
+    recipe2 = Recipe.model_validate(minimal)
+    monkeypatch.chdir(tmp_path)
+    mocker.patch.object(
+        Recipe,
+        "get_image_url",
+        autospec=True,
+        return_value="https://example.com/cover.jpg",
+    )
+    mocker.patch(
+        "kptncook.tandoor.httpx.get",
+        return_value=mocker.Mock(content=b"image", raise_for_status=mocker.Mock()),
+    )
+
+    filenames = exporter.export(recipes=[recipe1, recipe2])
+
+    assert filenames == [TANDOOR_BULK_EXPORT_FILENAME]
+    zip_path = tmp_path / TANDOOR_BULK_EXPORT_FILENAME
+    assert zip_path.is_file()
+    with zipfile.ZipFile(zip_path) as bulk:
+        names = sorted(bulk.namelist())
+        assert len(names) == 2
+        assert all(n.endswith(".zip") for n in names)
+    payload, inner_names = _read_recipe_from_export_zip(zip_path, inner_name=names[0])
+    assert "name" in payload
+    assert set(inner_names) >= {"recipe.json"}
+
+
+def test_export_returns_empty_list_when_no_recipes():
+    exporter = TandoorExporter()
+    assert exporter.export(recipes=[]) == []
 
 
 def test_export_recipe_writes_zip_with_image(
@@ -133,13 +173,8 @@ def test_get_keywords_includes_active_tags_and_rtype(minimal):
     }
     recipe = Recipe.model_validate(recipe_data)
 
-    assert exporter.get_keywords(recipe) == [
-        {"name": "kptncook"},
-        {"name": "quick"},
-        {"name": "dinner"},
-        {"name": "Fish"},
-    ]
-    assert exporter.get_keywords(recipe).count({"name": "kptncook"}) == 1
+    assert exporter.get_keywords(recipe) == ["kptncook", "quick", "dinner", "Fish"]
+    assert exporter.get_keywords(recipe).count("kptncook") == 1
 
 
 def test_get_recipe_payload_uses_tandoor_time_fields(minimal):

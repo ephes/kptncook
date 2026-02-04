@@ -507,7 +507,10 @@ def export_recipes_to_tandoor(_id: OptionalId = typer.Argument(None)):
     """
     result = _run_or_exit(export_recipes_to_tandoor_workflow, _id)
     _print_repository_warnings(result.invalid_repository_entries)
+    if not result.filenames:
+        rprint("\n No recipes to export.\n")
+        return
     rprint(
         "\n The data was exported to '%s'. Open the export file with Tandoor.\n"
-        % ", ".join(result.filenames)
+        % result.filenames[0]
     )

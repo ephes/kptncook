@@ -2,8 +2,8 @@
 Export recipes to Tandoor.
 
 Tandoor's Default importer expects an uploaded zip whose entries are .zip files
-(each entry = one recipe zip with recipe.json and optional image). We produce
-an outer zip containing a single inner recipe.zip (recipe.json + image.jpg).
+(each entry = one recipe zip with recipe.json and optional image). By default
+we produce a single outer zip containing one inner recipe.zip per recipe.
 """
 
 import json
@@ -37,15 +37,29 @@ from kptncook.models import (
 logger = logging.getLogger(__name__)
 IMAGE_DOWNLOAD_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
+TANDOOR_BULK_EXPORT_FILENAME = "kptncook-tandoor-export.zip"
+
 
 class TandoorExporter:
     def export(self, recipes: list[Recipe]) -> list[str]:
-        filenames = []
+        """Export all recipes into a single zip (Tandoor Default importer format)."""
+        if not recipes:
+            return []
+        entries: list[tuple[str, bytes]] = []
         for recipe in recipes:
-            filenames.append(self.export_recipe(recipe=recipe))
-        return filenames
+            payload = self.get_recipe_payload(recipe=recipe)
+            image_bytes = self.get_cover_image_bytes(recipe=recipe)
+            inner_zip_bytes = self._build_recipe_zip(payload, image_bytes)
+            inner_filename = self.get_export_filename(recipe=recipe)
+            entries.append((inner_filename, inner_zip_bytes))
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            zip_path = Path(tmp_dir) / TANDOOR_BULK_EXPORT_FILENAME
+            write_zip(zip_path, entries)
+            move_to_target_dir(zip_path, Path.cwd() / TANDOOR_BULK_EXPORT_FILENAME)
+        return [TANDOOR_BULK_EXPORT_FILENAME]
 
     def export_recipe(self, recipe: Recipe) -> str:
+        """Export a single recipe to a zip (one outer zip, one inner recipe.zip)."""
         filename = self.get_export_filename(recipe=recipe)
         payload = self.get_recipe_payload(recipe=recipe)
         image_bytes = self.get_cover_image_bytes(recipe=recipe)
@@ -251,6 +265,9 @@ class TandoorExporter:
             return None
         ingredient_name = self.get_step_ingredient_name(ingredient=ingredient) or ""
         if not ingredient_name.strip():
+            logger.debug(
+                "Skipping Tandoor step ingredient without a resolvable food name."
+            )
             return None
         unit = self.get_step_unit_payload(unit=ingredient.unit)
         amount = ingredient.quantity if ingredient.quantity is not None else 0.0
