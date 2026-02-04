@@ -10,6 +10,7 @@ import json
 import logging
 import tempfile
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -39,18 +40,28 @@ IMAGE_DOWNLOAD_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
 TANDOOR_BULK_EXPORT_FILENAME = "kptncook-tandoor-export.zip"
 
+MAX_IMAGE_FETCH_WORKERS = 10
+
 
 class TandoorExporter:
     def export(self, recipes: list[Recipe]) -> list[str]:
         """Export all recipes into a single zip (Tandoor Default importer format)."""
         if not recipes:
             return []
+        payloads_and_filenames = [
+            (
+                self.get_recipe_payload(recipe=recipe),
+                self.get_export_filename(recipe=recipe),
+            )
+            for recipe in recipes
+        ]
+        with ThreadPoolExecutor(max_workers=MAX_IMAGE_FETCH_WORKERS) as executor:
+            image_bytes_list = list(executor.map(self.get_cover_image_bytes, recipes))
         entries: list[tuple[str, bytes]] = []
-        for recipe in recipes:
-            payload = self.get_recipe_payload(recipe=recipe)
-            image_bytes = self.get_cover_image_bytes(recipe=recipe)
+        for (payload, inner_filename), image_bytes in zip(
+            payloads_and_filenames, image_bytes_list
+        ):
             inner_zip_bytes = self._build_recipe_zip(payload, image_bytes)
-            inner_filename = self.get_export_filename(recipe=recipe)
             entries.append((inner_filename, inner_zip_bytes))
         with tempfile.TemporaryDirectory() as tmp_dir:
             zip_path = Path(tmp_dir) / TANDOOR_BULK_EXPORT_FILENAME
