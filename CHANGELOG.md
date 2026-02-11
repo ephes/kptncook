@@ -7,7 +7,7 @@ Unreleased
 ### Fixes
 - #75 Only show ingredient group title ("You need" / "Pantry") on the first
   ingredient per section in Mealie export instead of on every ingredient.
-- Clarify first-run configuration messaging and note that commands should be
+- #64 Clarify first-run configuration messaging and note that commands should be
   re-run after scaffolding the `.env` file.
 - #74 Skip step image upload failures during Mealie sync while still persisting
   recipe metadata for de-duplication.
@@ -15,7 +15,7 @@ Unreleased
   ingredient-based searches, and onboarding.
 - #73 Improve error handling when resolving share URLs in `search-by-id`.
 - #70 Expand the `.env` template with commented Mealie settings and optional config.
-- Log non-duplicate Mealie creation errors instead of silently ignoring them.
+- #72 Log non-duplicate Mealie creation errors instead of silently ignoring them.
 
 0.0.28 - 2026-01-27
 ===================
