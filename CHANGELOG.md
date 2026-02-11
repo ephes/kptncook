@@ -1,5 +1,5 @@
-Unreleased
-==========
+0.0.29 - 2026-02-11
+====================
 
 ### Features
 - #68 Add a `help` command (with `--all`) and #71 an `ls` alias for `list-recipes`.

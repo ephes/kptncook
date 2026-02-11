@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "kptncook"
-version = "0.0.28"
+version = "0.0.29"
 description = "kptncook is a little command line utility to download new recipes."
 authors = [
     {name = "Jochen Wersdörfer", email = "jochen-kptncook@wersdoerfer.de"},
