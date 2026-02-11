@@ -423,7 +423,7 @@ def kptncook_to_mealie_ingredients(
     ingredient_id_to_reference_ids: dict[str, list[UUID4]] = {}
     groups = iter_ingredient_groups(kptncook_ingredients or [])
     for group_label, ingredients in groups:
-        for ingredient in ingredients:
+        for idx, ingredient in enumerate(ingredients):
             ingredient_title = (
                 localized_fallback(ingredient.ingredient.localized_title) or ""
             )
@@ -440,7 +440,7 @@ def kptncook_to_mealie_ingredients(
                     measure = RecipeUnit(name=ingredient.measure)
             reference_id = uuid.uuid4()
             mealie_ingredient = RecipeIngredient(
-                title=group_label or None,
+                title=group_label if idx == 0 else None,
                 quantity=quantity,
                 unit=measure,
                 note=note,

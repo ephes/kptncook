@@ -1,3 +1,4 @@
+from kptncook.config import settings
 from kptncook.mealie import kptncook_to_mealie
 from kptncook.models import Recipe
 
@@ -101,3 +102,54 @@ def test_mealie_export_handles_duplicate_ingredient_ids(minimal):
     assert len(ingredient_reference_ids) == 2
     assert len(set(ingredient_reference_ids)) == 2
     assert set(step_reference_ids) == set(ingredient_reference_ids)
+
+
+def test_ingredient_group_title_only_on_first(minimal, monkeypatch):
+    """Group label should appear only on the first ingredient per group (#75)."""
+    monkeypatch.setattr(settings, "kptncook_group_ingredients_by_typ", True)
+    recipe_data = {
+        **minimal,
+        "ingredients": [
+            {
+                "quantity": 1.0,
+                "measure": "g",
+                "ingredient": {
+                    "typ": "regular",
+                    "localizedTitle": {"de": "Salz"},
+                    "numberTitle": {"de": "Salz"},
+                    "category": "spices",
+                },
+            },
+            {
+                "quantity": 2.0,
+                "measure": "g",
+                "ingredient": {
+                    "typ": "regular",
+                    "localizedTitle": {"de": "Pfeffer"},
+                    "numberTitle": {"de": "Pfeffer"},
+                    "category": "spices",
+                },
+            },
+            {
+                "quantity": 100.0,
+                "measure": "ml",
+                "ingredient": {
+                    "typ": "basic",
+                    "localizedTitle": {"de": "Olivenöl"},
+                    "numberTitle": {"de": "Olivenöl"},
+                    "category": "oils",
+                },
+            },
+        ],
+    }
+    kc_recipe = Recipe.model_validate(recipe_data)
+    mealie_recipe = kptncook_to_mealie(kc_recipe)
+
+    ingredients = mealie_recipe.recipe_ingredient
+    assert len(ingredients) == 3
+    # First ingredient in "You need" group gets the title
+    assert ingredients[0].title == "You need"
+    # Second ingredient in same group gets no title
+    assert ingredients[1].title is None
+    # First ingredient in "Pantry" group gets that title
+    assert ingredients[2].title == "Pantry"

@@ -5,6 +5,8 @@ Unreleased
 - Add a `help` command (with `--all`) and an `ls` alias for `list-recipes`.
 
 ### Fixes
+- Only show ingredient group title ("You need" / "Pantry") on the first
+  ingredient per section in Mealie export instead of on every ingredient.
 - Clarify first-run configuration messaging and note that commands should be
   re-run after scaffolding the `.env` file.
 - Skip step image upload failures during Mealie sync while still persisting
