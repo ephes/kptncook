@@ -2,19 +2,20 @@ Unreleased
 ==========
 
 ### Features
-- Add a `help` command (with `--all`) and an `ls` alias for `list-recipes`.
+- #68 Add a `help` command (with `--all`) and #71 an `ls` alias for `list-recipes`.
 
 ### Fixes
-- Only show ingredient group title ("You need" / "Pantry") on the first
+- #75 Only show ingredient group title ("You need" / "Pantry") on the first
   ingredient per section in Mealie export instead of on every ingredient.
 - Clarify first-run configuration messaging and note that commands should be
   re-run after scaffolding the `.env` file.
-- Skip step image upload failures during Mealie sync while still persisting
+- #74 Skip step image upload failures during Mealie sync while still persisting
   recipe metadata for de-duplication.
-- Avoid printing recipe JSON when `--save` is used for discovery lists,
+- #69 Avoid printing recipe JSON when `--save` is used for discovery lists,
   ingredient-based searches, and onboarding.
-- Improve error handling when resolving share URLs in `search-by-id`.
-- Expand the `.env` template with commented Mealie settings and optional config.
+- #73 Improve error handling when resolving share URLs in `search-by-id`.
+- #70 Expand the `.env` template with commented Mealie settings and optional config.
+- Log non-duplicate Mealie creation errors instead of silently ignoring them.
 
 0.0.28 - 2026-01-27
 ===================

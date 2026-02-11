@@ -3,6 +3,7 @@ kptncook is a little command line utility to download
 new recipes.
 """
 
+import logging
 import sys
 from datetime import date
 from typing import Any, Optional
@@ -44,6 +45,7 @@ __all__ = [
 ]
 
 __version__ = "0.0.28"
+logger = logging.getLogger(__name__)
 cli = typer.Typer()
 
 
@@ -476,6 +478,12 @@ def sync_with_mealie():
             detail_message = _extract_mealie_detail_message(e.response)
             if detail_message == "Recipe already exists":
                 continue
+            logger.warning(
+                "Failed to create recipe %s in Mealie (%s): %s",
+                recipe.name,
+                e.response.status_code,
+                detail_message or e,
+            )
     rprint(f"Created {len(created_slugs)} recipes")
 
 
