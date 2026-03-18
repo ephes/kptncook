@@ -267,7 +267,7 @@ class MealieApiClient:
 
     def _post_recipe_trunk_and_get_slug(self, recipe_name):
         data = {"name": recipe_name}
-        r = self.post("/recipes", data=json.dumps(data))
+        r = self.post("/recipes", json=data)
         r.raise_for_status()
         slug = r.json()
         return slug
@@ -277,7 +277,7 @@ class MealieApiClient:
             return
         json_image_url = json.dumps({"url": recipe.image_url})
         scrape_image_path = f"/recipes/{slug}/image"
-        r = self.post(scrape_image_path, data=json_image_url)
+        r = self.post(scrape_image_path, content=json_image_url, headers={"Content-Type": "application/json"})
         r.raise_for_status()
 
     def _update_user_and_group_id(self, recipe, slug):
@@ -309,7 +309,7 @@ class MealieApiClient:
         return all_items
 
     def _create_item(self, endpoint_name, item):
-        r = self.post(f"/{endpoint_name}", data=item.json())
+        r = self.post(f"/{endpoint_name}", content=item.json(), headers={"Content-Type": "application/json"})
         r.raise_for_status()
         return r.json()
 
@@ -358,7 +358,7 @@ class MealieApiClient:
 
     def _update_recipe(self, recipe, slug):
         recipe_detail_path = f"/recipes/{slug}"
-        r = self.put(recipe_detail_path, data=recipe.json())
+        r = self.put(recipe_detail_path, content=recipe.json(), headers={"Content-Type": "application/json"})
         r.raise_for_status()
         return Recipe.model_validate(r.json())
 
