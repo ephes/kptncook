@@ -8,6 +8,7 @@ import pytest
 import kptncook
 from kptncook import _extract_mealie_detail_message
 from kptncook.config import settings
+from kptncook.http_errors import UserFacingError
 from kptncook.mealie import (
     MealieApiClient,
     Recipe,
@@ -17,6 +18,7 @@ from kptncook.mealie import (
     kptncook_to_mealie,
 )
 from kptncook.models import Image, LocalizedString, RecipeId
+from kptncook.services import workflows
 
 
 def test_parse_empty_mealie_recipe_is_valid():
@@ -242,7 +244,7 @@ def test_get_mealie_client_uses_token(monkeypatch):
         def login(self, username, password):
             called["login"] = (username, password)
 
-    monkeypatch.setattr(kptncook, "MealieApiClient", FakeClient)
+    monkeypatch.setattr(workflows, "MealieApiClient", FakeClient)
     monkeypatch.setattr(settings, "mealie_api_token", "token-123")
     monkeypatch.setattr(settings, "mealie_username", "user")
     monkeypatch.setattr(settings, "mealie_password", "pass")
@@ -266,7 +268,7 @@ def test_get_mealie_client_uses_username_password(monkeypatch):
         def login(self, username, password):
             called["login"] = (username, password)
 
-    monkeypatch.setattr(kptncook, "MealieApiClient", FakeClient)
+    monkeypatch.setattr(workflows, "MealieApiClient", FakeClient)
     monkeypatch.setattr(settings, "mealie_api_token", None)
     monkeypatch.setattr(settings, "mealie_username", "user")
     monkeypatch.setattr(settings, "mealie_password", "pass")
@@ -282,7 +284,7 @@ def test_get_mealie_client_exits_without_credentials(monkeypatch):
     monkeypatch.setattr(settings, "mealie_username", None)
     monkeypatch.setattr(settings, "mealie_password", None)
 
-    with pytest.raises(SystemExit):
+    with pytest.raises(UserFacingError):
         kptncook.get_mealie_client()
 
 

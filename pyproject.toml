@@ -6,6 +6,7 @@ build-backend = "uv_build"
 name = "kptncook"
 version = "0.0.29"
 description = "kptncook is a little command line utility to download new recipes."
+readme = "README.md"
 authors = [
     {name = "Jochen Wersdörfer", email = "jochen-kptncook@wersdoerfer.de"},
 ]
@@ -23,7 +24,6 @@ classifiers = [
     "Topic :: Internet",
     "Development Status :: 2 - Pre-Alpha",
     "Environment :: Web Environment",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",

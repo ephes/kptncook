@@ -1,3 +1,5 @@
+from importlib import import_module
+
 import httpx
 import pytest
 
@@ -24,12 +26,13 @@ def test_help_command_unknown_command_exits():
 
 
 def test_ls_alias_calls_list_recipes(monkeypatch):
+    cli_module = import_module("kptncook.cli")
     called = {"value": False}
 
     def fake_list_recipes():
         called["value"] = True
 
-    monkeypatch.setattr(kptncook, "list_recipes", fake_list_recipes)
+    monkeypatch.setattr(cli_module, "list_recipes", fake_list_recipes)
 
     kptncook.list_recipes_alias()
 

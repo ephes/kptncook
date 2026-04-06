@@ -341,6 +341,8 @@ $ just check
 This runs `just lint`, `just typecheck`, and `just test` in sequence. You can
 also run each step individually:
 
+The same three gates run in GitHub Actions for pushes and pull requests.
+
 Target a single test:
 
 ```shell
@@ -391,7 +393,7 @@ $ just beads-import-gh-issues --dry-run
 ## Release Process
 
 1. Update `CHANGELOG.md` (move Unreleased entries into a dated release header).
-2. Bump `__version__` in `src/kptncook/__init__.py` and `version` in `pyproject.toml`.
+2. Bump `version` in `pyproject.toml`. `kptncook.__version__` is derived from package metadata.
 3. Run quality gates: `just check`.
 4. Commit changes and create a tag (e.g., `git tag -a v0.0.27 -m "v0.0.27"`).
 5. Push commits and tags.

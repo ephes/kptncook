@@ -5,6 +5,19 @@ Unreleased
 - Add `just check` command that runs lint, typecheck, and tests in one step.
 - Add `just loc` command for Rich-formatted lines-of-code summary with area and
   directory breakdowns (uses cloc with Python fallback).
+- Add GitHub Actions CI to run `just lint`, `just typecheck`, and `just test`
+  on pushes and pull requests.
+
+### Refactoring
+- Split CLI wiring and workflow/repository/error helpers out of
+  `src/kptncook/__init__.py` into dedicated modules, keeping `__init__.py` as a
+  thin entrypoint/export surface.
+- Derive `kptncook.__version__` from package metadata so `pyproject.toml` is the
+  single version source of truth.
+
+### Documentation
+- Update the README release process to bump the package version in one place and
+  note that CI runs the standard local quality gates.
 
 ### Fixes
 - #78 Send JSON payloads with the correct content type when syncing recipes to

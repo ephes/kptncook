@@ -2,6 +2,7 @@ import httpx
 import pytest
 
 import kptncook as cli_mod
+from kptncook.services import workflows
 
 
 def test_backup_favorites_redirect_error(monkeypatch, capsys):
@@ -12,7 +13,7 @@ def test_backup_favorites_redirect_error(monkeypatch, capsys):
         raise httpx.HTTPStatusError("redirect", request=request, response=response)
 
     monkeypatch.setattr(cli_mod.KptnCookClient, "list_favorites", fake_list_favorites)
-    monkeypatch.setattr(cli_mod, "_require_access_token", lambda *a, **kw: None)
+    monkeypatch.setattr(workflows, "_require_access_token", lambda *a, **kw: None)
 
     with pytest.raises(SystemExit):
         cli_mod.backup_kptncook_favorites()
@@ -30,7 +31,7 @@ def test_backup_favorites_http_error(monkeypatch, capsys):
         raise httpx.HTTPStatusError("server error", request=request, response=response)
 
     monkeypatch.setattr(cli_mod.KptnCookClient, "list_favorites", fake_list_favorites)
-    monkeypatch.setattr(cli_mod, "_require_access_token", lambda *a, **kw: None)
+    monkeypatch.setattr(workflows, "_require_access_token", lambda *a, **kw: None)
 
     with pytest.raises(SystemExit):
         cli_mod.backup_kptncook_favorites()
@@ -47,7 +48,7 @@ def test_backup_favorites_transport_error(monkeypatch, capsys):
         raise httpx.ConnectError("connection refused", request=request)
 
     monkeypatch.setattr(cli_mod.KptnCookClient, "list_favorites", fake_list_favorites)
-    monkeypatch.setattr(cli_mod, "_require_access_token", lambda *a, **kw: None)
+    monkeypatch.setattr(workflows, "_require_access_token", lambda *a, **kw: None)
 
     with pytest.raises(SystemExit):
         cli_mod.backup_kptncook_favorites()
@@ -64,9 +65,9 @@ def test_backup_favorites_resolve_http_error(monkeypatch, capsys):
     monkeypatch.setattr(
         cli_mod.KptnCookClient, "list_favorites", lambda *a, **kw: [{"id": "abc"}]
     )
-    monkeypatch.setattr(cli_mod, "_require_access_token", lambda *a, **kw: None)
+    monkeypatch.setattr(workflows, "_require_access_token", lambda *a, **kw: None)
     monkeypatch.setattr(
-        cli_mod, "_collect_recipe_identifiers", lambda items: [("apiId", "abc")]
+        workflows, "_collect_recipe_identifiers", lambda items: [("apiId", "abc")]
     )
 
     def fake_resolve(*_args, **_kwargs):

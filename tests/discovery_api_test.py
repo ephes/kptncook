@@ -1,10 +1,13 @@
 import json
+from importlib import import_module
 
 import httpx
 import pytest
+import typer
 
 import kptncook as cli_mod
 from kptncook.api import KptnCookClient, _collect_recipe_identifiers
+from kptncook.services.discovery import normalize_discovery_list_type
 
 
 def _json_response(url: str, payload: object) -> httpx.Response:
@@ -105,6 +108,18 @@ def test_extract_quick_search_entries():
 def test_extract_ingredient_name_number_title():
     entry = {"numberTitle": {"singular": "Karotte", "plural": "Karotten"}}
     assert cli_mod._extract_ingredient_name(entry) == "Karotte"
+
+
+def test_normalize_discovery_list_type_raises_value_error():
+    with pytest.raises(ValueError):
+        normalize_discovery_list_type("bogus")
+
+
+def test_discovery_list_invalid_type_raises_bad_parameter():
+    cli_module = import_module("kptncook.cli")
+
+    with pytest.raises(typer.BadParameter):
+        cli_module.list_discovery_list(list_type="bogus")
 
 
 def test_dailies_http_error_message(monkeypatch, capsys):
