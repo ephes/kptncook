@@ -4,7 +4,7 @@ import zipfile
 import httpx
 
 from kptncook.models import Recipe
-from kptncook.tandoor import TandoorExporter
+from kptncook.tandoor import IMAGE_DOWNLOAD_TIMEOUT, TandoorExporter
 
 
 def test_export_recipe_writes_zip_with_image(
@@ -36,7 +36,9 @@ def test_export_recipe_writes_zip_with_image(
     assert "main_ingredient_pasta" in payload["keywords"]
     assert "Fish" in payload["keywords"]
     httpx_get.assert_called_once_with(
-        "https://example.com/cover.jpg", follow_redirects=True
+        "https://example.com/cover.jpg",
+        follow_redirects=True,
+        timeout=IMAGE_DOWNLOAD_TIMEOUT,
     )
 
 

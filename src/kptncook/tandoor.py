@@ -12,7 +12,7 @@ from typing import Any
 
 import httpx
 
-from kptncook.config import settings
+from kptncook.config import get_settings
 from kptncook.exporter_utils import (
     asciify_string,
     get_cover,
@@ -32,6 +32,7 @@ from kptncook.models import (
 )
 
 logger = logging.getLogger(__name__)
+IMAGE_DOWNLOAD_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
 
 class TandoorExporter:
@@ -67,11 +68,15 @@ class TandoorExporter:
         cover = get_cover(image_list=recipe.image_list)
         if cover is None:
             return None
-        cover_url = recipe.get_image_url(api_key=settings.kptncook_api_key)
+        cover_url = recipe.get_image_url(api_key=get_settings().kptncook_api_key)
         if cover_url is None:
             return None
         try:
-            response = httpx.get(cover_url, follow_redirects=True)
+            response = httpx.get(
+                cover_url,
+                follow_redirects=True,
+                timeout=IMAGE_DOWNLOAD_TIMEOUT,
+            )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:

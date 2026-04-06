@@ -11,9 +11,10 @@ from typing import Any
 import httpx
 from pydantic import UUID4, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
-from .config import settings
-from .ingredient_groups import iter_ingredient_groups
 from .exporter_utils import get_step_text
+from .config import get_settings
+from .http_client import BaseHttpClient, DEFAULT_REQUEST_TIMEOUT
+from .ingredient_groups import iter_ingredient_groups
 from .models import (
     Image,
     Ingredient,
@@ -23,6 +24,8 @@ from .models import (
 from .models import Recipe as KptnCookRecipe
 
 logger = logging.getLogger(__name__)
+
+ASSET_DOWNLOAD_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
 
 class NameIsIdModel(BaseModel):
@@ -167,33 +170,20 @@ class RecipeWithImage(Recipe):
     image_url: str | None = None
 
 
-class MealieApiClient:
-    def __init__(self, base_url):
-        self.base_url = base_url
-        self.headers = {}
+class MealieApiClient(BaseHttpClient):
+    def __init__(
+        self,
+        base_url: str,
+        *,
+        client: httpx.Client | None = None,
+    ) -> None:
+        super().__init__(
+            str(base_url), headers={}, timeout=DEFAULT_REQUEST_TIMEOUT, client=client
+        )
 
     @property
     def logged_in(self):
-        return "access_token" in self.headers
-
-    def to_url(self, path):
-        return f"{self.base_url}{path}"
-
-    def __getattr__(self, name):
-        """
-        Return proxy for httpx, joining base_url with path and
-        providing authentication headers automatically.
-        """
-
-        def proxy(path, **kwargs):
-            url = self.to_url(path)
-            set_headers = kwargs.get("headers", {})
-            kwargs["headers"] = set_headers | self.headers
-            with httpx.Client() as client:
-                response = getattr(client, name)(url, **kwargs)
-            return response
-
-        return proxy
+        return "authorization" in self.headers
 
     def fetch_api_token(self, username, password):
         login_data = {"username": username, "password": password}
@@ -205,14 +195,18 @@ class MealieApiClient:
         if password == "":
             password = getpass()
         access_token = self.fetch_api_token(username, password)
-        self.headers = {"authorization": f"Bearer {access_token}"}
+        self.headers["authorization"] = f"Bearer {access_token}"
 
     def login_with_token(self, token: str):
-        self.headers = {"authorization": f"Bearer {token}"}
+        self.headers["authorization"] = f"Bearer {token}"
 
     def upload_asset(self, recipe_slug, image: Image):
         # download image
-        r = httpx.get(image.url, follow_redirects=True)
+        r = httpx.get(
+            image.url,
+            follow_redirects=True,
+            timeout=ASSET_DOWNLOAD_TIMEOUT,
+        )
         r.raise_for_status()
 
         download = io.BytesIO(r.content)
@@ -554,8 +548,10 @@ def kptncook_to_mealie_tags(active_tags: list[str] | None) -> list[RecipeTag]:
 
 
 def kptncook_to_mealie(
-    kcin: KptnCookRecipe, api_key: str = settings.kptncook_api_key
+    kcin: KptnCookRecipe, api_key: str | None = None
 ) -> RecipeWithImage:
+    if api_key is None:
+        api_key = get_settings().kptncook_api_key
     ingredients, ingredient_id_to_reference_ids = kptncook_to_mealie_ingredients(
         kcin.ingredients
     )

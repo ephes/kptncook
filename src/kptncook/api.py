@@ -3,12 +3,14 @@ from collections.abc import Sequence
 from datetime import date
 from time import time
 from typing import Any, Literal
-from urllib.parse import urljoin
 
 import httpx
 
-from .config import settings
+from .config import get_settings
+from .http_client import BaseHttpClient, DEFAULT_REQUEST_TIMEOUT
 from .repositories import RecipeInDb
+
+RECIPE_RESOLUTION_TIMEOUT = httpx.Timeout(120.0, connect=10.0)
 
 RecipeIdentifier = tuple[Literal["oid", "uid"], str]
 
@@ -139,45 +141,49 @@ def _extract_favorites_payload(
     return [], False, False
 
 
-class KptnCookClient:
+class KptnCookClient(BaseHttpClient):
     """
     Client for the kptncook api.
     """
 
     def __init__(
-        self, base_url=settings.kptncook_api_url, api_key=settings.kptncook_api_key
-    ):
-        self.base_url = str(base_url)
-        self.headers = {
+        self,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        *,
+        access_token: str | None = None,
+        client: httpx.Client | None = None,
+    ) -> None:
+        current_settings = None
+        if base_url is None or api_key is None:
+            current_settings = get_settings()
+        if base_url is None:
+            assert current_settings is not None
+            base_url = str(current_settings.kptncook_api_url)
+        if api_key is None:
+            assert current_settings is not None
+            api_key = current_settings.kptncook_api_key
+        if access_token is None and current_settings is not None:
+            access_token = current_settings.kptncook_access_token
+        headers = {
             "content-type": "application/json",
             "Accept": "application/vnd.kptncook.mobile-v8+json",
             "User-Agent": "Platform/Android/12.0.1 App/7.10.1",
             "hasIngredients": "yes",
         }
+        if access_token is not None:
+            headers["Token"] = access_token
+        super().__init__(
+            str(base_url),
+            headers=headers,
+            timeout=DEFAULT_REQUEST_TIMEOUT,
+            client=client,
+        )
         self.api_key = api_key
-        if settings.kptncook_access_token is not None:
-            self.headers["Token"] = settings.kptncook_access_token
 
     @property
     def logged_in(self):
         return "Token" in self.headers
-
-    def to_url(self, path):
-        return urljoin(self.base_url, path)
-
-    def __getattr__(self, name):
-        """
-        Return proxy for httpx, joining base_url with path and
-        providing authentication headers automatically.
-        """
-
-        def proxy(path, **kwargs):
-            url = self.to_url(path)
-            set_headers = kwargs.get("headers", {})
-            kwargs["headers"] = set_headers | self.headers
-            return getattr(httpx, name)(url, **kwargs)
-
-        return proxy
 
     def _standard_query_params(
         self,
@@ -187,11 +193,14 @@ class KptnCookClient:
         preferences: str | None = None,
     ) -> dict[str, str]:
         if lang is None:
-            lang = settings.kptncook_lang
+            current_settings = get_settings()
+            lang = current_settings.kptncook_lang
         if store is None:
-            store = settings.kptncook_store
+            current_settings = get_settings()
+            store = current_settings.kptncook_store
         if preferences is None:
-            preferences = settings.kptncook_preferences
+            current_settings = get_settings()
+            preferences = current_settings.kptncook_preferences
         params = {"kptnkey": str(self.api_key)}
         if lang is not None:
             params["lang"] = str(lang)
@@ -297,9 +306,12 @@ class KptnCookClient:
         payload = ids_to_payload(identifiers)
         if not payload:
             return []
-        # timeout disabled because saving more than 999 favorites didn't work for @brotkrume
         response = self.post(
-            f"/recipes/search?kptnkey={self.api_key}", json=payload, timeout=None
+            f"/recipes/search?kptnkey={self.api_key}",
+            json=payload,
+            # Favorites backup can resolve large batches, so allow a longer read timeout
+            # without leaving the CLI hanging indefinitely.
+            timeout=RECIPE_RESOLUTION_TIMEOUT,
         )
         response.raise_for_status()
         results = response.json()

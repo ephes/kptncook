@@ -10,6 +10,7 @@ from kptncook import _extract_mealie_detail_message
 from kptncook.config import settings
 from kptncook.http_errors import UserFacingError
 from kptncook.mealie import (
+    ASSET_DOWNLOAD_TIMEOUT,
     MealieApiClient,
     Recipe,
     RecipeTag,
@@ -88,6 +89,7 @@ def test_upload_asset_follows_redirects(monkeypatch):
 
     def fake_get(url, follow_redirects=False, **kwargs):
         seen["follow_redirects"] = follow_redirects
+        seen["timeout"] = kwargs.get("timeout")
         request = httpx.Request("GET", url)
         return httpx.Response(200, request=request, content=b"image-bytes")
 
@@ -105,7 +107,27 @@ def test_upload_asset_follows_redirects(monkeypatch):
     result = client.upload_asset("recipe-slug", image)
 
     assert seen["follow_redirects"] is True
+    assert seen["timeout"] == ASSET_DOWNLOAD_TIMEOUT
     assert result["fileName"] == "step.jpg"
+
+
+def test_mealie_client_reuses_injected_httpx_client():
+    shared_client = httpx.Client()
+    client = MealieApiClient("http://mealie.local/api", client=shared_client)
+
+    assert client._client is shared_client
+
+    shared_client.close()
+
+
+def test_login_with_token_preserves_existing_headers():
+    client = MealieApiClient("http://mealie.local/api")
+    client.headers["Accept"] = "application/json"
+
+    client.login_with_token("token-123")
+
+    assert client.headers["Accept"] == "application/json"
+    assert client.headers["authorization"] == "Bearer token-123"
 
 
 def test_post_recipe_trunk_uses_json_request():

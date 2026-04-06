@@ -208,8 +208,10 @@ default API key, and optionally fetch an access token:
 $ kptncook-setup
 ```
 
-If you run a command before configuring the API key, kptncook will scaffold the
-`.env` file and exit; just re-run the command after updating the file.
+Configuration is validated lazily. If you run a command before configuring the
+API key, kptncook will scaffold the `.env` file when that command first needs
+settings and then exit; just re-run the command after updating the file. `help`
+and other non-config commands do not force `.env` validation up front.
 
 Then set environment variables in the `~/.kptncook/.env` file (or directly in your shell). You'll need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie, set `MEALIE_API_TOKEN` or `MEALIE_USERNAME`/`MEALIE_PASSWORD`.
 

@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 
-from kptncook.config import settings
+from kptncook.config import get_settings
 from kptncook.models import Ingredient
 
 DEFAULT_INGREDIENT_GROUP_LABELS = {
@@ -44,6 +44,7 @@ def iter_ingredient_groups(
     ingredients: Iterable[Ingredient],
 ) -> list[tuple[str | None, list[Ingredient]]]:
     items = list(ingredients)
+    settings = get_settings()
     if not settings.kptncook_group_ingredients_by_typ:
         return [(None, items)]
     label_map = parse_ingredient_group_labels(settings.kptncook_ingredient_group_labels)

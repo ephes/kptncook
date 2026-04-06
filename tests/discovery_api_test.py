@@ -32,14 +32,15 @@ def _json_response(url: str, payload: object) -> httpx.Response:
 )
 def test_get_discovery_list_paths(monkeypatch, list_type, list_id, expected_path):
     captured = {}
+    client = KptnCookClient(base_url="https://example.com", api_key="test-key")
 
-    def fake_get(url, **kwargs):
+    def fake_get(path, **kwargs):
+        url = client.to_url(path)
         captured["url"] = url
         captured["params"] = kwargs.get("params", {})
         return _json_response(url, {"recipes": []})
 
-    monkeypatch.setattr(httpx, "get", fake_get)
-    client = KptnCookClient(base_url="https://example.com", api_key="test-key")
+    monkeypatch.setattr(client, "get", fake_get)
     client.get_discovery_list(list_type=list_type, list_id=list_id)
 
     assert captured["url"] == f"https://example.com{expected_path}"
@@ -54,14 +55,15 @@ def test_get_discovery_list_requires_id():
 
 def test_list_dailies_includes_filters(monkeypatch):
     captured = {}
+    client = KptnCookClient(base_url="https://example.com", api_key="test-key")
 
-    def fake_get(url, **kwargs):
+    def fake_get(path, **kwargs):
+        url = client.to_url(path)
         captured["url"] = url
         captured["params"] = kwargs.get("params", {})
         return _json_response(url, [])
 
-    monkeypatch.setattr(httpx, "get", fake_get)
-    client = KptnCookClient(base_url="https://example.com", api_key="test-key")
+    monkeypatch.setattr(client, "get", fake_get)
     client.list_dailies(
         recipe_filter="veggie",
         zone="+02:00",

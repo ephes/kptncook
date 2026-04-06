@@ -61,8 +61,10 @@ def test_extract_favorites_payload_missing():
 
 def test_list_favorites_uses_accounts_me_endpoint(monkeypatch):
     captured = {}
+    client = KptnCookClient(base_url="https://mobile.kptncook.com", api_key="test-key")
 
-    def fake_get(url, **kwargs):
+    def fake_get(path, **kwargs):
+        url = client.to_url(path)
         captured["url"] = url
         captured["params"] = kwargs.get("params", {})
         request = httpx.Request("GET", url)
@@ -73,8 +75,7 @@ def test_list_favorites_uses_accounts_me_endpoint(monkeypatch):
             headers={"content-type": "application/json"},
         )
 
-    monkeypatch.setattr(httpx, "get", fake_get)
-    client = KptnCookClient(base_url="https://mobile.kptncook.com", api_key="test-key")
+    monkeypatch.setattr(client, "get", fake_get)
 
     favorites = client.list_favorites()
 

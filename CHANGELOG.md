@@ -14,6 +14,11 @@ Unreleased
   thin entrypoint/export surface.
 - Derive `kptncook.__version__` from package metadata so `pyproject.toml` is the
   single version source of truth.
+- Replace import-time settings validation with a lazy `get_settings()` boundary
+  so runtime modules can be imported safely and config errors are rendered at
+  the CLI boundary instead of during import.
+- Normalize the KptnCook and Mealie HTTP clients around explicit request
+  methods, persistent `httpx.Client` instances, and bounded timeout defaults.
 
 ### Documentation
 - Update the README release process to bump the package version in one place and

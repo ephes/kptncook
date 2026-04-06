@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 
 from kptncook.api import KptnCookClient, _collect_recipe_identifiers, parse_id
-from kptncook.config import settings
+from kptncook.config import get_settings
 from kptncook.env import ENV_PATH
 from kptncook.http_errors import (
     UserFacingError,
@@ -34,6 +34,7 @@ from kptncook.services.repository import (
 from kptncook.tandoor import TandoorExporter
 
 logger = logging.getLogger(__name__)
+SHARE_URL_TIMEOUT = httpx.Timeout(15.0, connect=5.0)
 
 
 @dataclass(frozen=True)
@@ -61,7 +62,8 @@ def save_todays_recipes() -> int:
 
 
 def get_mealie_client() -> MealieApiClient:
-    client = MealieApiClient(settings.mealie_url)
+    settings = get_settings()
+    client = MealieApiClient(str(settings.mealie_url))
     try:
         if settings.mealie_api_token:
             client.login_with_token(settings.mealie_api_token)
@@ -127,6 +129,7 @@ def list_dailies(
 
 
 def _require_access_token() -> None:
+    settings = get_settings()
     if settings.kptncook_access_token is None:
         raise UserFacingError(
             f"Please set KPTNCOOK_ACCESS_TOKEN in your environment or {ENV_PATH}"
@@ -198,6 +201,7 @@ def backup_kptncook_favorites() -> FavoritesBackupResult:
 
 
 def get_kptncook_access_token() -> str:
+    settings = get_settings()
     username, password = get_credentials(
         username_command=settings.kptncook_username_command,
         password_command=settings.kptncook_password_command,
@@ -328,7 +332,7 @@ def search_recipe_by_id(id_: str) -> SearchResult:
     resolved_id = id_
     if resolved_id.startswith("https://share.kptncook.com/"):
         try:
-            response = httpx.get(resolved_id)
+            response = httpx.get(resolved_id, timeout=SHARE_URL_TIMEOUT)
         except httpx.HTTPError as exc:
             raise UserFacingError(
                 f"Request failed while resolving share URL: {exc}"

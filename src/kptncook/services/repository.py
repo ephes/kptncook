@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from datetime import date
 
-from kptncook.config import settings
+from kptncook.config import get_settings
 from kptncook.models import Recipe
 from kptncook.repositories import RecipeInDb, RecipeRepository
 
 
 def get_repository() -> RecipeRepository:
-    return RecipeRepository(settings.root)
+    return RecipeRepository(get_settings().root)
 
 
 def repository_needs_sync(sync_date: date) -> bool:

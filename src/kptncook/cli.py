@@ -10,6 +10,7 @@ from rich import print as rprint
 from rich.pretty import pprint
 from typer.main import get_command
 
+from kptncook.config import SettingsError, render_settings_error
 from kptncook.models import localized_fallback
 from kptncook.services.discovery import (
     DISCOVERY_LIST_TYPES_REQUIRE_ID,
@@ -55,6 +56,9 @@ def _exit_with_error(message: str) -> NoReturn:
 def _run_or_exit(func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
     try:
         return func(*args, **kwargs)
+    except SettingsError as exc:
+        render_settings_error(exc)
+        sys.exit(1)
     except UserFacingError as exc:
         _exit_with_error(str(exc))
 

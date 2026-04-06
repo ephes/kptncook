@@ -3,13 +3,18 @@ from pathlib import Path
 
 import pytest
 
-from kptncook.config import settings
+from kptncook.config import clear_settings_cache, settings
 
 
 @pytest.fixture(autouse=True)
-def reset_grouping_settings(monkeypatch):
+def reset_grouping_settings(monkeypatch, tmp_path):
+    monkeypatch.setenv("KPTNCOOK_API_KEY", "test-key")
+    monkeypatch.setenv("KPTNCOOK_HOME", str(tmp_path / "kptncook-home"))
+    clear_settings_cache()
     monkeypatch.setattr(settings, "kptncook_group_ingredients_by_typ", False)
     monkeypatch.setattr(settings, "kptncook_ingredient_group_labels", None)
+    yield
+    clear_settings_cache()
 
 
 @pytest.fixture

@@ -2,15 +2,21 @@
 Base settings for kptncook.
 """
 
+from __future__ import annotations
+
 import os
-import sys
 from pathlib import Path
+from typing import Any
 
 from pydantic import AnyHttpUrl, DirectoryPath, Field, ValidationError, field_validator
+from pydantic_core import PydanticUndefined
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from rich import print as rprint
 
 from .env import ENV_PATH, scaffold_env_file
+
+_MISSING_DEFAULT = object()
+_settings_cache: Settings | None = None
 
 
 def _missing_required_fields(error: ValidationError) -> set[str]:
@@ -28,21 +34,38 @@ def _missing_required_fields(error: ValidationError) -> set[str]:
     return missing
 
 
-def _render_missing_settings_message(
-    missing_fields: set[str],
-    env_path: Path,
-    scaffolded: bool,
-) -> None:
-    if "kptncook_api_key" not in missing_fields:
+class SettingsError(Exception):
+    """Raised when configuration is invalid at runtime."""
+
+    def __init__(
+        self,
+        validation_error: ValidationError,
+        *,
+        missing_fields: set[str],
+        env_path: Path,
+        scaffolded: bool,
+    ) -> None:
+        super().__init__("Invalid kptncook configuration")
+        self.validation_error = validation_error
+        self.missing_fields = missing_fields
+        self.env_path = env_path
+        self.scaffolded = scaffolded
+
+
+def render_settings_error(error: SettingsError) -> None:
+    if "kptncook_api_key" in error.missing_fields:
+        rprint("[red]Missing required configuration.[/red]")
+        if error.scaffolded:
+            rprint(f"Created {error.env_path} with a starter template.")
+        rprint("Add your KptnCook API key to the .env file or your shell:")
+        rprint(f"  {error.env_path}")
+        rprint("  KPTNCOOK_API_KEY=your-api-key-here")
+        rprint("Then re-run the command, or use `kptncook-setup` for guided setup.")
+        rprint("See README.md for details.")
         return
-    rprint("[red]Missing required configuration.[/red]")
-    if scaffolded:
-        rprint(f"Created {env_path} with a starter template.")
-    rprint("Add your KptnCook API key to the .env file or your shell:")
-    rprint(f"  {env_path}")
-    rprint("  KPTNCOOK_API_KEY=your-api-key-here")
-    rprint("Then re-run the command, or use `kptncook-setup` for guided setup.")
-    rprint("See README.md for details.")
+
+    rprint("[red]Invalid configuration.[/red]")
+    rprint(str(error.validation_error))
 
 
 class Settings(BaseSettings):
@@ -81,14 +104,75 @@ class Settings(BaseSettings):
         return value
 
 
-try:
-    settings = Settings()  # type: ignore
-except ValidationError as e:
-    missing_fields = _missing_required_fields(e)
-    scaffolded = False
-    if "kptncook_api_key" in missing_fields:
-        scaffolded = scaffold_env_file(ENV_PATH)
-        _render_missing_settings_message(missing_fields, ENV_PATH, scaffolded)
-    else:
-        rprint("validation error: ", e)
-    sys.exit(1)
+def get_settings() -> Settings:
+    global _settings_cache
+    if _settings_cache is not None:
+        return _settings_cache
+    try:
+        loaded = Settings()  # type: ignore
+    except ValidationError as exc:
+        missing_fields = _missing_required_fields(exc)
+        scaffolded = False
+        if "kptncook_api_key" in missing_fields:
+            scaffolded = scaffold_env_file(ENV_PATH)
+        raise SettingsError(
+            exc,
+            missing_fields=missing_fields,
+            env_path=ENV_PATH,
+            scaffolded=scaffolded,
+        ) from exc
+    settings._apply_overrides(loaded)
+    _settings_cache = loaded
+    return loaded
+
+
+def clear_settings_cache() -> None:
+    global _settings_cache
+    _settings_cache = None
+
+
+class _LazySettingsProxy:
+    def __init__(self) -> None:
+        object.__setattr__(self, "_defaults", self._build_defaults())
+        object.__setattr__(self, "_overrides", {})
+
+    def _build_defaults(self) -> dict[str, Any]:
+        defaults: dict[str, Any] = {}
+        for name, field in Settings.model_fields.items():
+            default = field.default
+            if default is PydanticUndefined:
+                defaults[name] = _MISSING_DEFAULT
+            else:
+                defaults[name] = default
+        return defaults
+
+    def _apply_overrides(self, target: Settings) -> None:
+        overrides = object.__getattribute__(self, "_overrides")
+        for name, value in overrides.items():
+            setattr(target, name, value)
+
+    def __getattr__(self, name: str) -> Any:
+        overrides = object.__getattribute__(self, "_overrides")
+        if name in overrides:
+            return overrides[name]
+        if _settings_cache is not None:
+            return getattr(_settings_cache, name)
+        defaults = object.__getattribute__(self, "_defaults")
+        if name in defaults:
+            if defaults[name] is _MISSING_DEFAULT:
+                raise AttributeError(name)
+            return defaults[name]
+        raise AttributeError(name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        overrides = object.__getattribute__(self, "_overrides")
+        defaults = object.__getattribute__(self, "_defaults")
+        if name in defaults and defaults[name] == value and _settings_cache is None:
+            overrides.pop(name, None)
+        else:
+            overrides[name] = value
+        if _settings_cache is not None:
+            setattr(_settings_cache, name, value)
+
+
+settings = _LazySettingsProxy()
