@@ -61,6 +61,7 @@ Home = "https://github.com/ephes/kptncook"
 [project.scripts]
 kptncook = "kptncook:cli"
 kptncook-setup = "kptncook_setup:cli"
+count-lines-of-code = "kptncook.loc:count_lines_of_code"
 
 [tool.uv.build-backend]
 module-name = ["kptncook", "kptncook_setup"]

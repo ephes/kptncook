@@ -3,6 +3,8 @@ Unreleased
 
 ### Developer Experience
 - Add `just check` command that runs lint, typecheck, and tests in one step.
+- Add `just loc` command for Rich-formatted lines-of-code summary with area and
+  directory breakdowns (uses cloc with Python fallback).
 
 0.0.29 - 2026-02-11
 ====================
