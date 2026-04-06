@@ -1,4 +1,8 @@
-from kptncook.api import _extract_favorites_payload
+import json
+
+import httpx
+
+from kptncook.api import KptnCookClient, _extract_favorites_payload
 
 
 def test_extract_favorites_payload_from_list():
@@ -53,3 +57,27 @@ def test_extract_favorites_payload_missing():
     assert favorites == []
     assert found is False
     assert invalid is False
+
+
+def test_list_favorites_uses_accounts_me_endpoint(monkeypatch):
+    captured = {}
+
+    def fake_get(url, **kwargs):
+        captured["url"] = url
+        captured["params"] = kwargs.get("params", {})
+        request = httpx.Request("GET", url)
+        return httpx.Response(
+            200,
+            request=request,
+            content=json.dumps({"favorites": []}).encode("utf-8"),
+            headers={"content-type": "application/json"},
+        )
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    client = KptnCookClient(base_url="https://mobile.kptncook.com", api_key="test-key")
+
+    favorites = client.list_favorites()
+
+    assert favorites == []
+    assert captured["url"] == "https://mobile.kptncook.com/accounts/me/favorites"
+    assert captured["params"]["kptnkey"] == "test-key"

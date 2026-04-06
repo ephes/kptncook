@@ -5,7 +5,7 @@ import kptncook as cli_mod
 
 
 def test_backup_favorites_redirect_error(monkeypatch, capsys):
-    request = httpx.Request("GET", "https://mobile.kptncook.com/favorites")
+    request = httpx.Request("GET", "https://mobile.kptncook.com/accounts/me/favorites")
     response = httpx.Response(301, request=request)
 
     def fake_list_favorites(*_args, **_kwargs):
@@ -23,7 +23,7 @@ def test_backup_favorites_redirect_error(monkeypatch, capsys):
 
 
 def test_backup_favorites_http_error(monkeypatch, capsys):
-    request = httpx.Request("GET", "https://mobile.kptncook.com/favorites")
+    request = httpx.Request("GET", "https://mobile.kptncook.com/accounts/me/favorites")
     response = httpx.Response(500, request=request)
 
     def fake_list_favorites(*_args, **_kwargs):
@@ -41,7 +41,7 @@ def test_backup_favorites_http_error(monkeypatch, capsys):
 
 
 def test_backup_favorites_transport_error(monkeypatch, capsys):
-    request = httpx.Request("GET", "https://mobile.kptncook.com/favorites")
+    request = httpx.Request("GET", "https://mobile.kptncook.com/accounts/me/favorites")
 
     def fake_list_favorites(*_args, **_kwargs):
         raise httpx.ConnectError("connection refused", request=request)

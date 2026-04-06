@@ -13,6 +13,9 @@ Unreleased
 - #72 Match existing Mealie tags case-insensitively during sync so case-only
   tag differences do not trigger duplicate tag creation attempts (thanks
   @joshinils).
+- #81 Fetch favorites from KptnCook's current `/accounts/me/favorites`
+  endpoint so `backup-favorites` works again after the API move (thanks
+  @ConConner).
 
 0.0.29 - 2026-02-11
 ====================
