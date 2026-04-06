@@ -24,10 +24,12 @@ from kptncook.password_manager import get_credentials
 from kptncook.repositories import RecipeInDb
 from kptncook.services.discovery import DiscoveryScreenData, parse_discovery_screen
 from kptncook.services.repository import (
+    InvalidStoredRecipe,
+    RepositoryRecipesResult,
+    RepositoryServiceError,
     delete_recipe_ids,
-    get_repository_recipe_by_oid,
+    load_repository_recipes,
     list_repository_ids,
-    list_repository_recipes,
     repository_needs_sync,
     save_recipe_entries,
 )
@@ -50,15 +52,93 @@ class SearchResult:
     recipe: RecipeInDb
 
 
+@dataclass(frozen=True)
+class SyncWithMealieResult:
+    created_count: int
+    invalid_repository_entries: list[InvalidStoredRecipe]
+
+
+@dataclass(frozen=True)
+class DeleteSelectionResult:
+    recipes: list[Recipe]
+    invalid_indices: list[int]
+    missing_ids: list[str]
+    to_delete_ids: list[str]
+    invalid_repository_entries: list[InvalidStoredRecipe]
+
+
+@dataclass(frozen=True)
+class PaprikaExportResult:
+    filename: str
+    invalid_repository_entries: list[InvalidStoredRecipe]
+
+
+@dataclass(frozen=True)
+class TandoorExportResult:
+    filenames: list[str]
+    invalid_repository_entries: list[InvalidStoredRecipe]
+
+
+def _wrap_repository_error(exc: RepositoryServiceError) -> UserFacingError:
+    return UserFacingError(str(exc))
+
+
+def load_kptncook_recipes_from_repository() -> RepositoryRecipesResult:
+    try:
+        return load_repository_recipes()
+    except RepositoryServiceError as exc:
+        raise _wrap_repository_error(exc) from exc
+
+
+def load_recipe_from_repository_by_oid(oid: str) -> RepositoryRecipesResult:
+    result = load_kptncook_recipes_from_repository()
+    return RepositoryRecipesResult(
+        recipes=[recipe for recipe in result.recipes if recipe.id.oid == oid],
+        invalid_entries=result.invalid_entries,
+    )
+
+
+def load_recipe_from_repository_by_id(id_: str) -> RepositoryRecipesResult:
+    parsed = parse_id(id_)
+    if parsed is None:
+        raise UserFacingError("Could not parse id")
+    _, id_value = parsed
+    return load_recipe_from_repository_by_oid(id_value)
+
+
+def _repository_id_map() -> dict[object, RecipeInDb]:
+    try:
+        return list_repository_ids()
+    except RepositoryServiceError as exc:
+        raise _wrap_repository_error(exc) from exc
+
+
+def _save_repository_entries(recipes: list[RecipeInDb]) -> int:
+    try:
+        return save_recipe_entries(recipes)
+    except RepositoryServiceError as exc:
+        raise _wrap_repository_error(exc) from exc
+
+
+def _delete_repository_ids(ids: list[str]) -> tuple[list[str], list[str]]:
+    try:
+        return delete_recipe_ids(ids)
+    except RepositoryServiceError as exc:
+        raise _wrap_repository_error(exc) from exc
+
+
 def get_today_recipes() -> list[RecipeInDb]:
     return KptnCookClient().list_today()
 
 
 def save_todays_recipes() -> int:
-    if not repository_needs_sync(date.today()):
-        return 0
-    recipes = get_today_recipes()
-    return save_recipe_entries(recipes)
+    try:
+        if not repository_needs_sync(date.today()):
+            return 0
+        recipes = get_today_recipes()
+        return save_recipe_entries(recipes)
+    except RepositoryServiceError as exc:
+        raise _wrap_repository_error(exc) from exc
 
 
 def get_mealie_client() -> MealieApiClient:
@@ -86,11 +166,11 @@ def get_kptncook_recipes_from_mealie(client: MealieApiClient) -> list[Any]:
 
 
 def get_kptncook_recipes_from_repository():
-    return list_repository_recipes()
+    return load_kptncook_recipes_from_repository().recipes
 
 
 def get_recipe_from_repository_by_oid(oid: str):
-    return get_repository_recipe_by_oid(oid=oid)
+    return load_recipe_from_repository_by_oid(oid=oid).recipes
 
 
 def _resolve_recipe_summaries(
@@ -136,11 +216,13 @@ def _require_access_token() -> None:
         )
 
 
-def sync_with_mealie() -> int:
+def sync_with_mealie_result() -> SyncWithMealieResult:
     client = get_mealie_client()
     kptncook_recipes_from_mealie = get_kptncook_recipes_from_mealie(client)
-    recipes = get_kptncook_recipes_from_repository()
-    kptncook_recipes_from_repository = [kptncook_to_mealie(r) for r in recipes]
+    repository_result = load_kptncook_recipes_from_repository()
+    kptncook_recipes_from_repository = [
+        kptncook_to_mealie(r) for r in repository_result.recipes
+    ]
     ids_in_mealie = {r.extras["kptncook_id"] for r in kptncook_recipes_from_mealie}
     ids_from_api = {r.extras["kptncook_id"] for r in kptncook_recipes_from_repository}
     ids_to_add = ids_from_api - ids_in_mealie
@@ -164,7 +246,14 @@ def sync_with_mealie() -> int:
                 exc.response.status_code,
                 detail_message or exc,
             )
-    return len(created_slugs)
+    return SyncWithMealieResult(
+        created_count=len(created_slugs),
+        invalid_repository_entries=repository_result.invalid_entries,
+    )
+
+
+def sync_with_mealie() -> int:
+    return sync_with_mealie_result().created_count
 
 
 def backup_kptncook_favorites() -> FavoritesBackupResult:
@@ -193,7 +282,7 @@ def backup_kptncook_favorites() -> FavoritesBackupResult:
     if len(recipes) == 0:
         raise UserFacingError("Could not find any favorites")
 
-    saved_count = save_recipe_entries(recipes)
+    saved_count = _save_repository_entries(recipes)
     return FavoritesBackupResult(
         favorite_count=len(favorites),
         saved_count=saved_count,
@@ -303,8 +392,9 @@ def delete_recipes_by_selection(
     *,
     indices: list[int],
     oids: list[str],
-) -> tuple[list[Recipe], list[int], list[str], list[str]]:
-    recipes = get_kptncook_recipes_from_repository()
+) -> DeleteSelectionResult:
+    repository_result = load_kptncook_recipes_from_repository()
+    recipes = repository_result.recipes
     index_ids: list[str] = []
     invalid_indices: list[int] = []
     for index in indices:
@@ -318,14 +408,20 @@ def delete_recipes_by_selection(
         if oid not in requested_ids:
             requested_ids.append(oid)
 
-    existing_ids = {str(key) for key in list_repository_ids().keys()}
+    existing_ids = {str(key) for key in _repository_id_map().keys()}
     missing_ids = [oid for oid in requested_ids if str(oid) not in existing_ids]
     to_delete_ids = [oid for oid in requested_ids if str(oid) in existing_ids]
-    return recipes, invalid_indices, missing_ids, to_delete_ids
+    return DeleteSelectionResult(
+        recipes=recipes,
+        invalid_indices=invalid_indices,
+        missing_ids=missing_ids,
+        to_delete_ids=to_delete_ids,
+        invalid_repository_entries=repository_result.invalid_entries,
+    )
 
 
 def delete_repository_recipes(ids: list[str]) -> tuple[list[str], list[str]]:
-    return delete_recipe_ids(ids)
+    return _delete_repository_ids(ids)
 
 
 def search_recipe_by_id(id_: str) -> SearchResult:
@@ -364,16 +460,12 @@ def search_recipe_by_id(id_: str) -> SearchResult:
         raise UserFacingError("Could not find recipe")
 
     recipe = recipes[0]
-    save_recipe_entries([recipe])
+    _save_repository_entries([recipe])
     return SearchResult(id_type=id_type, id_value=id_value, recipe=recipe)
 
 
 def get_recipe_by_id(id_: str):
-    parsed = parse_id(id_)
-    if parsed is None:
-        raise UserFacingError("Could not parse id")
-    _, id_value = parsed
-    found_recipes = get_recipe_from_repository_by_oid(oid=id_value)
+    found_recipes = load_recipe_from_repository_by_id(id_).recipes
     if len(found_recipes) == 0:
         raise UserFacingError("Recipe not found.")
     if len(found_recipes) > 1:
@@ -381,19 +473,45 @@ def get_recipe_by_id(id_: str):
     return found_recipes
 
 
-def export_recipes_to_paprika(recipe_id: str | None) -> str:
-    recipes = (
-        get_recipe_by_id(recipe_id)
+def export_recipes_to_paprika_result(recipe_id: str | None) -> PaprikaExportResult:
+    repository_result = (
+        load_recipe_from_repository_by_id(recipe_id)
         if recipe_id
-        else get_kptncook_recipes_from_repository()
+        else load_kptncook_recipes_from_repository()
     )
-    return PaprikaExporter().export(recipes=recipes)
+    recipes = repository_result.recipes
+    if recipe_id:
+        if len(recipes) == 0:
+            raise UserFacingError("Recipe not found.")
+        if len(recipes) > 1:
+            raise UserFacingError("More than one recipe found with that ID.")
+    return PaprikaExportResult(
+        filename=PaprikaExporter().export(recipes=recipes),
+        invalid_repository_entries=repository_result.invalid_entries,
+    )
+
+
+def export_recipes_to_paprika(recipe_id: str | None) -> str:
+    return export_recipes_to_paprika_result(recipe_id).filename
+
+
+def export_recipes_to_tandoor_result(recipe_id: str | None) -> TandoorExportResult:
+    repository_result = (
+        load_recipe_from_repository_by_id(recipe_id)
+        if recipe_id
+        else load_kptncook_recipes_from_repository()
+    )
+    recipes = repository_result.recipes
+    if recipe_id:
+        if len(recipes) == 0:
+            raise UserFacingError("Recipe not found.")
+        if len(recipes) > 1:
+            raise UserFacingError("More than one recipe found with that ID.")
+    return TandoorExportResult(
+        filenames=TandoorExporter().export(recipes=recipes),
+        invalid_repository_entries=repository_result.invalid_entries,
+    )
 
 
 def export_recipes_to_tandoor(recipe_id: str | None) -> list[str]:
-    recipes = (
-        get_recipe_by_id(recipe_id)
-        if recipe_id
-        else get_kptncook_recipes_from_repository()
-    )
-    return TandoorExporter().export(recipes=recipes)
+    return export_recipes_to_tandoor_result(recipe_id).filenames

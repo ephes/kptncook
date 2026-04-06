@@ -1,4 +1,9 @@
+from types import SimpleNamespace
+
+from kptncook.models import Recipe
 from kptncook.repositories import RecipeInDb
+from kptncook.services import repository as repository_service
+from kptncook.services.repository import InvalidStoredRecipe, RepositoryRecipesResult
 from kptncook.services import workflows
 
 
@@ -20,6 +25,95 @@ def test_save_todays_recipes_uses_repository_service(monkeypatch):
 
     assert workflows.save_todays_recipes() == 1
     assert captured["recipes"] == [recipe]
+
+
+def test_load_repository_recipes_reports_invalid_entries(monkeypatch, minimal):
+    valid_entry = RecipeInDb(date=workflows.date.today(), data=minimal)
+    invalid_entry = RecipeInDb(
+        date=workflows.date.today(),
+        data={"_id": {"$oid": "broken"}, "localizedTitle": {"de": "Broken recipe"}},
+    )
+    expected_recipe = Recipe.model_validate(minimal)
+
+    monkeypatch.setattr(
+        repository_service,
+        "list_repository_entries",
+        lambda: [valid_entry, invalid_entry],
+    )
+
+    result = repository_service.load_repository_recipes()
+
+    assert result.recipes == [expected_recipe]
+    assert len(result.invalid_entries) == 1
+    assert result.invalid_entries[0].recipe_id == "broken"
+    assert result.invalid_entries[0].reason == "authorComment: Field required"
+
+
+def test_sync_with_mealie_continues_with_invalid_repository_entries(
+    monkeypatch, minimal
+):
+    warning = InvalidStoredRecipe(
+        position=2,
+        recipe_id="broken",
+        reason="steps: Field required",
+    )
+    recipe = Recipe.model_validate(minimal)
+    created_recipe = SimpleNamespace(slug="minimal-recipe")
+    mealie_recipe = SimpleNamespace(
+        name="Minimal Recipe",
+        extras={"kptncook_id": recipe.id.oid},
+    )
+    fake_client = SimpleNamespace(
+        create_recipe=lambda recipe_to_create: created_recipe,
+    )
+
+    monkeypatch.setattr(workflows, "get_mealie_client", lambda: fake_client)
+    monkeypatch.setattr(
+        workflows,
+        "get_kptncook_recipes_from_mealie",
+        lambda _client: [],
+    )
+    monkeypatch.setattr(
+        workflows,
+        "load_kptncook_recipes_from_repository",
+        lambda: RepositoryRecipesResult(
+            recipes=[recipe],
+            invalid_entries=[warning],
+        ),
+    )
+    monkeypatch.setattr(workflows, "kptncook_to_mealie", lambda _recipe: mealie_recipe)
+
+    result = workflows.sync_with_mealie_result()
+
+    assert result.created_count == 1
+    assert result.invalid_repository_entries == [warning]
+
+
+def test_export_recipes_to_paprika_accepts_parseable_repository_url(
+    monkeypatch, minimal
+):
+    recipe = Recipe.model_validate(minimal)
+
+    monkeypatch.setattr(
+        workflows,
+        "load_kptncook_recipes_from_repository",
+        lambda: RepositoryRecipesResult(
+            recipes=[recipe],
+            invalid_entries=[],
+        ),
+    )
+    monkeypatch.setattr(
+        workflows.PaprikaExporter,
+        "export",
+        lambda self, recipes: "/tmp/export.paprikarecipes",
+    )
+
+    result = workflows.export_recipes_to_paprika_result(
+        f"https://share.kptncook.com/{recipe.id.oid}"
+    )
+
+    assert result.filename == "/tmp/export.paprikarecipes"
+    assert result.invalid_repository_entries == []
 
 
 def test_get_discovery_screen_returns_structured_entries(monkeypatch):

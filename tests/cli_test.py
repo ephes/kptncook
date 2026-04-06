@@ -7,6 +7,8 @@ from pydantic import ValidationError
 
 import kptncook
 from kptncook.config import Settings, SettingsError
+from kptncook.models import Recipe
+from kptncook.services.repository import InvalidStoredRecipe, RepositoryRecipesResult
 
 
 def test_help_command_outputs_usage(capsys):
@@ -76,3 +78,31 @@ def test_command_renders_config_errors_at_cli_boundary(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "Missing required configuration." in output
     assert "KPTNCOOK_API_KEY=your-api-key-here" in output
+
+
+def test_list_recipes_renders_invalid_repository_warning(monkeypatch, capsys, minimal):
+    cli_module = import_module("kptncook.cli")
+    recipe = Recipe.model_validate(minimal)
+
+    monkeypatch.setattr(
+        cli_module,
+        "load_kptncook_recipes_from_repository",
+        lambda: RepositoryRecipesResult(
+            recipes=[recipe],
+            invalid_entries=[
+                InvalidStoredRecipe(
+                    position=2,
+                    recipe_id="broken",
+                    reason="steps: Field required",
+                )
+            ],
+        ),
+    )
+
+    cli_module.list_recipes()
+
+    output = capsys.readouterr().out
+    assert "Warning:" in output
+    assert "skipped 1 invalid stored recipe" in output
+    assert "- broken: steps: Field required" in output
+    assert "Minimal Recipe" in output

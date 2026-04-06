@@ -114,6 +114,14 @@ $ kptncook recipes-with-ingredients --ingredient-id 123,456 --save
 Exports to Mealie and Tandoor include KptnCook active tags as tags/keywords
 (verbatim).
 
+### Repository warnings
+
+Repository-backed commands now warn if `kptncook.json` contains stored entries
+that can no longer be parsed into full recipes. The command continues with the
+valid recipes instead of silently dropping the bad entries. If you need to
+recover, inspect `~/.kptncook/kptncook.json` and the previous snapshot in
+`~/.kptncook/kptncook.json.backup`.
+
 ## Delete recipes
 
 Use indices from `kptncook list-recipes` or pass one or more `--oid` values.

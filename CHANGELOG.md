@@ -19,6 +19,10 @@ Unreleased
   the CLI boundary instead of during import.
 - Normalize the KptnCook and Mealie HTTP clients around explicit request
   methods, persistent `httpx.Client` instances, and bounded timeout defaults.
+- Surface invalid stored recipe entries as explicit warnings in repository-backed
+  workflows instead of silently skipping them.
+- Make repository writes atomic with temp-file replacement, preserved backups,
+  and lightweight advisory locking for concurrent writers on POSIX platforms.
 
 ### Documentation
 - Update the README release process to bump the package version in one place and

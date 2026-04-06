@@ -5,12 +5,33 @@ Atm only uses json. But this could also be a sqlite or a
 remote api, maybe mealie... hmm.
 """
 
+import os
 import shutil
+import tempfile
+from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
-from typing import List  # noqa F401
+from typing import Iterator, List  # noqa F401
 
-from pydantic import BaseModel, RootModel
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - only used on platforms without fcntl
+    fcntl = None  # type: ignore[assignment]
+
+from pydantic import BaseModel, RootModel, ValidationError
+
+
+class RepositoryError(Exception):
+    """Raised when the repository file cannot be read or written safely."""
+
+
+def format_validation_error(exc: ValidationError) -> str:
+    error = exc.errors(include_url=False)[0]
+    location = ".".join(str(part) for part in error.get("loc", ()))
+    message = error.get("msg", "Validation failed")
+    if location:
+        return f"{location}: {message}"
+    return message
 
 
 class RecipeInDb(BaseModel):
@@ -36,7 +57,7 @@ class RecipeRepository:
     name: str = "kptncook.json"
 
     def __init__(self, base_dir: Path):
-        self.base_dir = base_dir
+        self.base_dir = Path(base_dir)
 
     @property
     def path(self) -> Path:
@@ -46,20 +67,76 @@ class RecipeRepository:
     def backup_path(self) -> Path:
         return self.base_dir / f"{self.name}.backup"
 
+    @property
+    def lock_path(self) -> Path:
+        return self.base_dir / f"{self.name}.lock"
+
+    def _ensure_parent_dir(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
     def create_backup(self):
         if self.path.exists():
             shutil.copyfile(self.path, self.backup_path)
 
+    def _build_by_id(
+        self, recipes: list[RecipeInDb] | RecipeListInDb
+    ) -> dict[str, RecipeInDb]:
+        return {recipe.id: recipe for recipe in recipes}
+
+    def _fsync_directory(self) -> None:
+        try:
+            directory_fd = os.open(self.path.parent, os.O_RDONLY)
+        except OSError:
+            return
+        try:
+            os.fsync(directory_fd)
+        except OSError:
+            pass
+        finally:
+            os.close(directory_fd)
+
+    @contextmanager
+    def _write_lock(self) -> Iterator[None]:
+        self._ensure_parent_dir()
+        with self.lock_path.open("a+", encoding="utf-8") as lock_file:
+            if fcntl is not None:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                if fcntl is not None:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
     def _write_models(self, locked):
         self.create_backup()
-        try:
-            self.path.parent.mkdir(exist_ok=True)
-        except AttributeError:
-            # LocalPath in tests
-            pass
+        self._ensure_parent_dir()
         models = RecipeListInDb.model_validate(locked.values())
-        with self.path.open("w", encoding="utf-8") as f:
-            f.write(models.model_dump_json())
+        temp_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=self.path.parent,
+                prefix=f".{self.path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as f:
+                temp_path = Path(f.name)
+                f.write(models.model_dump_json())
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, self.path)
+            self._fsync_directory()
+        except OSError as exc:
+            raise RepositoryError(
+                f"Could not write repository file {self.path}: {exc}"
+            ) from exc
+        finally:
+            if temp_path is not None:
+                try:
+                    temp_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     def _fetch_all(self):
         """
@@ -69,16 +146,23 @@ class RecipeRepository:
             if not self.path.exists():
                 return []
             with self.path.open("r", encoding="utf-8") as f:
-                recipes_in_db = RecipeListInDb.model_validate_json(f.read())
-            return recipes_in_db
+                raw_data = f.read()
         except FileNotFoundError:
             return []
+        except OSError as exc:
+            raise RepositoryError(
+                f"Could not read repository file {self.path}: {exc}"
+            ) from exc
+        try:
+            return RecipeListInDb.model_validate_json(raw_data)
+        except ValidationError as exc:
+            raise RepositoryError(
+                f"Repository file {self.path} contains invalid data: "
+                f"{format_validation_error(exc)}"
+            ) from exc
 
     def list_by_id(self):
-        by_id = {}
-        for recipe in self.list():
-            by_id[recipe.id] = recipe
-        return by_id
+        return self._build_by_id(self.list())
 
     def needs_to_be_synced(self, _date: date):
         """
@@ -87,31 +171,34 @@ class RecipeRepository:
         return not any(recipe.date == _date for recipe in self.list())
 
     def add(self, recipe: RecipeInDb):
-        locked = self.list_by_id()
-        locked[recipe.id] = recipe
-        self._write_models(locked)
+        with self._write_lock():
+            locked = self._build_by_id(self._fetch_all())
+            locked[recipe.id] = recipe
+            self._write_models(locked)
 
     def add_list(self, recipes: list[RecipeInDb]):
-        locked = self.list_by_id()
-        for recipe in recipes:
-            locked[recipe.id] = recipe
-        self._write_models(locked)
+        with self._write_lock():
+            locked = self._build_by_id(self._fetch_all())
+            for recipe in recipes:
+                locked[recipe.id] = recipe
+            self._write_models(locked)
 
     def delete_by_ids(self, ids: list[str]) -> tuple[list[str], list[str]]:
-        locked = self.list_by_id()
-        key_map = {str(key): key for key in locked.keys()}
-        deleted: list[str] = []
-        missing: list[str] = []
-        for oid in ids:
-            key = key_map.get(str(oid))
-            if key is None:
-                missing.append(str(oid))
-                continue
-            locked.pop(key)
-            deleted.append(str(oid))
-        if deleted:
-            self._write_models(locked)
-        return deleted, missing
+        with self._write_lock():
+            locked = self._build_by_id(self._fetch_all())
+            key_map = {str(key): key for key in locked.keys()}
+            deleted: list[str] = []
+            missing: list[str] = []
+            for oid in ids:
+                key = key_map.get(str(oid))
+                if key is None:
+                    missing.append(str(oid))
+                    continue
+                locked.pop(key)
+                deleted.append(str(oid))
+            if deleted:
+                self._write_models(locked)
+            return deleted, missing
 
     def list(self):
         return list(self._fetch_all())
