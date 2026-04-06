@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "kptncook"
-version = "0.0.28"
+version = "0.0.29"
 description = "kptncook is a little command line utility to download new recipes."
 authors = [
     {name = "Jochen Wersdörfer", email = "jochen-kptncook@wersdoerfer.de"},
@@ -61,6 +61,7 @@ Home = "https://github.com/ephes/kptncook"
 [project.scripts]
 kptncook = "kptncook:cli"
 kptncook-setup = "kptncook_setup:cli"
+count-lines-of-code = "kptncook.loc:count_lines_of_code"
 
 [tool.uv.build-backend]
 module-name = ["kptncook", "kptncook_setup"]

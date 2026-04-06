@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import uuid
+from collections.abc import Callable
 from getpass import getpass
 from pathlib import Path
 from typing import Any
@@ -268,7 +269,7 @@ class MealieApiClient:
 
     def _post_recipe_trunk_and_get_slug(self, recipe_name):
         data = {"name": recipe_name}
-        r = self.post("/recipes", data=json.dumps(data))
+        r = self.post("/recipes", json=data)
         r.raise_for_status()
         slug = r.json()
         return slug
@@ -278,7 +279,11 @@ class MealieApiClient:
             return
         json_image_url = json.dumps({"url": recipe.image_url})
         scrape_image_path = f"/recipes/{slug}/image"
-        r = self.post(scrape_image_path, data=json_image_url)
+        r = self.post(
+            scrape_image_path,
+            content=json_image_url,
+            headers={"Content-Type": "application/json"},
+        )
         r.raise_for_status()
 
     def _update_user_and_group_id(self, recipe, slug):
@@ -310,18 +315,45 @@ class MealieApiClient:
         return all_items
 
     def _create_item(self, endpoint_name, item):
-        r = self.post(f"/{endpoint_name}", data=item.json())
+        r = self.post(
+            f"/{endpoint_name}",
+            content=item.model_dump_json(),
+            headers={"Content-Type": "application/json"},
+        )
         r.raise_for_status()
         return r.json()
 
-    def _create_item_name_to_item_lookup(self, endpoint_name, model_class, items):
+    def _create_item_name_to_item_lookup(
+        self,
+        endpoint_name,
+        model_class,
+        items,
+        normalize_name: Callable[[str], str] | None = None,
+    ):
+        def identity(name: str) -> str:
+            return name
+
+        if normalize_name is None:
+            normalize_name = identity
+
         existing_items = parse_obj_as(
-            set[model_class], self._get_all_items(endpoint_name)
+            list[model_class], self._get_all_items(endpoint_name)
         )
-        items_to_create = items - existing_items
+        normalized_name_to_item = {
+            normalize_name(item.name): item for item in existing_items
+        }
+        items_to_create = {
+            item
+            for item in items
+            if normalize_name(item.name) not in normalized_name_to_item
+        }
         for item in items_to_create:
-            existing_items.add(model_class(**self._create_item(endpoint_name, item)))
-        return {i.name: i for i in existing_items}
+            created_item = model_class(**self._create_item(endpoint_name, item))
+            normalized_name_to_item[normalize_name(created_item.name)] = created_item
+        return {
+            item.name: normalized_name_to_item[normalize_name(item.name)]
+            for item in items
+        }
 
     def _update_item_ids(self, recipe, endpoint_name, model_class, attr_name):
         items = {
@@ -352,14 +384,18 @@ class MealieApiClient:
             return recipe
 
         name_to_tag_with_id = self._create_item_name_to_item_lookup(
-            "organizers/tags", RecipeTag, recipe_tags
+            "organizers/tags", RecipeTag, recipe_tags, normalize_name=str.casefold
         )
         recipe.tags = [name_to_tag_with_id[tag.name] for tag in recipe_tags]
         return recipe
 
     def _update_recipe(self, recipe, slug):
         recipe_detail_path = f"/recipes/{slug}"
-        r = self.put(recipe_detail_path, data=recipe.json())
+        r = self.put(
+            recipe_detail_path,
+            content=recipe.model_dump_json(),
+            headers={"Content-Type": "application/json"},
+        )
         r.raise_for_status()
         return Recipe.model_validate(r.json())
 
@@ -424,7 +460,7 @@ def kptncook_to_mealie_ingredients(
     ingredient_id_to_reference_ids: dict[str, list[UUID4]] = {}
     groups = iter_ingredient_groups(kptncook_ingredients or [])
     for group_label, ingredients in groups:
-        for ingredient in ingredients:
+        for idx, ingredient in enumerate(ingredients):
             ingredient_title = (
                 localized_fallback(ingredient.ingredient.localized_title) or ""
             )
@@ -441,7 +477,7 @@ def kptncook_to_mealie_ingredients(
                     measure = RecipeUnit(name=ingredient.measure)
             reference_id = uuid.uuid4()
             mealie_ingredient = RecipeIngredient(
-                title=group_label or None,
+                title=group_label if idx == 0 else None,
                 quantity=quantity,
                 unit=measure,
                 note=note,

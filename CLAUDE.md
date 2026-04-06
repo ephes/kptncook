@@ -54,13 +54,13 @@ uv run pre-commit install
 
 ### Quality Gates (Required)
 
-All of `just lint`, `just typecheck`, and `just test` must pass before declaring work done.
+All quality gates must pass before declaring work done.
 
 ```bash
-just lint
-just typecheck
-just test
+just check
 ```
+
+This runs `just lint`, `just typecheck`, and `just test` in sequence.
 
 ### Running Tests (Direct)
 
@@ -137,17 +137,9 @@ KPTNCOOK_PASSWORD_COMMAND="pass show kptncook/password"
 - Mock HTTP requests when testing API clients
 - Test data in `tests/fixtures/`
 
-## Beads and Beadsflow
-
-- Beads is the issue tracker; `.beads/` is committed.
-- Onboard with `bd onboard` (fallback: `bd init` + `bd hooks install`).
-- If your global gitignore ignores `.beads/`, remove `**/.beads/` or use `git add -f`.
-- Use local beadsflow: `uv run --project ../beadsflow beadsflow run <epic-id> ...` or the `just` helpers.
-- Comment markers must start with one of: `Ready for review:`, `LGTM`, `Changes requested:`.
-
 ## Commits and Push
 
-Do not run `git commit`, `git push`, or `bd sync` unless the user explicitly asks.
+Do not run `git commit` or `git push` unless the user explicitly asks.
 
 ## Landing the Plane (Session Completion)
 
@@ -161,7 +153,6 @@ Do not run `git commit`, `git push`, or `bd sync` unless the user explicitly ask
 4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
-   bd sync
    git push
    git status  # MUST show "up to date with origin"
    ```

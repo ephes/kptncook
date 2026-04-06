@@ -262,7 +262,7 @@ class KptnCookClient:
         Get a list of favorite recipes.
         """
         params = self._standard_query_params()
-        response = self.get("/favorites", params=params)
+        response = self.get("/accounts/me/favorites", params=params)
         response.raise_for_status()
         try:
             payload = response.json()

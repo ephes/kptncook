@@ -23,19 +23,8 @@
 - Release process: see `README.md#release-process`.
 - Files in `specs/` are ephemeral and for local consumption only. Do not track or commit them.
 
-## Beads workflow (required)
-- This repo uses Beads for issue tracking, and `.beads/` is committed.
-- Onboard: `bd onboard` (fallback: `bd init` + `bd hooks install`).
-- If your global gitignore ignores `.beads/`, remove `**/.beads/` or use `git add -f`.
-- Start work by reading context and deps: `bd --no-daemon --no-db show <id>` and `bd --no-daemon --no-db dep tree <id>`.
-- Comment markers must start with one of: `Ready for review:`, `LGTM`, `Changes requested:`.
-
-## Beadsflow
-- Use the local checkout: `uv run --project ../beadsflow beadsflow run <epic-id> ...`.
-- Helpers exist in `justfile`: `just beadsflow-dry <epic-id>`, `just beadsflow-once <epic-id>`, `just beadsflow-run <epic-id>`.
-
 ## Commits and push
-- Do not run `git commit`, `git push`, or `bd sync` unless the user explicitly asks.
+- Do not run `git commit` or `git push` unless the user explicitly asks.
 
 ## Landing the Plane (Session Completion)
 
@@ -49,7 +38,6 @@
 4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
-   bd sync
    git push
    git status  # MUST show "up to date with origin"
    ```

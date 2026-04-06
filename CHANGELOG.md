@@ -1,20 +1,42 @@
 Unreleased
 ==========
 
-### Features
-- Add a `help` command (with `--all`) and an `ls` alias for `list-recipes`.
+### Developer Experience
+- Add `just check` command that runs lint, typecheck, and tests in one step.
+- Add `just loc` command for Rich-formatted lines-of-code summary with area and
+  directory breakdowns (uses cloc with Python fallback).
 
 ### Fixes
-- Clarify first-run configuration messaging and note that commands should be
-  re-run after scaffolding the `.env` file.
-- Skip step image upload failures during Mealie sync while still persisting
-  recipe metadata for de-duplication.
-- Avoid printing recipe JSON when `--save` is used for discovery lists,
-  ingredient-based searches, and onboarding.
-- Improve error handling when resolving share URLs in `search-by-id`.
-- Expand the `.env` template with commented Mealie settings and optional config.
+- #78 Send JSON payloads with the correct content type when syncing recipes to
+  Mealie, fixing `422 Unprocessable Entity` errors on Mealie v3.12.0+ (thanks
+  @TheZargs).
+- #72 Match existing Mealie tags case-insensitively during sync so case-only
+  tag differences do not trigger duplicate tag creation attempts (thanks
+  @joshinils).
+- #81 Fetch favorites from KptnCook's current `/accounts/me/favorites`
+  endpoint so `backup-favorites` works again after the API move (thanks
+  @ConConner).
 - #80 Expand `<timer>` placeholders in exported recipe steps so timer values show
   up correctly in Mealie, Tandoor, and Paprika (thanks @joshinils).
+
+0.0.29 - 2026-02-11
+====================
+
+### Features
+- #68 Add a `help` command (with `--all`) and #71 an `ls` alias for `list-recipes`.
+
+### Fixes
+- #75 Only show ingredient group title ("You need" / "Pantry") on the first
+  ingredient per section in Mealie export instead of on every ingredient.
+- #64 Clarify first-run configuration messaging and note that commands should be
+  re-run after scaffolding the `.env` file.
+- #74 Skip step image upload failures during Mealie sync while still persisting
+  recipe metadata for de-duplication.
+- #69 Avoid printing recipe JSON when `--save` is used for discovery lists,
+  ingredient-based searches, and onboarding.
+- #73 Improve error handling when resolving share URLs in `search-by-id`.
+- #70 Expand the `.env` template with commented Mealie settings and optional config.
+- #72 Log non-duplicate Mealie creation errors instead of silently ignoring them.
 
 0.0.28 - 2026-01-27
 ===================

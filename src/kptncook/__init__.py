@@ -3,6 +3,7 @@ kptncook is a little command line utility to download
 new recipes.
 """
 
+import logging
 import sys
 from datetime import date
 from typing import Any, Optional
@@ -43,7 +44,8 @@ __all__ = [
     "export_recipes_to_tandoor",
 ]
 
-__version__ = "0.0.28"
+__version__ = "0.0.29"
+logger = logging.getLogger(__name__)
 cli = typer.Typer()
 
 
@@ -476,6 +478,12 @@ def sync_with_mealie():
             detail_message = _extract_mealie_detail_message(e.response)
             if detail_message == "Recipe already exists":
                 continue
+            logger.warning(
+                "Failed to create recipe %s in Mealie (%s): %s",
+                recipe.name,
+                e.response.status_code,
+                detail_message or e,
+            )
     rprint(f"Created {len(created_slugs)} recipes")
 
 
@@ -498,6 +506,18 @@ def backup_kptncook_favorites():
     client = KptnCookClient()
     try:
         favorites = client.list_favorites()
+    except httpx.HTTPStatusError as exc:
+        detail = _extract_http_error_message(exc.response)
+        message = f"HTTP {exc.response.status_code} while fetching favorites"
+        if 300 <= exc.response.status_code < 400:
+            message = f"{message} (endpoint may no longer be available)"
+        if detail:
+            message = f"{message}: {detail}"
+        rprint(f"[red]{message}[/red]")
+        sys.exit(1)
+    except httpx.HTTPError as exc:
+        rprint(f"[red]Request failed: {exc}[/red]")
+        sys.exit(1)
     except ValueError as exc:
         rprint(f"[red]{exc}[/red]")
         sys.exit(1)
@@ -506,7 +526,7 @@ def backup_kptncook_favorites():
     if not identifiers:
         rprint("Could not find any favorites")
         sys.exit(1)
-    recipes = client.get_by_ids(identifiers)
+    recipes = _resolve_recipe_summaries(client, identifiers)
     if len(recipes) == 0:
         rprint("Could not find any favorites")
         sys.exit(1)

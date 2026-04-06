@@ -8,6 +8,12 @@ default:
 install:
     uv sync
 
+# Run lint, typecheck, and tests
+check:
+    just lint
+    just typecheck
+    just test
+
 # Run the full test suite
 test:
     uv run pytest
@@ -24,6 +30,10 @@ typecheck:
 lint:
     uv run ruff format .
     uv run ruff check .
+
+# Count lines of code in the repository with language, area, and directory summaries
+loc:
+    @uv run count-lines-of-code
 
 # Remove build artifacts
 clean-build:
