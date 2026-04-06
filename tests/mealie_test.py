@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 
 import httpx
@@ -9,6 +10,7 @@ from kptncook.config import settings
 from kptncook.mealie import (
     MealieApiClient,
     Recipe,
+    RecipeTag,
     RecipeStep,
     RecipeWithImage,
     kptncook_to_mealie,
@@ -101,6 +103,98 @@ def test_upload_asset_follows_redirects(monkeypatch):
 
     assert seen["follow_redirects"] is True
     assert result["fileName"] == "step.jpg"
+
+
+def test_post_recipe_trunk_uses_json_request():
+    client = MealieApiClient("http://mealie.local/api")
+    seen = {}
+
+    def fake_post(path, **kwargs):
+        seen["path"] = path
+        seen["kwargs"] = kwargs
+        request = httpx.Request("POST", f"http://mealie.local/api{path}")
+        return httpx.Response(200, request=request, json="recipe-slug")
+
+    client.post = fake_post
+
+    slug = client._post_recipe_trunk_and_get_slug("Test recipe")
+
+    assert slug == "recipe-slug"
+    assert seen["path"] == "/recipes"
+    assert seen["kwargs"]["json"] == {"name": "Test recipe"}
+    assert "data" not in seen["kwargs"]
+
+
+def test_scrape_image_for_recipe_uses_json_content_type():
+    client = MealieApiClient("http://mealie.local/api")
+    recipe = RecipeWithImage(
+        name="Test recipe",
+        image_url="https://images.example/test.jpg",
+    )
+    seen = {}
+
+    def fake_post(path, **kwargs):
+        seen["path"] = path
+        seen["kwargs"] = kwargs
+        request = httpx.Request("POST", f"http://mealie.local/api{path}")
+        return httpx.Response(200, request=request, json={})
+
+    client.post = fake_post
+
+    client._scrape_image_for_recipe(recipe, "recipe-slug")
+
+    assert seen["path"] == "/recipes/recipe-slug/image"
+    assert seen["kwargs"]["content"] == json.dumps({"url": recipe.image_url})
+    assert seen["kwargs"]["headers"]["Content-Type"] == "application/json"
+    assert "data" not in seen["kwargs"]
+
+
+def test_create_item_uses_json_content_type():
+    client = MealieApiClient("http://mealie.local/api")
+    tag = RecipeTag(name="quick")
+    seen = {}
+
+    def fake_post(path, **kwargs):
+        seen["path"] = path
+        seen["kwargs"] = kwargs
+        request = httpx.Request("POST", f"http://mealie.local/api{path}")
+        return httpx.Response(200, request=request, json={"name": "quick"})
+
+    client.post = fake_post
+
+    created = client._create_item("organizers/tags", tag)
+
+    assert created == {"name": "quick"}
+    assert seen["path"] == "/organizers/tags"
+    assert seen["kwargs"]["content"] == tag.model_dump_json()
+    assert seen["kwargs"]["headers"]["Content-Type"] == "application/json"
+    assert "data" not in seen["kwargs"]
+
+
+def test_update_recipe_uses_json_content_type():
+    client = MealieApiClient("http://mealie.local/api")
+    recipe = Recipe(name="Test recipe", slug="recipe-slug")
+    seen = {}
+
+    def fake_put(path, **kwargs):
+        seen["path"] = path
+        seen["kwargs"] = kwargs
+        request = httpx.Request("PUT", f"http://mealie.local/api{path}")
+        return httpx.Response(
+            200,
+            request=request,
+            json=recipe.model_dump(mode="json", by_alias=True),
+        )
+
+    client.put = fake_put
+
+    updated = client._update_recipe(recipe, "recipe-slug")
+
+    assert updated.name == "Test recipe"
+    assert seen["path"] == "/recipes/recipe-slug"
+    assert seen["kwargs"]["content"] == recipe.model_dump_json()
+    assert seen["kwargs"]["headers"]["Content-Type"] == "application/json"
+    assert "data" not in seen["kwargs"]
 
 
 def test_get_mealie_client_uses_token(monkeypatch):
