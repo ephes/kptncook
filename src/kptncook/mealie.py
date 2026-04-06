@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import uuid
+from collections.abc import Callable
 from getpass import getpass
 from pathlib import Path
 from typing import Any
@@ -321,14 +322,37 @@ class MealieApiClient:
         r.raise_for_status()
         return r.json()
 
-    def _create_item_name_to_item_lookup(self, endpoint_name, model_class, items):
+    def _create_item_name_to_item_lookup(
+        self,
+        endpoint_name,
+        model_class,
+        items,
+        normalize_name: Callable[[str], str] | None = None,
+    ):
+        def identity(name: str) -> str:
+            return name
+
+        if normalize_name is None:
+            normalize_name = identity
+
         existing_items = parse_obj_as(
-            set[model_class], self._get_all_items(endpoint_name)
+            list[model_class], self._get_all_items(endpoint_name)
         )
-        items_to_create = items - existing_items
+        normalized_name_to_item = {
+            normalize_name(item.name): item for item in existing_items
+        }
+        items_to_create = {
+            item
+            for item in items
+            if normalize_name(item.name) not in normalized_name_to_item
+        }
         for item in items_to_create:
-            existing_items.add(model_class(**self._create_item(endpoint_name, item)))
-        return {i.name: i for i in existing_items}
+            created_item = model_class(**self._create_item(endpoint_name, item))
+            normalized_name_to_item[normalize_name(created_item.name)] = created_item
+        return {
+            item.name: normalized_name_to_item[normalize_name(item.name)]
+            for item in items
+        }
 
     def _update_item_ids(self, recipe, endpoint_name, model_class, attr_name):
         items = {
@@ -359,7 +383,7 @@ class MealieApiClient:
             return recipe
 
         name_to_tag_with_id = self._create_item_name_to_item_lookup(
-            "organizers/tags", RecipeTag, recipe_tags
+            "organizers/tags", RecipeTag, recipe_tags, normalize_name=str.casefold
         )
         recipe.tags = [name_to_tag_with_id[tag.name] for tag in recipe_tags]
         return recipe

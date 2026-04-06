@@ -10,6 +10,10 @@ Unreleased
 - #78 Send JSON payloads with the correct content type when syncing recipes to
   Mealie, fixing `422 Unprocessable Entity` errors on Mealie v3.12.0+ (thanks
   @TheZargs).
+- #72 Match existing Mealie tags case-insensitively during sync so case-only
+  tag differences do not trigger duplicate tag creation attempts (thanks
+  @joshinils).
+
 0.0.29 - 2026-02-11
 ====================
 

@@ -1,5 +1,6 @@
 import json
 from types import SimpleNamespace
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -169,6 +170,37 @@ def test_create_item_uses_json_content_type():
     assert seen["kwargs"]["content"] == tag.model_dump_json()
     assert seen["kwargs"]["headers"]["Content-Type"] == "application/json"
     assert "data" not in seen["kwargs"]
+
+
+def test_update_tag_ids_reuses_existing_tags_case_insensitively(monkeypatch):
+    client = MealieApiClient("http://mealie.local/api")
+    existing_tag_id = uuid4()
+    recipe = Recipe(tags=[RecipeTag(name="dessert")])
+    create_calls = []
+
+    def fake_get_all_items(endpoint_name):
+        assert endpoint_name == "organizers/tags"
+        return [
+            {
+                "id": str(existing_tag_id),
+                "name": "Dessert",
+                "slug": "dessert",
+            }
+        ]
+
+    def fake_create_item(endpoint_name, item):
+        create_calls.append((endpoint_name, item.name))
+        return {"id": str(uuid4()), "name": item.name, "slug": item.name}
+
+    monkeypatch.setattr(client, "_get_all_items", fake_get_all_items)
+    monkeypatch.setattr(client, "_create_item", fake_create_item)
+
+    updated = client._update_tag_ids(recipe)
+
+    assert create_calls == []
+    assert len(updated.tags) == 1
+    assert updated.tags[0].id == existing_tag_id
+    assert updated.tags[0].name == "Dessert"
 
 
 def test_update_recipe_uses_json_content_type():
