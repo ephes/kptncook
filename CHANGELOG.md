@@ -8,7 +8,8 @@ Unreleased
 
 ### Fixes
 - #78 Send JSON payloads with the correct content type when syncing recipes to
-  Mealie, fixing `422 Unprocessable Entity` errors on Mealie v3.12.0+.
+  Mealie, fixing `422 Unprocessable Entity` errors on Mealie v3.12.0+ (thanks
+  @TheZargs).
 0.0.29 - 2026-02-11
 ====================
 
