@@ -406,18 +406,42 @@ $ just beads-import-gh-issues --dry-run
 
 ## Release Process
 
-1. Update `CHANGELOG.md` (move Unreleased entries into a dated release header).
-2. Bump `version` in `pyproject.toml`. `kptncook.__version__` is derived from package metadata.
-3. Run quality gates: `just check`.
-4. Commit changes and create a tag (e.g., `git tag -a v0.0.27 -m "v0.0.27"`).
-5. Push commits and tags.
-6. Draft a GitHub release from the changelog, crediting issue authors when applicable:
-   `gh release create v0.0.27 --draft --notes "..."`.
-7. Publish the release when ready.
+Use the helper commands below from a clean worktree:
+
+1. Prepare the release metadata:
+   ```shell
+   $ just release-prepare <version>
+   ```
+   This moves the current `Unreleased` section into a dated changelog entry and
+   bumps `version` in `pyproject.toml`. `kptncook.__version__` is derived from
+   package metadata, so no second version file needs updating.
+2. Run quality gates:
+   ```shell
+   $ just check
+   ```
+3. Review the generated release notes if needed:
+   ```shell
+   $ just release-notes <version>
+   ```
+4. Commit the release prep and create a tag:
+   ```shell
+   $ git commit -am "release: v<version>"
+   $ git tag -a v<version> -m "v<version>"
+   ```
+5. Push commits and tags:
+   ```shell
+   $ git push
+   $ git push --tags
+   ```
+6. Draft the GitHub release from the matching changelog section:
+   ```shell
+   $ just release-draft <version>
+   ```
+7. Publish the GitHub release and package when ready.
 
 ## Publish Packages
 
-After running the tests, publish the package to PyPI using uv:
+After running `just check`, publish the package to PyPI using uv:
 
 ```shell
 $ uv publish --token your_token

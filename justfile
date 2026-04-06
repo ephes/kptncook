@@ -35,6 +35,18 @@ lint:
 loc:
     @uv run count-lines-of-code
 
+# Prepare a release by moving Unreleased notes into a dated section and bumping the package version
+release-prepare VERSION:
+    uv run python -m kptncook.release prepare {{VERSION}}
+
+# Print changelog notes for a specific release version
+release-notes VERSION:
+    uv run python -m kptncook.release notes {{VERSION}}
+
+# Create a draft GitHub release from the changelog notes for a specific version
+release-draft VERSION:
+    uv run python -m kptncook.release draft {{VERSION}}
+
 # Remove build artifacts
 clean-build:
     rm -fr build/

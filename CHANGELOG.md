@@ -1,12 +1,17 @@
 Unreleased
 ==========
 
+0.0.30 - 2026-04-06
+===================
+
 ### Developer Experience
 - Add `just check` command that runs lint, typecheck, and tests in one step.
 - Add `just loc` command for Rich-formatted lines-of-code summary with area and
   directory breakdowns (uses cloc with Python fallback).
 - Add GitHub Actions CI to run `just lint`, `just typecheck`, and `just test`
   on pushes and pull requests.
+- Add release helper commands to prepare changelog/version updates, print
+  release notes, and draft GitHub releases from the changelog.
 
 ### Refactoring
 - Split CLI wiring and workflow/repository/error helpers out of
@@ -30,6 +35,8 @@ Unreleased
 - Document that `kptncook-access-token` now saves the token into `~/.kptncook/.env`,
   that `.env` writes are permission-hardened where supported, and that password-manager
   commands run through the local shell and must be trusted.
+- Document the new `just release-prepare`, `just release-notes`, and
+  `just release-draft` workflow in the README release section.
 
 ### Fixes
 - Stop printing the full KptnCook access token to stdout; save it to
