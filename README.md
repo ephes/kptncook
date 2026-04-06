@@ -355,6 +355,18 @@ Run tests using uv:
 $ uv run pytest
 ```
 
+## Lines of Code
+
+Show a Rich-formatted summary of lines of code by language, area (src, tests,
+scripts, tooling), and directory:
+
+```shell
+$ just loc
+```
+
+Requires `cloc` (`brew install cloc`). Falls back to a pure-Python counter when
+`cloc` is not installed.
+
 ## Beadsflow
 
 Use the local beadsflow checkout:
