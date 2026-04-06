@@ -29,12 +29,26 @@ class TestGetCredentialFromCommand:
         """Test command execution failure."""
         mock_run = mocker.patch("subprocess.run")
         mock_run.side_effect = subprocess.CalledProcessError(
-            1, "fake_command", stderr="Command not found"
+            1, "fake_command", stderr="token=super-secret"
         )
 
         result = get_credential_from_command("fake_command")
 
         assert result is None
+
+    def test_command_failure_does_not_echo_stderr(self, mocker, capsys):
+        """Test that failed command stderr is not printed back to the terminal."""
+        mock_run = mocker.patch("subprocess.run")
+        mock_run.side_effect = subprocess.CalledProcessError(
+            1, "fake_command", stderr="token=super-secret"
+        )
+
+        result = get_credential_from_command("fake_command")
+
+        output = capsys.readouterr().out
+        assert result is None
+        assert "Command output is not shown" in output
+        assert "token=super-secret" not in output
 
     def test_unexpected_error(self, mocker):
         """Test unexpected error handling."""

@@ -77,7 +77,7 @@ Commands:
   discovery-list            List recipes from a discovery list.
   discovery-screen          List discovery screen lists and quick search entries.
   ingredients-popular       List popular ingredients.
-  kptncook-access-token     Get access token for kptncook.
+  kptncook-access-token     Fetch and save the KptnCook access token.
   kptncook-today            List all recipes for today from the kptncook...
   list-recipes              List all locally saved recipes.
   onboarding                List onboarding recipes by tags.
@@ -223,9 +223,11 @@ and other non-config commands do not force `.env` validation up front.
 
 Then set environment variables in the `~/.kptncook/.env` file (or directly in your shell). You'll need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie, set `MEALIE_API_TOKEN` or `MEALIE_USERNAME`/`MEALIE_PASSWORD`.
 
+When kptncook creates or updates `~/.kptncook/.env`, it applies owner-only read/write permissions (`0600`) where the platform supports it, because the file may contain access tokens, passwords, or trusted shell commands.
+
 **Important:** The `.env` file must be created in the `~/.kptncook/` directory, NOT in the installation directory or by editing the `kptncook` executable.
 
-If you want to back up your favorite recipes from KptnCook, you have to set the `KPTNCOOK_ACCESS_TOKEN` variable as well. You can obtain the access token by running the `kptncook kptncook-access-token` command. But you need a kptncook account to do that.
+If you want to back up your favorite recipes from KptnCook, you have to set the `KPTNCOOK_ACCESS_TOKEN` variable as well. You can obtain the access token by running `kptncook kptncook-access-token`; the command fetches the token and saves `KPTNCOOK_ACCESS_TOKEN` into `~/.kptncook/.env` instead of printing the raw token to stdout. But you need a kptncook account to do that.
 Beware: If you don't have a kptncook account, you'll lose all your favorites by creating a new one.
 
 Optional API defaults for discovery/dailies/onboarding requests:
@@ -252,6 +254,8 @@ Example for pass (password-store):
 KPTNCOOK_USERNAME_COMMAND="pass show kptncook/username"
 KPTNCOOK_PASSWORD_COMMAND="pass show kptncook/password"
 ```
+
+These commands are executed through your local shell. Only configure commands you trust and fully control, and treat the `.env` file as sensitive because it can contain shell commands as well as tokens and passwords.
 
 ### Ingredient Grouping (Optional)
 

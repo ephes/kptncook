@@ -142,6 +142,39 @@ def test_sync_with_mealie_command_smoke_renders_warning_summary(monkeypatch):
     assert "Created 2 recipes" in result.output
 
 
+def test_access_token_command_saves_token_without_printing_it(monkeypatch, tmp_path):
+    cli_module = import_module("kptncook.cli")
+    env_path = tmp_path / ".env"
+    captured = {}
+
+    monkeypatch.setattr(
+        cli_module,
+        "get_kptncook_access_token_workflow",
+        lambda: "secret-token-123",
+    )
+
+    def fake_upsert_env_value(path, key, value):
+        captured["path"] = path
+        captured["key"] = key
+        captured["value"] = value
+
+    monkeypatch.setattr(cli_module, "ENV_PATH", env_path)
+    monkeypatch.setattr(cli_module, "upsert_env_value", fake_upsert_env_value)
+
+    result = runner.invoke(cli_module.app, ["kptncook-access-token"])
+
+    assert result.exit_code == 0
+    assert captured == {
+        "path": env_path,
+        "key": "KPTNCOOK_ACCESS_TOKEN",
+        "value": "secret-token-123",
+    }
+    assert "Access token retrieved successfully" in result.output
+    assert "Saved KPTNCOOK_ACCESS_TOKEN to" in result.output
+    assert str(env_path) in result.output.replace("\n", "")
+    assert "secret-token-123" not in result.output
+
+
 def test_discovery_list_save_command_smoke_uses_service_result(monkeypatch, minimal):
     cli_module = import_module("kptncook.cli")
     recipe = RecipeInDb(date=date.today(), data=minimal)

@@ -24,7 +24,10 @@ def get_credential_from_command(command: str) -> str | None:
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
         rprint(f"[red]Error executing password manager command: {e}[/red]")
-        rprint(f"[red]Command output: {e.stderr}[/red]")
+        rprint(
+            "[red]Command output is not shown because it may contain secrets. "
+            "Run the configured command manually if you need to debug it.[/red]"
+        )
         return None
     except Exception as e:
         rprint(f"[red]Unexpected error: {e}[/red]")

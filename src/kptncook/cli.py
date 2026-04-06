@@ -11,6 +11,7 @@ from rich.pretty import pprint
 from typer.main import get_command
 
 from kptncook.config import SettingsError, render_settings_error
+from kptncook.env import ENV_PATH, upsert_env_value
 from kptncook.models import localized_fallback
 from kptncook.services.repository import InvalidStoredRecipe
 from kptncook.services.discovery import (
@@ -214,14 +215,15 @@ def backup_kptncook_favorites():
 @app.command(name="kptncook-access-token")
 def get_kptncook_access_token():
     """
-    Get access token for kptncook.
+    Fetch and save the KptnCook access token.
     """
     access_token = _run_or_exit(get_kptncook_access_token_workflow)
-    rprint("[green]✓ Access token retrieved successfully[/green]")
-    rprint("Your access token: ", access_token)
-    from kptncook.env import ENV_PATH
-
-    rprint(f"Add it to {ENV_PATH} as KPTNCOOK_ACCESS_TOKEN=...")
+    try:
+        upsert_env_value(ENV_PATH, "KPTNCOOK_ACCESS_TOKEN", access_token)
+    except OSError as exc:
+        _exit_with_error(f"Could not save KPTNCOOK_ACCESS_TOKEN to {ENV_PATH}: {exc}")
+    rprint("[green]✓ Access token retrieved successfully.[/green]")
+    rprint(f"Saved KPTNCOOK_ACCESS_TOKEN to {ENV_PATH}.")
 
 
 @app.command(name="list-recipes")

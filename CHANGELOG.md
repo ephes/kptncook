@@ -27,8 +27,16 @@ Unreleased
 ### Documentation
 - Update the README release process to bump the package version in one place and
   note that CI runs the standard local quality gates.
+- Document that `kptncook-access-token` now saves the token into `~/.kptncook/.env`,
+  that `.env` writes are permission-hardened where supported, and that password-manager
+  commands run through the local shell and must be trusted.
 
 ### Fixes
+- Stop printing the full KptnCook access token to stdout; save it to
+  `~/.kptncook/.env` instead, and tighten `.env` permissions to owner-only
+  read/write (`0600`) where supported.
+- Stop echoing password-manager command stderr back to the terminal on failure,
+  because it may contain secrets.
 - #78 Send JSON payloads with the correct content type when syncing recipes to
   Mealie, fixing `422 Unprocessable Entity` errors on Mealie v3.12.0+ (thanks
   @TheZargs).

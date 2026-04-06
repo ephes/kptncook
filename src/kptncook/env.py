@@ -7,6 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 
 DEFAULT_API_KEY = "6q7QNKy-oIgk-IMuWisJ-jfN7s6"
+ENV_FILE_MODE = 0o600
 ENV_PATH = Path.home() / ".kptncook" / ".env"
 ENV_TEMPLATE = f"""# kptncook configuration
 #
@@ -37,6 +38,14 @@ KPTNCOOK_ACCESS_TOKEN=
 """
 
 
+def _tighten_env_permissions(env_path: Path) -> None:
+    """Best-effort hardening for secret-bearing env files."""
+    try:
+        env_path.chmod(ENV_FILE_MODE)
+    except OSError:
+        pass
+
+
 def scaffold_env_file(env_path: Path = ENV_PATH) -> bool:
     try:
         if env_path.exists() and env_path.stat().st_size > 0:
@@ -48,6 +57,7 @@ def scaffold_env_file(env_path: Path = ENV_PATH) -> bool:
         env_path.write_text(ENV_TEMPLATE)
     except OSError:
         return False
+    _tighten_env_permissions(env_path)
     return True
 
 
@@ -86,3 +96,4 @@ def upsert_env_value(env_path: Path, key: str, value: str) -> None:
         new_lines.append(f"{key}={value}")
     env_path.parent.mkdir(parents=True, exist_ok=True)
     env_path.write_text("\n".join(new_lines) + "\n")
+    _tighten_env_permissions(env_path)
