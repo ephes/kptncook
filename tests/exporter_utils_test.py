@@ -37,7 +37,7 @@ class TestExpandTimerPlaceholders:
         ]
         assert (
             expand_timer_placeholders(text, timers)
-            == "Fry 3 Min., then simmer 20–30 Min.."
+            == "Fry 3 Min., then simmer 20–30 Min."
         )
 
     def test_no_placeholders_unchanged(self):

@@ -13,6 +13,8 @@ Unreleased
   ingredient-based searches, and onboarding.
 - Improve error handling when resolving share URLs in `search-by-id`.
 - Expand the `.env` template with commented Mealie settings and optional config.
+- #80 Expand `<timer>` placeholders in exported recipe steps so timer values show
+  up correctly in Mealie, Tandoor, and Paprika (thanks @joshinils).
 
 0.0.28 - 2026-01-27
 ===================

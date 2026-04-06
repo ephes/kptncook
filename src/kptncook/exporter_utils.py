@@ -9,6 +9,9 @@ from unidecode import unidecode
 from kptncook.models import Image, RecipeStep, StepTimer, localized_fallback
 
 TIMER_PLACEHOLDER = "<timer>"
+TIMER_PLACEHOLDER_PATTERN = re.compile(
+    rf"{re.escape(TIMER_PLACEHOLDER)}(?P<punct>[.!?])?"
+)
 
 
 def format_timer(timer: StepTimer) -> str:
@@ -30,14 +33,18 @@ def expand_timer_placeholders(text: str, timers: list[StepTimer] | None) -> str:
         return text.replace(TIMER_PLACEHOLDER, "")
     timer_index = [0]
 
-    def replacer(_: re.Match) -> str:
+    def replacer(match: re.Match[str]) -> str:
         idx = timer_index[0]
         timer_index[0] += 1
+        punctuation = match.group("punct") or ""
         if idx < len(timers):
-            return format_timer(timers[idx])
-        return ""
+            timer_text = format_timer(timers[idx])
+            if punctuation == "." and timer_text.endswith("."):
+                timer_text = timer_text[:-1]
+            return f"{timer_text}{punctuation}"
+        return punctuation
 
-    return re.sub(re.escape(TIMER_PLACEHOLDER), replacer, text)
+    return TIMER_PLACEHOLDER_PATTERN.sub(replacer, text)
 
 
 def get_step_text(step: RecipeStep) -> str:
