@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from pydantic import UUID4, BaseModel, ConfigDict, Field, ValidationError, parse_obj_as
+from pydantic import UUID4, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
 from .config import settings
 from .ingredient_groups import iter_ingredient_groups
@@ -336,8 +336,8 @@ class MealieApiClient:
         if normalize_name is None:
             normalize_name = identity
 
-        existing_items = parse_obj_as(
-            list[model_class], self._get_all_items(endpoint_name)
+        existing_items = TypeAdapter(list[model_class]).validate_python(
+            self._get_all_items(endpoint_name)
         )
         normalized_name_to_item = {
             normalize_name(item.name): item for item in existing_items
