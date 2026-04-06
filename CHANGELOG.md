@@ -1,3 +1,9 @@
+Unreleased
+==========
+
+### Developer Experience
+- Add `just check` command that runs lint, typecheck, and tests in one step.
+
 0.0.29 - 2026-02-11
 ====================
 

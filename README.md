@@ -335,10 +335,11 @@ If your global gitignore ignores `.beads/`, remove `**/.beads/` or use `git add 
 ## Quality Gates (Required)
 
 ```shell
-$ just lint
-$ just typecheck
-$ just test
+$ just check
 ```
+
+This runs `just lint`, `just typecheck`, and `just test` in sequence. You can
+also run each step individually:
 
 Target a single test:
 
@@ -379,7 +380,7 @@ $ just beads-import-gh-issues --dry-run
 
 1. Update `CHANGELOG.md` (move Unreleased entries into a dated release header).
 2. Bump `__version__` in `src/kptncook/__init__.py` and `version` in `pyproject.toml`.
-3. Run quality gates: `just lint`, `just typecheck`, `just test`.
+3. Run quality gates: `just check`.
 4. Commit changes and create a tag (e.g., `git tag -a v0.0.27 -m "v0.0.27"`).
 5. Push commits and tags.
 6. Draft a GitHub release from the changelog, crediting issue authors when applicable:

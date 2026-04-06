@@ -8,6 +8,12 @@ default:
 install:
     uv sync
 
+# Run lint, typecheck, and tests
+check:
+    just lint
+    just typecheck
+    just test
+
 # Run the full test suite
 test:
     uv run pytest

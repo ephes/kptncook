@@ -54,13 +54,13 @@ uv run pre-commit install
 
 ### Quality Gates (Required)
 
-All of `just lint`, `just typecheck`, and `just test` must pass before declaring work done.
+All quality gates must pass before declaring work done.
 
 ```bash
-just lint
-just typecheck
-just test
+just check
 ```
+
+This runs `just lint`, `just typecheck`, and `just test` in sequence.
 
 ### Running Tests (Direct)
 
