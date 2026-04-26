@@ -212,7 +212,7 @@ class Recipe(BaseModel):
     uid: str | None = None
     rtype: str | None = None
     localized_title: LocalizedString
-    author_comment: LocalizedString
+    author_comment: LocalizedString | None = None
     preparation_time: int
     cooking_time: int | None = None
     recipe_nutrition: Nutrition

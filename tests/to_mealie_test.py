@@ -36,6 +36,27 @@ def test_mealie_export_includes_active_tags(full_recipe):
     assert tag_names == ["kptncook", "quick", "dinner"]
 
 
+def test_mealie_export_includes_author_note_with_author_comment(minimal):
+    kc_recipe = Recipe.model_validate(minimal)
+
+    mealie_recipe = kptncook_to_mealie(kc_recipe)
+
+    assert mealie_recipe.notes is not None
+    assert len(mealie_recipe.notes) == 1
+    assert mealie_recipe.notes[0].title == "author comment"
+    assert mealie_recipe.notes[0].text == "Dies ist ein Kommentar"
+
+
+def test_mealie_export_omits_author_note_without_author_comment(minimal):
+    recipe_data = {**minimal}
+    recipe_data.pop("authorComment")
+    kc_recipe = Recipe.model_validate(recipe_data)
+
+    mealie_recipe = kptncook_to_mealie(kc_recipe)
+
+    assert mealie_recipe.notes == []
+
+
 def test_mealie_export_includes_step_ingredient_references(full_recipe):
     kc_recipe = Recipe.model_validate(full_recipe)
 

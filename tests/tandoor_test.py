@@ -121,6 +121,17 @@ def test_get_keywords_includes_active_tags_and_rtype(minimal):
     assert exporter.get_keywords(recipe) == ["kptncook", "quick", "dinner", "Fish"]
 
 
+def test_get_recipe_payload_uses_empty_description_without_author_comment(minimal):
+    exporter = TandoorExporter()
+    recipe_data = {**minimal}
+    recipe_data.pop("authorComment")
+    recipe = Recipe.model_validate(recipe_data)
+
+    payload = exporter.get_recipe_payload(recipe)
+
+    assert payload["description"] == ""
+
+
 def test_export_expands_timer_placeholders(minimal, mocker, tmp_path, monkeypatch):
     exporter = TandoorExporter()
     recipe_data = {

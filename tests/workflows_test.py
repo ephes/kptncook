@@ -86,9 +86,11 @@ def test_save_todays_recipes_wraps_repository_errors(monkeypatch):
 
 def test_load_repository_recipes_reports_invalid_entries(monkeypatch, minimal):
     valid_entry = RecipeInDb(date=workflows.date.today(), data=minimal)
+    invalid_data = _recipe_data(minimal, oid="broken")
+    invalid_data.pop("steps")
     invalid_entry = RecipeInDb(
         date=workflows.date.today(),
-        data={"_id": {"$oid": "broken"}, "localizedTitle": {"de": "Broken recipe"}},
+        data=invalid_data,
     )
     expected_recipe = Recipe.model_validate(minimal)
 
@@ -103,7 +105,7 @@ def test_load_repository_recipes_reports_invalid_entries(monkeypatch, minimal):
     assert result.recipes == [expected_recipe]
     assert len(result.invalid_entries) == 1
     assert result.invalid_entries[0].recipe_id == "broken"
-    assert result.invalid_entries[0].reason == "authorComment: Field required"
+    assert result.invalid_entries[0].reason == "steps: Field required"
 
 
 def test_sync_with_mealie_skips_duplicates_and_logs_other_failures(

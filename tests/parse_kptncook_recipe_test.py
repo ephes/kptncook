@@ -42,6 +42,15 @@ def test_parse_recipe_active_tags_missing(minimal):
     assert recipe.active_tags is None
 
 
+def test_parse_recipe_author_comment_missing(minimal):
+    recipe_data = {**minimal}
+    recipe_data.pop("authorComment")
+
+    recipe = Recipe.model_validate(recipe_data)
+
+    assert recipe.author_comment is None
+
+
 def test_parse_ingredient_details_id(full_recipe):
     recipe = Recipe.model_validate(full_recipe)
     raw_id = full_recipe["ingredients"][0]["ingredient"]["_id"]["$oid"]

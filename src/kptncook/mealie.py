@@ -555,14 +555,14 @@ def kptncook_to_mealie(
     ingredients, ingredient_id_to_reference_ids = kptncook_to_mealie_ingredients(
         kcin.ingredients
     )
+    author_comment = localized_fallback(kcin.author_comment)
     kwargs = {
         "name": localized_fallback(kcin.localized_title),
-        "notes": [
-            RecipeNote(
-                title="author comment",
-                text=localized_fallback(kcin.author_comment),
-            ),
-        ],
+        "notes": (
+            [RecipeNote(title="author comment", text=author_comment)]
+            if author_comment
+            else []
+        ),
         "nutrition": Nutrition(
             calories=str(kcin.recipe_nutrition.calories),
             proteinContent=str(kcin.recipe_nutrition.protein),
