@@ -11,7 +11,8 @@ import tempfile
 from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
-from typing import Iterator, List  # noqa F401
+from typing import List  # noqa F401
+from collections.abc import Iterator
 
 try:
     import fcntl

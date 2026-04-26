@@ -335,9 +335,9 @@ Install the development environment:
 $ uv sync
 ```
 
-Install the git pre-commit hooks:
+Install the git hooks:
 ```shell
-$ uv run pre-commit install
+$ uv run prek install -f
 ```
 
 ## Beads Setup (Required)
@@ -367,6 +367,12 @@ This runs `just lint`, `just typecheck`, and `just test` in sequence. You can
 also run each step individually:
 
 The same three gates run in GitHub Actions for pushes and pull requests.
+
+Update hook revisions:
+
+```shell
+$ just update-hooks
+```
 
 Target a single test:
 

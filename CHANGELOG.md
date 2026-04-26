@@ -4,6 +4,13 @@ Unreleased
 ### Documentation
 - Add a maintenance disclosure explaining that the repository is maintained
   primarily through coding-agent workflows under maintainer review.
+- Document installing git hooks with `prek` and add a `just update-hooks`
+  helper for refreshing hook revisions.
+
+### Developer Experience
+- Replace the `pre-commit` development dependency with `prek`, keeping the
+  existing `.pre-commit-config.yaml` hook configuration and refreshing hook
+  revisions, including the resulting hook-driven cleanup.
 
 ### Fixes
 - #82 Treat missing or empty KptnCook `authorComment` fields as optional so

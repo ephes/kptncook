@@ -11,7 +11,7 @@
 - Lint/format: `just lint` (ruff format + ruff check).
 - Type checks: `just typecheck` (mypy).
 - Tests: `just test` or `just test-one tests/test_file.py::TestClass::test_case`.
-- Pre-commit hooks: `uv run pre-commit install`.
+- Git hooks: `uv run prek install -f`.
 - Before declaring work done, `just lint`, `just typecheck`, and `just test` must pass.
 
 ## Coding style

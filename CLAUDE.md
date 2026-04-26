@@ -39,7 +39,7 @@ KptnCook is a Python command-line client for downloading recipes from the KptnCo
 
 - Python >=3.10
 - Main libs: httpx, pydantic, typer, rich
-- Dev tools: pytest, mypy, pre-commit, jupyterlab
+- Dev tools: pytest, mypy, prek, jupyterlab
 - Build tool: uv
 
 ### Installation
@@ -48,8 +48,8 @@ KptnCook is a Python command-line client for downloading recipes from the KptnCo
 # Clone and setup dev environment
 uv sync
 
-# Install pre-commit hooks
-uv run pre-commit install
+# Install git hooks
+uv run prek install -f
 ```
 
 ### Quality Gates (Required)
@@ -70,7 +70,7 @@ uv run pytest
 
 ### Code Style
 
-- Uses Ruff for linting and formatting (via pre-commit or `just lint`)
+- Uses Ruff for linting and formatting (via prek or `just lint`)
 - Type hints encouraged
 - Follow existing patterns in codebase
 

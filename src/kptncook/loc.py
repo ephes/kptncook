@@ -7,7 +7,8 @@ import subprocess
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Sequence, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
+from collections.abc import Sequence
 
 RichConsoleModule: Any | None
 RichTableModule: Any | None
