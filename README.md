@@ -8,6 +8,14 @@ Thanks to [this blogpost](https://medium.com/analytics-vidhya/reversing-and-anal
 
 It's in pre alpha status and currently slightly unmaintained. If you want to step in, please let me know.
 
+## Maintenance disclosure
+
+This repository is maintained with substantial assistance from coding agents.
+Most routine implementation, investigation, documentation, triage, and
+release-preparation work may be performed through agent-assisted workflows.
+Changes are still reviewed and accepted by the maintainer, and human
+contributors are welcome.
+
 # Dependencies
 * Python >=3.10
 * Mealie >=v1.0
@@ -312,6 +320,9 @@ This error occurs if you accidentally edited the `kptncook` executable file inst
 This happens when the required environment variables are not set. Make sure you have created the `.env` file in the correct location (`~/.kptncook/.env`) and added at least the `KPTNCOOK_API_KEY` variable.
 
 # Contribute
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for notes on how this repository uses
+coding-agent assisted maintenance.
 
 ## Install Development Version
 

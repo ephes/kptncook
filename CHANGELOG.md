@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+### Documentation
+- Add a maintenance disclosure explaining that the repository is maintained
+  primarily through coding-agent workflows under maintainer review.
+
 ### Fixes
 - #82 Treat missing or empty KptnCook `authorComment` fields as optional so
   older stored recipes are no longer skipped during sync and export workflows
