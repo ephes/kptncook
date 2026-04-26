@@ -1,6 +1,9 @@
 Unreleased
 ==========
 
+0.0.31 - 2026-04-26
+===================
+
 ### Documentation
 - Add a maintenance disclosure explaining that the repository is maintained
   primarily through coding-agent workflows under maintainer review.

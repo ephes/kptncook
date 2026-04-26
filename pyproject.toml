@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "kptncook"
-version = "0.0.30"
+version = "0.0.31"
 description = "kptncook is a little command line utility to download new recipes."
 readme = "README.md"
 authors = [
