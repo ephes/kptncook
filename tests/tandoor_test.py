@@ -32,9 +32,13 @@ def test_export_recipe_writes_zip_with_image(
         assert set(zip_file.namelist()) == {"recipe.json", "image.jpg"}
         payload = json.loads(zip_file.read("recipe.json").decode("utf-8"))
     assert payload["name"] == recipe.localized_title.de
-    assert "kptncook" in payload["keywords"]
-    assert "main_ingredient_pasta" in payload["keywords"]
-    assert "Fish" in payload["keywords"]
+    assert {"name": "kptncook"} in payload["keywords"]
+    assert {"name": "main_ingredient_pasta"} in payload["keywords"]
+    assert {"name": "Fish"} in payload["keywords"]
+    assert "working_time" in payload
+    assert "waiting_time" in payload
+    assert "prep_time" not in payload
+    assert "cook_time" not in payload
     httpx_get.assert_called_once_with(
         "https://example.com/cover.jpg",
         follow_redirects=True,
@@ -118,7 +122,46 @@ def test_get_keywords_includes_active_tags_and_rtype(minimal):
     }
     recipe = Recipe.model_validate(recipe_data)
 
-    assert exporter.get_keywords(recipe) == ["kptncook", "quick", "dinner", "Fish"]
+    assert exporter.get_keywords(recipe) == [
+        {"name": "kptncook"},
+        {"name": "quick"},
+        {"name": "dinner"},
+        {"name": "Fish"},
+    ]
+    assert exporter.get_keywords(recipe).count({"name": "kptncook"}) == 1
+
+
+def test_get_recipe_payload_uses_tandoor_time_fields(minimal):
+    exporter = TandoorExporter()
+    recipe = Recipe.model_validate({**minimal, "cookingTime": 45})
+
+    payload = exporter.get_recipe_payload(recipe)
+
+    assert payload["working_time"] == 20
+    assert payload["waiting_time"] == 45
+    assert "prep_time" not in payload
+    assert "cook_time" not in payload
+
+
+def test_get_step_ingredients_skips_unnamed_ingredients(minimal, caplog):
+    exporter = TandoorExporter()
+    recipe_data = {
+        **minimal,
+        "steps": [
+            {
+                "title": {"de": "Alles parat?"},
+                "ingredients": [{"quantity": 1, "unit": "g"}],
+                "image": minimal["steps"][0]["image"],
+            }
+        ],
+    }
+    recipe = Recipe.model_validate(recipe_data)
+
+    with caplog.at_level("DEBUG", logger="kptncook.tandoor"):
+        ingredients = exporter.get_step_ingredients(recipe.steps[0])
+
+    assert ingredients == []
+    assert "without a resolvable food name" in caplog.text
 
 
 def test_get_recipe_payload_uses_empty_description_without_author_comment(minimal):

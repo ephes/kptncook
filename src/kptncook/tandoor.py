@@ -105,8 +105,8 @@ class TandoorExporter:
             "description": localized_fallback(recipe.author_comment) or "",
             "servings": 3,
             "source_url": self.get_source_url(recipe=recipe),
-            "prep_time": recipe.preparation_time,
-            "cook_time": recipe.cooking_time,
+            "working_time": recipe.preparation_time,
+            "waiting_time": recipe.cooking_time,
             "keywords": self.get_keywords(recipe=recipe),
             "steps": self.get_steps(recipe=recipe),
             "ingredients": self.get_ingredients(recipe=recipe),
@@ -116,12 +116,14 @@ class TandoorExporter:
         source_id = recipe.uid or recipe.id.oid
         return f"https://share.kptncook.com/{source_id}"
 
-    def get_keywords(self, recipe: Recipe) -> list[str]:
-        keywords = ["kptncook"]
+    def get_keywords(self, recipe: Recipe) -> list[dict[str, str]]:
+        keywords = [{"name": "kptncook"}]
         if recipe.active_tags:
-            keywords.extend(self._filter_active_tags(recipe.active_tags))
+            keywords.extend(
+                [{"name": tag} for tag in self._filter_active_tags(recipe.active_tags)]
+            )
         if recipe.rtype:
-            keywords.append(recipe.rtype)
+            keywords.append({"name": recipe.rtype})
         return keywords
 
     @staticmethod
@@ -152,7 +154,12 @@ class TandoorExporter:
     ) -> dict[str, Any] | None:
         if ingredient is None:
             return None
-        ingredient_name = self.get_step_ingredient_name(ingredient=ingredient) or ""
+        ingredient_name = self.get_step_ingredient_name(ingredient=ingredient)
+        if not ingredient_name:
+            logger.debug(
+                "Skipping Tandoor step ingredient without a resolvable food name."
+            )
+            return None
         payload = {
             "amount": ingredient.quantity,
             "unit": self.get_step_unit_payload(unit=ingredient.unit),
