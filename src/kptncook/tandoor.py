@@ -3,6 +3,7 @@ Export recipes to Tandoor.
 
 Tandoor expects a zip archive with a recipe.json file and an optional image.jpg.
 """
+
 import json
 import logging
 import tempfile
@@ -31,7 +32,6 @@ from kptncook.models import (
 )
 
 logger = logging.getLogger(__name__)
-
 IMAGE_DOWNLOAD_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
 
@@ -58,7 +58,7 @@ class TandoorExporter:
                 entries.append(("image.jpg", image_bytes))
             write_zip(zip_path, entries)
             move_to_target_dir(zip_path, Path.cwd() / filename)
-            return filename
+        return filename
 
     def get_export_filename(self, recipe: Recipe) -> str:
         title = localized_fallback(recipe.localized_title) or "kptncook-recipe"
@@ -156,6 +156,9 @@ class TandoorExporter:
             return None
         ingredient_name = self.get_step_ingredient_name(ingredient=ingredient)
         if not ingredient_name:
+            logger.debug(
+                "Skipping Tandoor step ingredient without a resolvable food name."
+            )
             return None
         payload = {
             "amount": ingredient.quantity,

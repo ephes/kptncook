@@ -1,6 +1,11 @@
 Unreleased
 ==========
 
+### Fixes
+- #83 Fix Tandoor exports to use Tandoor's working/waiting time fields and
+  keyword object payloads, and skip unnamed step ingredients that Tandoor
+  rejects (thanks @brindor).
+
 0.0.31 - 2026-04-26
 ===================
 
