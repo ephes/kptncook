@@ -1,6 +1,13 @@
 Unreleased
 ==========
 
+### Developer Experience
+- Replace the project-local lines-of-code implementation with a `slopscope`
+  backed `just loc` recipe during the `slopscope` pre-release phase, preserving
+  `cloc` semantics when available while no longer counting the removed local
+  counter implementation itself (51 files and 6867 code lines before migration,
+  50 files and 6437 code lines after migration).
+
 0.0.32 - 2026-04-28
 ===================
 

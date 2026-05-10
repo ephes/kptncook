@@ -35,9 +35,9 @@ lint:
     uv run ruff format .
     uv run ruff check .
 
-# Count lines of code in the repository with language, area, and directory summaries
+# Count lines in the repository with language, area, and directory summaries
 loc:
-    @uv run count-lines-of-code
+    @uv run --with-editable ../slopscope slopscope .
 
 # Prepare a release by moving Unreleased notes into a dated section and bumping the package version
 release-prepare VERSION:

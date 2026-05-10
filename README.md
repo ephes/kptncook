@@ -390,15 +390,19 @@ $ uv run pytest
 
 ## Lines of Code
 
-Show a Rich-formatted summary of lines of code by language, area (src, tests,
-scripts, tooling), and directory:
+Show a Rich-formatted summary of lines by language, area (src, tests, scripts,
+tooling), and directory:
 
 ```shell
 $ just loc
 ```
 
-Requires `cloc` (`brew install cloc`). Falls back to a pure-Python counter when
-`cloc` is not installed.
+During the `slopscope` pre-release phase, this uses a sibling `../slopscope`
+checkout. It uses `cloc` when available and falls back to Python physical-line
+counting when `cloc` is not installed. Compared to the previous project-local
+counter, totals no longer include that removed counter implementation itself;
+for example, the previous `cloc` total was 51 files and 6867 code lines, while
+the migrated `slopscope` report is 50 files and 6437 code lines.
 
 ## Beadsflow
 
