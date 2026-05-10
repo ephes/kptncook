@@ -4,6 +4,8 @@
 default:
     @just --list
 
+SLOPSCOPE_SPEC := env_var_or_default("SLOPSCOPE_SPEC", "slopscope")
+
 # Install Python dependencies via uv
 install:
     uv sync
@@ -37,7 +39,7 @@ lint:
 
 # Count lines in the repository with language, area, and directory summaries
 loc:
-    @uv run --with-editable ../slopscope slopscope .
+    @uv run --prerelease allow --with "{{SLOPSCOPE_SPEC}}" --with rich slopscope .
 
 # Prepare a release by moving Unreleased notes into a dated section and bumping the package version
 release-prepare VERSION:
