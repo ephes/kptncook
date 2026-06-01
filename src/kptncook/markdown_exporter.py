@@ -2,9 +2,10 @@
 
 Writes one `.md` file per recipe to `settings.root`.
 """
+
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Iterable, List
 
@@ -15,6 +16,7 @@ from .exporter_utils import get_cover, replace_timers_in_step
 from pathvalidate import sanitize_filename
 
 DEFAULT_SERVINGS = 4
+
 
 class MarkdownExporter:
     def export(self, recipes: Iterable[Recipe]) -> List[Path]:
@@ -34,7 +36,6 @@ class MarkdownExporter:
         return written
 
     def render_recipe(self, recipe: Recipe) -> str:
-        title = localized_fallback(recipe.localized_title) or "recipe"
         comment = localized_fallback(recipe.author_comment) or ""
 
         fm_lines: list[str] = ["---"]
@@ -51,8 +52,10 @@ class MarkdownExporter:
         )
 
         # cover image (use last step image, else cover image)
-        image = (recipe.steps[-1].image or get_cover(recipe.image_list))
-        image_url = f"{image.url}?kptnkey={settings.kptncook_api_key}" if image else None
+        image = recipe.steps[-1].image or get_cover(recipe.image_list)
+        image_url = (
+            f"{image.url}?kptnkey={settings.kptncook_api_key}" if image else None
+        )
 
         if image_url:
             fm_lines.append(f"image: {image_url}")
@@ -60,18 +63,22 @@ class MarkdownExporter:
         fm_lines.append("tags:")
 
         if recipe.rtype == "Vegan":
-            fm_lines.append(f"  - vegan")
+            fm_lines.append("  - vegan")
 
         if recipe.active_tags:
             # filter out unwanted tags
-            filtered_tags = [tag for tag in recipe.active_tags if not (
-                tag.startswith("diet_")
-                or tag.startswith("main_ingredient_")
-                or "under_" in tag
-                or "above_" in tag
-                or "below_" in tag
-                or "_friendly" in tag
-            )]
+            filtered_tags = [
+                tag
+                for tag in recipe.active_tags
+                if not (
+                    tag.startswith("diet_")
+                    or tag.startswith("main_ingredient_")
+                    or "under_" in tag
+                    or "above_" in tag
+                    or "below_" in tag
+                    or "_friendly" in tag
+                )
+            ]
 
             # transform some tags
             for i, tag in enumerate(filtered_tags):
@@ -84,9 +91,12 @@ class MarkdownExporter:
 
             fm_lines.extend(f"  - {tag}" for tag in filtered_tags)
 
-            if "cooking_time_under_20" in recipe.active_tags or "under_five_ingredient" in recipe.active_tags:
+            if (
+                "cooking_time_under_20" in recipe.active_tags
+                or "under_five_ingredient" in recipe.active_tags
+            ):
                 fm_lines.append("simple: true")
-        
+
         fm_lines.append("---")
         fm_lines.append("")
 
@@ -128,10 +138,12 @@ class MarkdownExporter:
         lines.append("### Notizen / Empfehlungen")
         lines.append("")
         lines.append("- ")
-        
+
         return "\n".join(lines)
 
-    def get_ingredients_lines(self, ingredients: list[Ingredient], servings_factor: int) -> list[str]:
+    def get_ingredients_lines(
+        self, ingredients: list[Ingredient], servings_factor: int
+    ) -> list[str]:
         lines: list[str] = []
         for group_label, group_ingredients in iter_ingredient_groups(ingredients):
             if group_label:
@@ -143,7 +155,9 @@ class MarkdownExporter:
             lines.append("")
         return lines
 
-    def format_ingredient_line(self, ingredient: Ingredient, servings_factor: int) -> str:
+    def format_ingredient_line(
+        self, ingredient: Ingredient, servings_factor: int
+    ) -> str:
         parts: list[str] = []
         if ingredient.quantity:
             ingredient_amount = round(ingredient.quantity * servings_factor, 2)
