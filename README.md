@@ -2,7 +2,7 @@
 
 A small command line client for downloading [KptnCook](https://www.kptncook.com/) recipes, including today's picks, discovery screens and lists,
 dailies, onboarding tags, and ingredient-based searches. It can also sync
-to Mealie and export recipes to Paprika or Tandoor.
+to Mealie and export recipes to Paprika, Tandoor, or Markdown.
 
 Thanks to [this blogpost](https://medium.com/analytics-vidhya/reversing-and-analyzing-the-cooking-app-kptncook-my-recipe-collection-5b5b04e5a085) for the url to get the json for today's recipes.
 
@@ -96,6 +96,7 @@ Commands:
   sync-with-mealie          Sync locally saved recipes with mealie.
   export-recipes-to-paprika  Export a recipe by id or all recipes to Paprika app
   export-recipes-to-tandoor  Export a recipe by id or all recipes to Tandoor
+  export-recipes-to-markdown Export a recipe by id or all recipes to Markdown files
 ```
 
 ## Quick examples
@@ -121,6 +122,14 @@ $ kptncook recipes-with-ingredients --ingredient-id 123,456 --save
 
 Exports to Mealie and Tandoor include KptnCook active tags as tags/keywords
 (verbatim).
+
+The Markdown export (`export-recipes-to-markdown`) writes one `.md` file per
+recipe into an `export_md` directory under the KptnCook home, with YAML front
+matter (servings, prep/cook time, link, image, tags) followed by ingredients
+and instructions. Section headings and image alt text follow `KPTNCOOK_LANG`
+(German, English, Spanish, French, and Portuguese are recognized; other
+languages fall back to English), and `<timer>` placeholders in steps are
+replaced with their durations.
 
 ### Repository warnings
 

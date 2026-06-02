@@ -17,6 +17,7 @@ from kptncook.http_errors import (
     format_http_status_error,
     format_request_error,
 )
+from kptncook.markdown_exporter import MarkdownExporter
 from kptncook.mealie import MealieApiClient, kptncook_to_mealie
 from kptncook.models import Recipe
 from kptncook.paprika import PaprikaExporter
@@ -75,6 +76,12 @@ class PaprikaExportResult:
 
 @dataclass(frozen=True)
 class TandoorExportResult:
+    filenames: list[str]
+    invalid_repository_entries: list[InvalidStoredRecipe]
+
+
+@dataclass(frozen=True)
+class MarkdownExportResult:
     filenames: list[str]
     invalid_repository_entries: list[InvalidStoredRecipe]
 
@@ -515,3 +522,25 @@ def export_recipes_to_tandoor_result(recipe_id: str | None) -> TandoorExportResu
 
 def export_recipes_to_tandoor(recipe_id: str | None) -> list[str]:
     return export_recipes_to_tandoor_result(recipe_id).filenames
+
+
+def export_recipes_to_markdown_result(recipe_id: str | None) -> MarkdownExportResult:
+    repository_result = (
+        load_recipe_from_repository_by_id(recipe_id)
+        if recipe_id
+        else load_kptncook_recipes_from_repository()
+    )
+    recipes = repository_result.recipes
+    if recipe_id:
+        if len(recipes) == 0:
+            raise UserFacingError("Recipe not found.")
+        if len(recipes) > 1:
+            raise UserFacingError("More than one recipe found with that ID.")
+    return MarkdownExportResult(
+        filenames=[str(path) for path in MarkdownExporter().export(recipes=recipes)],
+        invalid_repository_entries=repository_result.invalid_entries,
+    )
+
+
+def export_recipes_to_markdown(recipe_id: str | None) -> list[str]:
+    return export_recipes_to_markdown_result(recipe_id).filenames

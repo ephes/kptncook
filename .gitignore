@@ -1,20 +1,23 @@
-__pycache__
-dist
-build
-*.egg-info
-.pytest_cache
-.mypy_cache
-.ruff_cache
-.ipynb_checkpoints
+# virtualfish
+.venv
 
-# IDEs
-.vscode
+# build
+dist/
+
+# PyCharm
 .idea
 
-# Python
+# python
+__pycache__
+
+# notebooks
+.ipynb_checkpoints
+
+# pytest-cov
+.coverage
+
+# environment
 .env
-*.pyc
-*.pyo
 
 # export files for Paprika app accidently create in source code directory
 *.paprikarecipes
@@ -23,8 +26,4 @@ build
 .*swp
 .*swo
 
-# ephemeral local export specs
 specs/
-
-# macOS
-.DS_Store

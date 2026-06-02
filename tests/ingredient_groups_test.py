@@ -23,8 +23,8 @@ def test_iter_ingredient_groups_disabled(full_recipe, monkeypatch):
     assert len(groups) == 1
     label, ingredients = groups[0]
     assert label is None
-    # When grouping is disabled, all ingredients should be returned but may be reordered
-    assert sorted(ingredients, key=lambda x: x.ingredient.id.oid) == sorted(recipe.ingredients, key=lambda x: x.ingredient.id.oid)
+    # When grouping is disabled, ingredients are returned untouched, in original order
+    assert ingredients == recipe.ingredients
 
 
 def test_iter_ingredient_groups_enabled(full_recipe, monkeypatch):

@@ -71,20 +71,24 @@ def get_cover(image_list: list[Image] | None) -> Image | None:
         return None
     return covers[0]
 
-def replace_timers_in_step(step, text: str) -> str:
-    """Replace <timer> placeholders in `text` using timers from `step`.
 
-    Uses the step.timers list and the timer.min_or_exact field. Consumes timers in order
-    without mutating the original list. Assumes timers have a `min_or_exact` value.
+def replace_timers_in_step(step, text: str) -> str:
+    """Replace ``<timer>`` placeholders in ``text`` with the step's timers.
+
+    Timers are consumed in order using ``timer.min_or_exact`` (minutes). A
+    placeholder with no remaining timer is left untouched. The original
+    ``step.timers`` list is not mutated.
     """
-    timers = list(getattr(step, "timers", []) or [])
-    timer_iter = iter(timers)
-    def repl(match, _it=timer_iter):
-        t = next(_it, None)
-        if t is None:
+    timer_iter = iter(getattr(step, "timers", None) or [])
+
+    def repl(match: re.Match[str]) -> str:
+        timer = next(timer_iter, None)
+        if timer is None or timer.min_or_exact is None:
             return match.group(0)
-        return f"{t.min_or_exact}m"
+        return f"{timer.min_or_exact}m"
+
     return re.sub(r"<timer>", repl, text)
+
 
 def move_to_target_dir(source: str | Path, target: str | Path) -> str:
     return shutil.move(str(source), str(target))

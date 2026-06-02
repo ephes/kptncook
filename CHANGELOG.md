@@ -1,6 +1,14 @@
 Unreleased
 ==========
 
+### Features
+- #85 Add a `export-recipes-to-markdown` command that writes one Markdown file
+  per recipe (YAML front matter, ingredients, and instructions) to an
+  `export_md` directory under the kptncook home. Section headings and image alt
+  text are localized via `KPTNCOOK_LANG`, `<timer>` placeholders in steps are
+  resolved to their durations, and the canned "mise en place" prep step is
+  skipped (thanks @lursyy).
+
 ### Developer Experience
 - Replace the project-local lines-of-code implementation with a `slopscope`
   backed `just loc` recipe during the `slopscope` pre-release phase, preserving
