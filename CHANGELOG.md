@@ -1,6 +1,9 @@
 Unreleased
 ==========
 
+0.0.33 - 2026-06-02
+===================
+
 ### Features
 - #85 Add a `export-recipes-to-markdown` command that writes one Markdown file
   per recipe (YAML front matter, ingredients, and instructions) to an
