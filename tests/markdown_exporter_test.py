@@ -1,5 +1,3 @@
-import pytest
-
 from kptncook.config import settings
 from kptncook.markdown_exporter import MarkdownExporter
 from kptncook.models import Recipe
