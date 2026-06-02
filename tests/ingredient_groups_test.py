@@ -23,6 +23,7 @@ def test_iter_ingredient_groups_disabled(full_recipe, monkeypatch):
     assert len(groups) == 1
     label, ingredients = groups[0]
     assert label is None
+    # When grouping is disabled, ingredients are returned untouched, in original order
     assert ingredients == recipe.ingredients
 
 

@@ -220,6 +220,7 @@ class Recipe(BaseModel):
     steps: list[RecipeStep] = Field(..., alias="steps")
     image_list: list[Image]
     ingredients: list[Ingredient]
+    fixed_portion_count: int | None = None
 
     @model_validator(mode="before")
     def normalize_titles(cls, values):

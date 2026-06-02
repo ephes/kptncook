@@ -29,6 +29,7 @@ from kptncook.services.workflows import (
     backup_kptncook_favorites as backup_kptncook_favorites_workflow,
     delete_recipes_by_selection,
     delete_repository_recipes,
+    export_recipes_to_markdown_result as export_recipes_to_markdown_workflow,
     export_recipes_to_paprika_result as export_recipes_to_paprika_workflow,
     export_recipes_to_tandoor_result as export_recipes_to_tandoor_workflow,
     get_discovery_list_recipes,
@@ -510,4 +511,17 @@ def export_recipes_to_tandoor(_id: OptionalId = typer.Argument(None)):
     rprint(
         "\n The data was exported to '%s'. Open the export file with Tandoor.\n"
         % ", ".join(result.filenames)
+    )
+
+
+@app.command(name="export-recipes-to-markdown")
+def export_recipes_to_markdown(_id: OptionalId = typer.Argument(None)):
+    """
+    Export one recipe or all recipes to Markdown files.
+    """
+    result = _run_or_exit(export_recipes_to_markdown_workflow, _id)
+    _print_repository_warnings(result.invalid_repository_entries)
+    rprint(
+        "\n %d recipe(s) were exported as Markdown to:\n %s\n"
+        % (len(result.filenames), "\n ".join(result.filenames))
     )
