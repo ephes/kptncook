@@ -35,7 +35,9 @@ $ docker build -t kptncook .
 ```
 
 The container sets `KPTNCOOK_HOME=/data`. Mount that directory and provide the
-required environment variables. For Mealie auth, set `MEALIE_API_TOKEN` or
+required environment variables. Passing configuration with `-e` is the
+recommended approach for Docker: it avoids the need for an interactive setup and
+works the same on every run. For Mealie auth, set `MEALIE_API_TOKEN` or
 `MEALIE_USERNAME`/`MEALIE_PASSWORD`:
 
 ```shell
@@ -61,6 +63,19 @@ $ docker run --rm -v ~/.kptncook:/data \
     -e MEALIE_PASSWORD=pass \
     kptncook backup-favorites
 ```
+
+The guided setup is available as the `kptncook setup` subcommand, so it is
+reachable through the container's `kptncook` entrypoint. Because it prompts for
+your KptnCook account credentials, run it with an interactive TTY (`-it`). The
+`.env` it writes lives at `$KPTNCOOK_HOME/.env` (i.e. `/data/.env`), so the
+mounted volume persists it across runs:
+
+```shell
+$ docker run --rm -it -v ~/.kptncook:/data kptncook setup
+```
+
+To fetch only the access token after the API key is already configured, use
+`docker run --rm -it -v ~/.kptncook:/data kptncook kptncook-access-token`.
 
 # Usage
 
@@ -227,11 +242,17 @@ $ touch ~/.kptncook/.env
 ```
 
 Alternatively, you can run the setup helper to create the `.env` file, prefill the
-default API key, and optionally fetch an access token:
+default API key, and optionally fetch an access token. It is available both as a
+`kptncook` subcommand and as a standalone command:
 
 ```shell
+$ kptncook setup
+# or, equivalently:
 $ kptncook-setup
 ```
+
+The `.env` is written to `$KPTNCOOK_HOME/.env` when `KPTNCOOK_HOME` is set,
+otherwise to `~/.kptncook/.env`.
 
 Configuration is validated lazily. If you run a command before configuring the
 API key, kptncook will scaffold the `.env` file when that command first needs

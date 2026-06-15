@@ -1,8 +1,15 @@
 import os
 import stat
 
+from pathlib import Path
+
 from kptncook.env import ENV_TEMPLATE as MAIN_ENV_TEMPLATE
-from kptncook.env import read_env_values, scaffold_env_file, upsert_env_value
+from kptncook.env import (
+    _default_env_dir,
+    read_env_values,
+    scaffold_env_file,
+    upsert_env_value,
+)
 from kptncook_setup import ENV_TEMPLATE as SETUP_ENV_TEMPLATE
 
 
@@ -61,3 +68,21 @@ def test_upsert_env_value_tightens_permissions(tmp_path):
 
 def test_env_templates_are_kept_in_sync():
     assert MAIN_ENV_TEMPLATE == SETUP_ENV_TEMPLATE
+
+
+def test_default_env_dir_honors_kptncook_home(monkeypatch, tmp_path):
+    monkeypatch.setenv("KPTNCOOK_HOME", str(tmp_path / "data"))
+
+    assert _default_env_dir() == tmp_path / "data"
+
+
+def test_default_env_dir_expands_kptncook_home(monkeypatch):
+    monkeypatch.setenv("KPTNCOOK_HOME", "~/kptncook-home")
+
+    assert _default_env_dir() == Path.home() / "kptncook-home"
+
+
+def test_default_env_dir_falls_back_to_home(monkeypatch):
+    monkeypatch.delenv("KPTNCOOK_HOME", raising=False)
+
+    assert _default_env_dir() == Path.home() / ".kptncook"

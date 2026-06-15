@@ -1,3 +1,5 @@
+import subprocess
+import sys
 from datetime import date
 from pathlib import Path
 from importlib import import_module
@@ -173,6 +175,29 @@ def test_access_token_command_saves_token_without_printing_it(monkeypatch, tmp_p
     assert "Saved KPTNCOOK_ACCESS_TOKEN to" in result.output
     assert str(env_path) in result.output.replace("\n", "")
     assert "secret-token-123" not in result.output
+
+
+def test_setup_is_registered_as_subcommand():
+    cli_module = import_module("kptncook.cli")
+
+    result = runner.invoke(cli_module.app, ["setup", "--help"])
+
+    assert result.exit_code == 0
+    assert "Interactive setup for kptncook configuration." in result.output
+
+
+def test_kptncook_setup_entrypoint_imports_without_cycle():
+    # The standalone `kptncook-setup` console script imports `kptncook_setup`
+    # before `kptncook`, which previously triggered a circular import. Use a
+    # fresh interpreter so the import order matches the entry point (in-process
+    # tests already have `kptncook` imported and cannot reproduce it).
+    result = subprocess.run(
+        [sys.executable, "-c", "import kptncook_setup; assert kptncook_setup.setup"],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_discovery_list_save_command_smoke_uses_service_result(monkeypatch, minimal):

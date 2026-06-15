@@ -60,7 +60,7 @@ def render_settings_error(error: SettingsError) -> None:
         rprint("Add your KptnCook API key to the .env file or your shell:")
         rprint(f"  {error.env_path}")
         rprint("  KPTNCOOK_API_KEY=your-api-key-here")
-        rprint("Then re-run the command, or use `kptncook-setup` for guided setup.")
+        rprint("Then re-run the command, or use `kptncook setup` for guided setup.")
         rprint("See README.md for details.")
         return
 
