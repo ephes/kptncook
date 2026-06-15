@@ -7,9 +7,6 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 
-[options]
-prerelease-mode = "allow"
-
 [[package]]
 name = "annotated-doc"
 version = "0.0.4"
@@ -1013,7 +1010,7 @@ wheels = [
 
 [[package]]
 name = "kptncook"
-version = "0.0.32"
+version = "0.0.33"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
