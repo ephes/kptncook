@@ -4,11 +4,28 @@ Environment configuration helpers for kptncook.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 DEFAULT_API_KEY = "6q7QNKy-oIgk-IMuWisJ-jfN7s6"
 ENV_FILE_MODE = 0o600
-ENV_PATH = Path.home() / ".kptncook" / ".env"
+
+
+def _default_env_dir() -> Path:
+    """Resolve the directory that holds the ``.env`` file.
+
+    Honors ``KPTNCOOK_HOME`` so the config file lands in the same directory as
+    the rest of kptncook's data (matching ``Settings.root``). This keeps the
+    scaffolded ``.env`` and the file the app reads in sync, e.g. inside the
+    Docker image where ``KPTNCOOK_HOME=/data`` is the mounted volume.
+    """
+    home = os.environ.get("KPTNCOOK_HOME")
+    if home:
+        return Path(os.path.expandvars(home)).expanduser()
+    return Path.home() / ".kptncook"
+
+
+ENV_PATH = _default_env_dir() / ".env"
 ENV_TEMPLATE = f"""# kptncook configuration
 #
 # Required

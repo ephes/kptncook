@@ -45,8 +45,14 @@ from kptncook.services.workflows import (
     search_recipe_by_id as search_recipe_by_id_workflow,
     sync_with_mealie_result as sync_with_mealie_workflow,
 )
+from kptncook.setup import setup as setup_command
 
 app = typer.Typer()
+
+# Expose the standalone `kptncook-setup` entry point as a subcommand so guided
+# setup is reachable through the Docker entrypoint (`docker run ... kptncook
+# setup`), where only `kptncook` subcommands can be invoked.
+app.command(name="setup")(setup_command)
 P = ParamSpec("P")
 T = TypeVar("T")
 
