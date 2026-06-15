@@ -4,7 +4,8 @@ Unreleased
 ### Fixes
 - #87 Make guided setup reachable from the Docker entrypoint by exposing it as
   the `kptncook setup` subcommand (the standalone `kptncook-setup` command still
-  works), and update the missing-configuration message to point at it.
+  works), and update the missing-configuration message to point at it (reported
+  by @SimonBard).
 - #87 Honor `KPTNCOOK_HOME` when locating the `.env` file so the config is read
   from and written to the same directory as the rest of kptncook's data. In the
   Docker image (`KPTNCOOK_HOME=/data`) the `.env` now lives in the mounted
