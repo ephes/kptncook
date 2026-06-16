@@ -1,6 +1,9 @@
 Unreleased
 ==========
 
+0.0.34 - 2026-06-16
+===================
+
 ### Fixes
 - #87 Make guided setup reachable from the Docker entrypoint by exposing it as
   the `kptncook setup` subcommand (the standalone `kptncook-setup` command still
