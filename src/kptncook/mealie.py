@@ -397,13 +397,18 @@ class MealieApiClient(BaseHttpClient):
         slug = self._post_recipe_trunk_and_get_slug(recipe.name)
         logger.debug("Created Mealie recipe slug: %s", slug)
         recipe.slug = slug
-        self._scrape_image_for_recipe(recipe, slug)
-        recipe = self._update_user_and_group_id(recipe, slug)
-        recipe = self._update_item_ids(recipe, "units", RecipeUnit, "unit")
-        recipe = self._update_item_ids(recipe, "foods", RecipeFood, "food")
-        recipe = self._update_tag_ids(recipe)
-        recipe = self.enrich_recipe_with_step_images(recipe)
-        return self._update_recipe(recipe, slug)
+        try:
+            self._scrape_image_for_recipe(recipe, slug)
+            recipe = self._update_user_and_group_id(recipe, slug)
+            recipe = self._update_item_ids(recipe, "units", RecipeUnit, "unit")
+            recipe = self._update_item_ids(recipe, "foods", RecipeFood, "food")
+            recipe = self._update_tag_ids(recipe)
+            recipe = self.enrich_recipe_with_step_images(recipe)
+            return self._update_recipe(recipe, slug)
+        except Exception:
+            logger.warning("Failed to fully create recipe %s, cleaning up skeleton", slug)
+            self.delete_via_slug(slug)
+            raise
 
     @staticmethod
     def validate_recipes(recipes):

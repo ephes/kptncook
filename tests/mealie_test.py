@@ -433,3 +433,33 @@ def test_create_recipe_continues_when_step_images_fail(monkeypatch):
     assert called["update"] is True
     assert result.slug == "recipe-slug"
     assert result.extras["kptncook_id"] == "abc123"
+
+
+def test_create_recipe_cleans_up_skeleton_on_failure(monkeypatch):
+    client = MealieApiClient("http://mealie.local/api")
+    recipe = RecipeWithImage(name="Test recipe", image_url=None)
+    called = {"deleted_slug": None}
+
+    def fake_post_recipe_trunk_and_get_slug(_recipe_name):
+        return "recipe-slug"
+
+    def fail_update_user_and_group_id(_recipe_obj, *_args, **_kwargs):
+        raise httpx.HTTPStatusError(
+            "Server Error",
+            request=httpx.Request("GET", "http://mealie.local/api/recipes/recipe-slug"),
+            response=httpx.Response(500),
+        )
+
+    def fake_delete_via_slug(slug):
+        called["deleted_slug"] = slug
+
+    monkeypatch.setattr(
+        client, "_post_recipe_trunk_and_get_slug", fake_post_recipe_trunk_and_get_slug
+    )
+    monkeypatch.setattr(client, "_update_user_and_group_id", fail_update_user_and_group_id)
+    monkeypatch.setattr(client, "delete_via_slug", fake_delete_via_slug)
+
+    with pytest.raises(httpx.HTTPStatusError):
+        client.create_recipe(recipe)
+
+    assert called["deleted_slug"] == "recipe-slug"
