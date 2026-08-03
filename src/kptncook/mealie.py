@@ -407,7 +407,10 @@ class MealieApiClient(BaseHttpClient):
             return self._update_recipe(recipe, slug)
         except Exception:
             logger.warning("Failed to fully create recipe %s, cleaning up skeleton", slug, exc_info=True)
-            self.delete_via_slug(slug)
+            try:
+                self.delete_via_slug(slug)
+            except Exception:
+                logger.warning("Failed to clean up skeleton %s", slug, exc_info=True)
             raise
 
     @staticmethod
