@@ -482,11 +482,7 @@ def test_create_recipe_reraises_original_error_when_cleanup_fails(monkeypatch):
         raise original_error
 
     def fail_delete_via_slug(_slug):
-        raise httpx.HTTPStatusError(
-            "Delete Failed",
-            request=httpx.Request("DELETE", "http://mealie.local/api/recipes/recipe-slug"),
-            response=httpx.Response(503),
-        )
+        raise httpx.HTTPError("Delete Failed")
 
     monkeypatch.setattr(
         client, "_post_recipe_trunk_and_get_slug", fake_post_recipe_trunk_and_get_slug

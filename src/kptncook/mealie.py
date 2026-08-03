@@ -405,11 +405,11 @@ class MealieApiClient(BaseHttpClient):
             recipe = self._update_tag_ids(recipe)
             recipe = self.enrich_recipe_with_step_images(recipe)
             return self._update_recipe(recipe, slug)
-        except Exception:
+        except (httpx.HTTPError, ValidationError):
             logger.warning("Failed to fully create recipe %s, cleaning up skeleton", slug, exc_info=True)
             try:
                 self.delete_via_slug(slug)
-            except Exception:
+            except httpx.HTTPError:
                 logger.warning("Failed to clean up skeleton %s", slug, exc_info=True)
             raise
 
