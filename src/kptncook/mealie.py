@@ -390,6 +390,8 @@ class MealieApiClient(BaseHttpClient):
             content=recipe.model_dump_json(),
             headers={"Content-Type": "application/json"},
         )
+        if r.status_code >= 400:
+            logger.warning("Mealie rejected PUT %s: %s %s", slug, r.status_code, r.text[:500])
         r.raise_for_status()
         return Recipe.model_validate(r.json())
 
