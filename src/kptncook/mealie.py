@@ -406,7 +406,7 @@ class MealieApiClient(BaseHttpClient):
             recipe = self.enrich_recipe_with_step_images(recipe)
             return self._update_recipe(recipe, slug)
         except Exception:
-            logger.warning("Failed to fully create recipe %s, cleaning up skeleton", slug)
+            logger.warning("Failed to fully create recipe %s, cleaning up skeleton", slug, exc_info=True)
             self.delete_via_slug(slug)
             raise
 
