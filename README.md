@@ -370,23 +370,6 @@ Install the git hooks:
 $ uv run prek install -f
 ```
 
-## Beads Setup (Required)
-
-This repo uses Beads for issue tracking, and `.beads/` is committed.
-
-```shell
-$ bd onboard
-```
-
-If `bd onboard` is not available:
-
-```shell
-$ bd init
-$ bd hooks install
-```
-
-If your global gitignore ignores `.beads/`, remove `**/.beads/` or use `git add -f`.
-
 ## Quality Gates (Required)
 
 ```shell
@@ -433,27 +416,6 @@ counting when `cloc` is not installed. Compared to the previous project-local
 counter, totals no longer include that removed counter implementation itself;
 for example, the previous `cloc` total was 51 files and 6867 code lines, while
 the migrated `slopscope` report is 50 files and 6437 code lines.
-
-## Beadsflow
-
-Use the local beadsflow checkout:
-
-```shell
-$ just beadsflow-dry <epic-id>
-$ just beadsflow-once <epic-id>
-$ just beadsflow-run <epic-id>
-```
-
-## GitHub Issue Import
-
-Import GitHub issues into Beads epics (open issues by default), including
-comments. The importer is idempotent and uses `external_ref` as `gh-<number>`.
-
-```shell
-$ just beads-import-gh-issues
-$ just beads-import-gh-issues --repo OWNER/REPO --state open --limit 500
-$ just beads-import-gh-issues --dry-run
-```
 
 ## Release Process
 
