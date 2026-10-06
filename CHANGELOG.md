@@ -1,6 +1,13 @@
 Unreleased
 ==========
 
+### Security
+- Refresh vulnerable locked dependencies flagged by `pip-audit`: anyio 4.14.2,
+  bleach 6.4.0, click 8.3.3, idna 3.15, jupyter-server 2.21.0, jupyterlab
+  4.5.11, mistune 3.3.3, nbconvert 7.17.1, pydantic-settings 2.14.2, pygments
+  2.20.0, pytest 9.0.3, python-dotenv 1.2.2, requests 2.33.0, soupsieve 2.9.0,
+  tornado 6.5.9 and urllib3 2.8.0.
+
 0.0.34 - 2026-06-16
 ===================
 
