@@ -1,6 +1,13 @@
 Unreleased
 ==========
 
+### Fixes
+- Paprika and Tandoor exports no longer overwrite existing files. Two recipes
+  with the same title used to export to the same file name, so the second
+  silently replaced the first (and any earlier export of that name was lost).
+  The exporters now append the recipe id, then a counter, until the name is
+  free, and report the names actually written.
+
 0.0.34 - 2026-06-16
 ===================
 

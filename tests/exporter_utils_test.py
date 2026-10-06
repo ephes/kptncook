@@ -1,7 +1,10 @@
+import pytest
+
 from kptncook.exporter_utils import (
     expand_timer_placeholders,
     format_timer,
     get_step_text,
+    move_to_free_target,
 )
 from kptncook.models import Image, LocalizedString, RecipeStep, StepTimer
 
@@ -81,3 +84,54 @@ class TestGetStepText:
             image=Image(name="x.jpg", url="https://example.com/x.jpg"),
         )
         assert get_step_text(step) == "Ca. 2-3 min. braten."
+
+
+def test_move_to_free_target_never_overwrites(tmp_path):
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "name.zip").write_bytes(b"old")
+    (out / "name-id1.zip").write_bytes(b"old too")
+
+    def source(content: bytes):
+        path = tmp_path / "src.zip"
+        path.write_bytes(content)
+        return path
+
+    target = move_to_free_target(source(b"new"), out, "name", ".zip", "id1")
+    assert target == out / "name-id1-2.zip"
+    assert target.read_bytes() == b"new"
+    assert not (tmp_path / "src.zip").exists()
+    assert (out / "name.zip").read_bytes() == b"old"
+    assert (out / "name-id1.zip").read_bytes() == b"old too"
+
+    plain = move_to_free_target(source(b"plain"), out, "name", ".zip")
+    assert plain == out / "name-2.zip"
+    assert plain.read_bytes() == b"plain"
+
+
+def test_move_to_free_target_keeps_existing_file_on_source_error(tmp_path):
+    existing = tmp_path / "name.zip"
+    existing.write_bytes(b"old")
+
+    with pytest.raises(FileNotFoundError):
+        move_to_free_target(tmp_path / "missing.zip", tmp_path, "name", ".zip")
+
+    assert existing.read_bytes() == b"old"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["name.zip"]
+
+
+def test_move_to_free_target_removes_own_partial_target_on_copy_error(tmp_path, mocker):
+    existing = tmp_path / "name.zip"
+    existing.write_bytes(b"old")
+    source = tmp_path / "src.bin"
+    source.write_bytes(b"new")
+    mocker.patch(
+        "kptncook.exporter_utils.shutil.copyfileobj", side_effect=OSError("disk full")
+    )
+
+    with pytest.raises(OSError, match="disk full"):
+        move_to_free_target(source, tmp_path, "name", ".zip", "id1")
+
+    assert existing.read_bytes() == b"old"
+    assert not (tmp_path / "name-id1.zip").exists()
+    assert source.read_bytes() == b"new"

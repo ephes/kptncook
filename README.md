@@ -146,6 +146,14 @@ and instructions. Section headings and image alt text follow `KPTNCOOK_LANG`
 languages fall back to English), and `<timer>` placeholders in steps are
 replaced with their durations.
 
+The Paprika and Tandoor exports write their files into the current directory
+and never overwrite an existing file. If the preferred name (the asciified
+recipe title, or `allrecipes.paprikarecipes` for a Paprika export of several
+recipes) is taken, for example by an earlier export or by a second recipe with
+the same title, the recipe id and then a counter are appended
+(`Title-<recipe id>.zip`, `Title-<recipe id>-2.zip`, `allrecipes-2.paprikarecipes`).
+The command output lists the names that were actually written.
+
 ### Repository warnings
 
 Repository-backed commands now warn if `kptncook.json` contains stored entries

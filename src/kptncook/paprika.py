@@ -28,7 +28,7 @@ from kptncook.exporter_utils import (
     asciify_string,
     get_cover,
     get_step_text,
-    move_to_target_dir,
+    move_to_free_target,
     write_zip,
 )
 from kptncook.ingredient_groups import iter_ingredient_groups
@@ -86,10 +86,16 @@ class PaprikaExporter:
         filename_full_path = self.save_recipes(
             export_data=export_data, directory=tmp_dir, filename=filename
         )
-        move_to_target_dir(
-            source=filename_full_path, target=os.path.join(str(Path.cwd()), filename)
+        # never overwrite an existing export; pick a free name instead
+        disambiguator = recipes[0].id.oid if len(export_data) == 1 else None
+        target = move_to_free_target(
+            source=filename_full_path,
+            directory=Path.cwd(),
+            stem=Path(filename).stem,
+            extension=Path(filename).suffix,
+            disambiguator=disambiguator,
         )
-        return filename
+        return target.name
 
     def get_export_filename(
         self, export_data: dict[str, str], recipes: list[Recipe]

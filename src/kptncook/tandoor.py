@@ -17,7 +17,7 @@ from kptncook.exporter_utils import (
     asciify_string,
     get_cover,
     get_step_text,
-    move_to_target_dir,
+    move_to_free_target,
     write_zip,
     ZipContent,
 )
@@ -57,10 +57,21 @@ class TandoorExporter:
             if image_bytes is not None:
                 entries.append(("image.jpg", image_bytes))
             write_zip(zip_path, entries)
-            move_to_target_dir(zip_path, Path.cwd() / filename)
-        return filename
+            target = move_to_free_target(
+                zip_path,
+                Path.cwd(),
+                stem=Path(filename).stem,
+                extension=".zip",
+                disambiguator=recipe.id.oid,
+            )
+        return target.name
 
     def get_export_filename(self, recipe: Recipe) -> str:
+        """Return the preferred file name.
+
+        The actual name may get the recipe id appended if a file with this
+        name already exists (for example a second recipe with the same title).
+        """
         title = localized_fallback(recipe.localized_title) or "kptncook-recipe"
         return f"{asciify_string(title)}.zip"
 

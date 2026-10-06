@@ -1,3 +1,4 @@
+import itertools
 import re
 import shutil
 import zipfile
@@ -90,8 +91,46 @@ def replace_timers_in_step(step, text: str) -> str:
     return re.sub(r"<timer>", repl, text)
 
 
-def move_to_target_dir(source: str | Path, target: str | Path) -> str:
-    return shutil.move(str(source), str(target))
+def move_to_free_target(
+    source: str | Path,
+    directory: str | Path,
+    stem: str,
+    extension: str,
+    disambiguator: str | None = None,
+) -> Path:
+    """Move ``source`` into ``directory`` without overwriting an existing file.
+
+    The first candidate is ``<stem><extension>``. If that name is taken, the
+    ``disambiguator`` (for example a recipe id) is appended, then a counter:
+    ``<stem>-<disambiguator><extension>``, ``<stem>-<disambiguator>-2<extension>``
+    and so on (``<stem>-2<extension>`` ... without a disambiguator). The target
+    name is claimed with an exclusive create, so an existing file is never
+    replaced, even if it appears between the check and the write.
+    """
+    directory = Path(directory)
+    base = f"{stem}-{disambiguator}" if disambiguator else stem
+    candidates = itertools.chain(
+        [stem],
+        [base] if disambiguator else [],
+        (f"{base}-{counter}" for counter in itertools.count(2)),
+    )
+    for candidate in candidates:
+        target = directory / f"{candidate}{extension}"
+        with open(source, "rb") as src:
+            try:
+                dst = open(target, "xb")
+            except FileExistsError:
+                continue
+            # from here on the target is ours, so it may be cleaned up on failure
+            try:
+                with dst:
+                    shutil.copyfileobj(src, dst)
+            except BaseException:
+                target.unlink(missing_ok=True)
+                raise
+        Path(source).unlink()
+        return target
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def write_zip(zip_path: Path, entries: Iterable[tuple[str, ZipContent]]) -> None:
