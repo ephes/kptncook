@@ -288,7 +288,7 @@ and other non-config commands do not force `.env` validation up front.
 
 Then set environment variables in the `~/.kptncook/.env` file (or directly in your shell). You'll need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie, set `MEALIE_API_TOKEN` or `MEALIE_USERNAME`/`MEALIE_PASSWORD`.
 
-When kptncook creates or updates `~/.kptncook/.env`, it applies owner-only read/write permissions (`0600`) where the platform supports it, because the file may contain access tokens, passwords, or trusted shell commands.
+When kptncook creates or updates `~/.kptncook/.env`, it applies owner-only read/write permissions (`0600`) where the platform supports it, because the file may contain access tokens, passwords, or trusted shell commands. Updates are written to an owner-only temporary file next to `.env` and then moved into place, so a failed write leaves the previous file intact.
 
 **Important:** The `.env` file must be created in the `~/.kptncook/` directory, NOT in the installation directory or by editing the `kptncook` executable.
 
