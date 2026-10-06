@@ -133,6 +133,25 @@ $ kptncook ingredients-popular
 $ kptncook recipes-with-ingredients --ingredient-id 123,456 --save
 ```
 
+### Mealie sync
+
+`sync-with-mealie` (and `sync`) creates every locally saved recipe that is not
+yet in Mealie. Recipes are matched by the KptnCook id stored in the Mealie
+recipe's extras (`source: kptncook`), not by name. The summary means:
+
+* `Created N recipes`: recipes newly created in Mealie.
+* `Skipped N recipes because Mealie already has a recipe with the same name`:
+  Mealie refuses a second recipe with the same name. The existing one may be
+  another KptnCook recipe with the same title, your own recipe, or one left over
+  from a failed sync whose cleanup also failed. Rename or delete it in Mealie
+  and sync again to import the skipped recipe. Skips do not change the exit
+  status.
+* `Failed to create N recipes`: each line names the recipe and the reason (HTTP
+  status, connection error, timeout). Other recipes are still synced, and the
+  command exits with status 1. A failed recipe is deleted from Mealie again, so
+  the next sync retries it cleanly. If that delete fails too, the reason names
+  the slug of the partial recipe to delete by hand.
+
 ### Export metadata
 
 Exports to Mealie and Tandoor include KptnCook active tags as tags/keywords

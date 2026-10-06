@@ -28,6 +28,22 @@ logger = logging.getLogger(__name__)
 ASSET_DOWNLOAD_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
 
+class RecipeCleanupError(Exception):
+    """Creating a recipe failed and its partial Mealie recipe could not be deleted.
+
+    ``__cause__`` holds the error that made the create fail; ``cleanup_error``
+    holds the error raised while deleting the partial recipe at ``slug``.
+    """
+
+    def __init__(self, slug: str, cleanup_error: BaseException):
+        super().__init__(
+            f"could not delete the partially created Mealie recipe {slug!r}: "
+            f"{cleanup_error}"
+        )
+        self.slug = slug
+        self.cleanup_error = cleanup_error
+
+
 class NameIsIdModel(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -383,7 +399,7 @@ class MealieApiClient(BaseHttpClient):
         recipe.tags = [name_to_tag_with_id[tag.name] for tag in recipe_tags]
         return recipe
 
-    def _update_recipe(self, recipe, slug):
+    def _put_recipe(self, recipe, slug) -> httpx.Response:
         recipe_detail_path = f"/recipes/{slug}"
         r = self.put(
             recipe_detail_path,
@@ -391,11 +407,12 @@ class MealieApiClient(BaseHttpClient):
             headers={"Content-Type": "application/json"},
         )
         r.raise_for_status()
-        return Recipe.model_validate(r.json())
+        return r
 
-    def create_recipe(self, recipe):
-        slug = self._post_recipe_trunk_and_get_slug(recipe.name)
-        logger.debug("Created Mealie recipe slug: %s", slug)
+    def _update_recipe(self, recipe, slug):
+        return Recipe.model_validate(self._put_recipe(recipe, slug).json())
+
+    def _fill_recipe_trunk(self, recipe, slug) -> httpx.Response:
         recipe.slug = slug
         self._scrape_image_for_recipe(recipe, slug)
         recipe = self._update_user_and_group_id(recipe, slug)
@@ -403,7 +420,44 @@ class MealieApiClient(BaseHttpClient):
         recipe = self._update_item_ids(recipe, "foods", RecipeFood, "food")
         recipe = self._update_tag_ids(recipe)
         recipe = self.enrich_recipe_with_step_images(recipe)
-        return self._update_recipe(recipe, slug)
+        return self._put_recipe(recipe, slug)
+
+    def create_recipe(self, recipe):
+        """Create ``recipe`` in Mealie.
+
+        Mealie only creates a recipe from a name, so this posts a bare "trunk"
+        recipe first and fills it with a final PUT. If any step between the
+        trunk POST and a successful PUT fails, the trunk is deleted again
+        (best-effort) and the original error is re-raised. If that delete
+        fails too, ``RecipeCleanupError`` is raised from the original error so
+        the caller can report the leftover slug.
+        """
+        slug = self._post_recipe_trunk_and_get_slug(recipe.name)
+        logger.debug("Created Mealie recipe slug: %s", slug)
+        try:
+            response = self._fill_recipe_trunk(recipe, slug)
+        except BaseException as exc:
+            self._delete_partial_recipe(slug, exc)
+            raise
+        return Recipe.model_validate(response.json())
+
+    def _delete_partial_recipe(self, slug: str, error: BaseException) -> None:
+        logger.warning(
+            "Creating Mealie recipe %s failed (%s); deleting the partial recipe",
+            slug,
+            error,
+        )
+        try:
+            self.delete_via_slug(slug)
+        except Exception as cleanup_error:
+            logger.error(
+                "Could not delete partially created Mealie recipe %s: %s",
+                slug,
+                cleanup_error,
+            )
+            if isinstance(error, Exception):
+                raise RecipeCleanupError(slug, cleanup_error) from error
+            # Let KeyboardInterrupt and friends propagate unchanged.
 
     @staticmethod
     def validate_recipes(recipes):
@@ -439,7 +493,7 @@ class MealieApiClient(BaseHttpClient):
     def delete_via_slug(self, slug):
         r = self.delete(f"/recipes/{slug}")
         r.raise_for_status()
-        return r.json()
+        return r.json() if r.content else None
 
     def get_via_slug(self, slug):
         r = self.get(f"/recipes/{slug}")

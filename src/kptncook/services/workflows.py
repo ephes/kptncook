@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
@@ -18,7 +18,7 @@ from kptncook.http_errors import (
     format_request_error,
 )
 from kptncook.markdown_exporter import MarkdownExporter
-from kptncook.mealie import MealieApiClient, kptncook_to_mealie
+from kptncook.mealie import MealieApiClient, RecipeCleanupError, kptncook_to_mealie
 from kptncook.models import Recipe
 from kptncook.paprika import PaprikaExporter
 from kptncook.password_manager import get_credentials
@@ -54,9 +54,17 @@ class SearchResult:
 
 
 @dataclass(frozen=True)
+class MealieSyncIssue:
+    name: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class SyncWithMealieResult:
     created_count: int
     invalid_repository_entries: list[InvalidStoredRecipe]
+    failed: list[MealieSyncIssue] = field(default_factory=list)
+    skipped_existing: list[MealieSyncIssue] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -239,24 +247,63 @@ def sync_with_mealie_result() -> SyncWithMealieResult:
         if recipe.extras.get("kptncook_id") in ids_to_add
     ]
     created_slugs: list[str] = []
+    failed: list[MealieSyncIssue] = []
+    skipped_existing: list[MealieSyncIssue] = []
     for recipe in recipes_to_add:
+        name = recipe.name or str(recipe.extras.get("kptncook_id"))
         try:
             created = client.create_recipe(recipe)
-            created_slugs.append(created.slug)
         except httpx.HTTPStatusError as exc:
             detail_message = extract_mealie_detail_message(exc.response)
             if detail_message == "Recipe already exists":
+                logger.warning(
+                    "Skipping recipe %s: Mealie already has a recipe with this name",
+                    name,
+                )
+                skipped_existing.append(
+                    MealieSyncIssue(name=name, reason=MEALIE_NAME_CLASH_REASON)
+                )
                 continue
-            logger.warning(
-                "Failed to create recipe %s in Mealie (%s): %s",
-                recipe.name,
-                exc.response.status_code,
-                detail_message or exc,
-            )
+            failed.append(_record_mealie_failure(name, exc))
+        except Exception as exc:
+            failed.append(_record_mealie_failure(name, exc))
+        else:
+            created_slugs.append(created.slug)
     return SyncWithMealieResult(
         created_count=len(created_slugs),
         invalid_repository_entries=repository_result.invalid_entries,
+        failed=failed,
+        skipped_existing=skipped_existing,
     )
+
+
+MEALIE_NAME_CLASH_REASON = (
+    "Mealie already has a recipe with this name (another KptnCook recipe with "
+    "the same title, your own recipe, or one left over from a failed sync); "
+    "rename or delete it in Mealie and sync again to import this one"
+)
+
+
+def _describe_mealie_error(exc: BaseException) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        detail = extract_mealie_detail_message(exc.response)
+        return f"HTTP {exc.response.status_code}: {detail or exc}"
+    if isinstance(exc, httpx.HTTPError):
+        return format_request_error(exc)
+    return f"{type(exc).__name__}: {exc}"
+
+
+def _record_mealie_failure(name: str, exc: Exception) -> MealieSyncIssue:
+    if isinstance(exc, RecipeCleanupError):
+        cause = exc.__cause__ if exc.__cause__ is not None else exc
+        reason = (
+            f"{_describe_mealie_error(cause)}; {exc}. Delete recipe "
+            f"{exc.slug!r} in Mealie before the next sync"
+        )
+    else:
+        reason = _describe_mealie_error(exc)
+    logger.warning("Failed to create recipe %s in Mealie: %s", name, reason)
+    return MealieSyncIssue(name=name, reason=reason)
 
 
 def sync_with_mealie() -> int:

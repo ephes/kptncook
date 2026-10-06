@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 import kptncook
 from kptncook import _extract_mealie_detail_message
@@ -13,6 +14,7 @@ from kptncook.mealie import (
     ASSET_DOWNLOAD_TIMEOUT,
     MealieApiClient,
     Recipe,
+    RecipeCleanupError,
     RecipeTag,
     RecipeStep,
     RecipeWithImage,
@@ -353,6 +355,13 @@ def test_kptncook_to_mealie_allows_missing_image_url():
     assert mealie_recipe.image_url is None
 
 
+def _fake_put_recipe(recipe_obj, slug):
+    request = httpx.Request("PUT", f"http://mealie.local/api/recipes/{slug}")
+    return httpx.Response(
+        200, request=request, json=json.loads(recipe_obj.model_dump_json())
+    )
+
+
 def test_create_recipe_skips_scrape_without_image_url(monkeypatch):
     client = MealieApiClient("http://mealie.local/api")
     recipe = RecipeWithImage(name="Test recipe", image_url=None)
@@ -380,7 +389,7 @@ def test_create_recipe_skips_scrape_without_image_url(monkeypatch):
     monkeypatch.setattr(client, "_update_item_ids", passthrough)
     monkeypatch.setattr(client, "_update_tag_ids", passthrough_update_tag_ids)
     monkeypatch.setattr(client, "enrich_recipe_with_step_images", passthrough)
-    monkeypatch.setattr(client, "_update_recipe", passthrough)
+    monkeypatch.setattr(client, "_put_recipe", _fake_put_recipe)
 
     result = client.create_recipe(recipe)
 
@@ -412,9 +421,9 @@ def test_create_recipe_continues_when_step_images_fail(monkeypatch):
     def passthrough_update_tag_ids(recipe_obj):
         return recipe_obj
 
-    def fake_update_recipe(recipe_obj, _slug):
+    def fake_put_recipe(recipe_obj, slug):
         called["update"] = True
-        return recipe_obj
+        return _fake_put_recipe(recipe_obj, slug)
 
     def fail_upload_asset(_slug, _image):
         raise httpx.HTTPError("boom")
@@ -425,7 +434,7 @@ def test_create_recipe_continues_when_step_images_fail(monkeypatch):
     monkeypatch.setattr(client, "_update_user_and_group_id", passthrough)
     monkeypatch.setattr(client, "_update_item_ids", passthrough)
     monkeypatch.setattr(client, "_update_tag_ids", passthrough_update_tag_ids)
-    monkeypatch.setattr(client, "_update_recipe", fake_update_recipe)
+    monkeypatch.setattr(client, "_put_recipe", fake_put_recipe)
     monkeypatch.setattr(client, "upload_asset", fail_upload_asset)
 
     result = client.create_recipe(recipe)
@@ -433,3 +442,168 @@ def test_create_recipe_continues_when_step_images_fail(monkeypatch):
     assert called["update"] is True
     assert result.slug == "recipe-slug"
     assert result.extras["kptncook_id"] == "abc123"
+
+
+SYNTHETIC_RECIPE_DETAILS = {
+    "id": str(uuid4()),
+    "userId": str(uuid4()),
+    "groupId": str(uuid4()),
+    "name": "Synthetic recipe",
+    "slug": "synthetic-recipe",
+}
+
+
+def _mock_mealie(
+    *,
+    fail: dict[tuple[str, str], object] | None = None,
+    put_json: object = None,
+):
+    """Build a MealieApiClient backed by an in-memory mock transport.
+
+    ``fail`` maps (method, path) to either an exception instance to raise or an
+    HTTP status code to answer with.
+    """
+    fail = fail or {}
+    calls: list[tuple[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        key = (request.method, request.url.path)
+        calls.append(key)
+        outcome = fail.get(key)
+        if isinstance(outcome, Exception):
+            raise outcome
+        if isinstance(outcome, int):
+            return httpx.Response(outcome, json={"detail": {"message": "boom"}})
+        if key == ("POST", "/api/recipes"):
+            return httpx.Response(201, json="synthetic-recipe")
+        if key == ("GET", "/api/recipes/synthetic-recipe"):
+            return httpx.Response(200, json=SYNTHETIC_RECIPE_DETAILS)
+        if key == ("PUT", "/api/recipes/synthetic-recipe"):
+            body = json.loads(request.content)
+            return httpx.Response(200, json=body if put_json is None else put_json)
+        if key == ("DELETE", "/api/recipes/synthetic-recipe"):
+            return httpx.Response(200, json=SYNTHETIC_RECIPE_DETAILS)
+        return httpx.Response(404)
+
+    http_client = httpx.Client(transport=httpx.MockTransport(handler))
+    client = MealieApiClient("http://mealie.local/api", client=http_client)
+    return client, calls
+
+
+def _synthetic_recipe() -> RecipeWithImage:
+    return RecipeWithImage(
+        name="Synthetic recipe",
+        image_url=None,
+        extras={"source": "kptncook", "kptncook_id": "synthetic-1"},
+    )
+
+
+DELETE_CALL = ("DELETE", "/api/recipes/synthetic-recipe")
+
+
+def test_create_recipe_success_does_not_delete():
+    client, calls = _mock_mealie()
+
+    result = client.create_recipe(_synthetic_recipe())
+
+    assert result.slug == "synthetic-recipe"
+    assert result.extras["source"] == "kptncook"
+    assert DELETE_CALL not in calls
+
+
+def test_create_recipe_deletes_trunk_when_final_put_fails():
+    client, calls = _mock_mealie(fail={("PUT", "/api/recipes/synthetic-recipe"): 500})
+
+    with pytest.raises(httpx.HTTPStatusError) as exc_info:
+        client.create_recipe(_synthetic_recipe())
+
+    assert exc_info.value.response.status_code == 500
+    assert calls[-1] == DELETE_CALL
+
+
+def test_create_recipe_deletes_trunk_when_connection_fails_after_trunk():
+    client, calls = _mock_mealie(
+        fail={("GET", "/api/recipes/synthetic-recipe"): httpx.ConnectError("down")}
+    )
+
+    with pytest.raises(httpx.ConnectError):
+        client.create_recipe(_synthetic_recipe())
+
+    assert calls == [
+        ("POST", "/api/recipes"),
+        ("GET", "/api/recipes/synthetic-recipe"),
+        DELETE_CALL,
+    ]
+
+
+def test_create_recipe_deletes_trunk_on_unexpected_error(monkeypatch):
+    client, calls = _mock_mealie()
+
+    def explode(*_args, **_kwargs):
+        raise KeyError("userId")
+
+    monkeypatch.setattr(client, "_update_user_and_group_id", explode)
+
+    with pytest.raises(KeyError):
+        client.create_recipe(_synthetic_recipe())
+
+    assert calls[-1] == DELETE_CALL
+
+
+def test_create_recipe_reports_failed_trunk_cleanup():
+    client, calls = _mock_mealie(
+        fail={
+            ("PUT", "/api/recipes/synthetic-recipe"): httpx.ReadTimeout("slow"),
+            DELETE_CALL: 500,
+        }
+    )
+
+    with pytest.raises(RecipeCleanupError) as exc_info:
+        client.create_recipe(_synthetic_recipe())
+
+    assert exc_info.value.slug == "synthetic-recipe"
+    assert isinstance(exc_info.value.__cause__, httpx.ReadTimeout)
+    assert isinstance(exc_info.value.cleanup_error, httpx.HTTPStatusError)
+    assert calls[-1] == DELETE_CALL
+
+
+def test_create_recipe_keeps_interrupt_when_cleanup_fails(monkeypatch):
+    client, calls = _mock_mealie(fail={DELETE_CALL: 500})
+
+    def interrupt(*_args, **_kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(client, "_update_user_and_group_id", interrupt)
+
+    with pytest.raises(KeyboardInterrupt):
+        client.create_recipe(_synthetic_recipe())
+
+    assert calls[-1] == DELETE_CALL
+
+
+def test_create_recipe_does_not_delete_when_trunk_post_fails():
+    client, calls = _mock_mealie(fail={("POST", "/api/recipes"): 409})
+
+    with pytest.raises(httpx.HTTPStatusError):
+        client.create_recipe(_synthetic_recipe())
+
+    assert calls == [("POST", "/api/recipes")]
+
+
+def test_create_recipe_keeps_recipe_after_successful_put():
+    # Once the full PUT succeeded the recipe is complete and tagged; a
+    # malformed response body must not delete it again.
+    client, calls = _mock_mealie(put_json=["unexpected"])
+
+    with pytest.raises(ValidationError):
+        client.create_recipe(_synthetic_recipe())
+
+    assert DELETE_CALL not in calls
+
+
+def test_delete_via_slug_accepts_empty_response():
+    client, _calls = _mock_mealie()
+    request = httpx.Request("DELETE", "http://mealie.local/api/recipes/x")
+    client.delete = lambda _path, **_kwargs: httpx.Response(204, request=request)
+
+    assert client.delete_via_slug("x") is None

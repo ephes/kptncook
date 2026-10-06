@@ -14,7 +14,7 @@ from kptncook.config import Settings, SettingsError
 from kptncook.models import Recipe
 from kptncook.repositories import RecipeInDb
 from kptncook.services.repository import InvalidStoredRecipe, RepositoryRecipesResult
-from kptncook.services.workflows import SyncWithMealieResult
+from kptncook.services.workflows import MealieSyncIssue, SyncWithMealieResult
 
 
 runner = CliRunner()
@@ -142,6 +142,56 @@ def test_sync_with_mealie_command_smoke_renders_warning_summary(monkeypatch):
     assert "skipped 1 invalid stored recipe" in result.output
     assert "- broken: steps: Field required" in result.output
     assert "Created 2 recipes" in result.output
+
+
+def test_sync_with_mealie_command_reports_skipped_and_failed(monkeypatch):
+    cli_module = import_module("kptncook.cli")
+
+    monkeypatch.setattr(
+        cli_module,
+        "sync_with_mealie_workflow",
+        lambda: SyncWithMealieResult(
+            created_count=1,
+            invalid_repository_entries=[],
+            skipped_existing=[
+                MealieSyncIssue(name="Pasta [vegan]", reason="name already used")
+            ],
+            failed=[
+                MealieSyncIssue(
+                    name="Soup", reason="Request failed: connection refused"
+                )
+            ],
+        ),
+    )
+
+    result = runner.invoke(cli_module.app, ["sync-with-mealie"])
+
+    assert result.exit_code == 1
+    assert "Created 1 recipes" in result.output
+    assert "Skipped 1 recipes" in result.output
+    assert "- Pasta [vegan]: name already used" in result.output
+    assert "Failed to create 1 recipes" in result.output
+    assert "- Soup: Request failed: connection refused" in result.output
+
+
+def test_sync_with_mealie_command_reports_skips_without_failing(monkeypatch):
+    cli_module = import_module("kptncook.cli")
+
+    monkeypatch.setattr(
+        cli_module,
+        "sync_with_mealie_workflow",
+        lambda: SyncWithMealieResult(
+            created_count=0,
+            invalid_repository_entries=[],
+            skipped_existing=[MealieSyncIssue(name="Pasta", reason="clash")],
+        ),
+    )
+
+    result = runner.invoke(cli_module.app, ["sync-with-mealie"])
+
+    assert result.exit_code == 0
+    assert "- Pasta: clash" in result.output
+    assert "Failed" not in result.output
 
 
 def test_access_token_command_saves_token_without_printing_it(monkeypatch, tmp_path):

@@ -7,6 +7,16 @@ Unreleased
   silently replaced the first (and any earlier export of that name was lost).
   The exporters now append the recipe id, then a counter, until the name is
   free, and report the names actually written.
+- `sync-with-mealie` no longer leaves empty recipes behind or hides failures.
+  Creating a recipe posts a bare recipe first and fills it in afterwards; if a
+  later step failed, the empty, untagged recipe stayed in Mealie, and every
+  following sync skipped it silently as "Recipe already exists". Now the
+  partial recipe is deleted again when a create fails (if that delete also
+  fails, the leftover slug is reported). Connection errors and timeouts only
+  fail the affected recipe instead of aborting the sync. The command now lists
+  recipes skipped because Mealie already has a recipe with the same name and
+  recipes that failed (with the reason), and exits with status 1 when any
+  recipe failed.
 
 0.0.34 - 2026-06-16
 ===================
