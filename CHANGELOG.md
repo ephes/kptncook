@@ -2,6 +2,15 @@ Unreleased
 ==========
 
 ### Fixes
+- The `.env` file is now written atomically and owner-only. `kptncook setup`,
+  `kptncook kptncook-access-token` and the first-run scaffold used to truncate
+  the file and rewrite it in place, then `chmod 0600` it: a crash or full disk
+  in between left `.env` empty or partial (losing the Mealie password and API
+  key stored there), and a newly created file was readable by other users
+  until the `chmod`. The new content now goes to a 0600 temporary file in the
+  same directory, which is fsynced and moved over `.env`, so the old file stays
+  intact if the write fails. A symlinked `.env` keeps its link, and an
+  unreadable `.env` is no longer replaced by one holding a single key.
 - Paprika and Tandoor exports no longer overwrite existing files. Two recipes
   with the same title used to export to the same file name, so the second
   silently replaced the first (and any earlier export of that name was lost).
