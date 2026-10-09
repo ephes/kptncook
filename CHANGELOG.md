@@ -1,17 +1,21 @@
 Unreleased
 ==========
 
+0.0.35 - 2026-10-09
+===================
+
 ### Fixes
-- #90 Import fully identified recipes through Mealie's native ZIP endpoint
-  (v1 and v2/v3), avoiding orphaned skeletons and supporting distinct KptnCook
-  recipes with the same title. Preserve Mealie's assigned names and slugs, and
-  leave ambiguous network outcomes for the next identity-based sync to resolve
-  instead of deleting a potentially successful import. A Mealie version that
-  does not report a release number (such as a development build) uses the
-  v2/v3 import route.
-- Keep cover and step images as best-effort follow-ups, patching only step
+- #72 `sync-with-mealie` no longer creates duplicate recipes. Recipes are
+  imported through Mealie's native ZIP endpoint (v1 and v2/v3), avoiding
+  orphaned skeletons and supporting distinct KptnCook recipes with the same
+  title. Preserve Mealie's assigned names and slugs, and leave ambiguous
+  network outcomes for the next identity-based sync to resolve instead of
+  deleting a potentially successful import. A Mealie version that does not
+  report a release number (such as a development build) uses the v2/v3 import
+  route. Reported by @joshinils, fixed by @drachenbach in #90.
+- #90 Keep cover and step images as best-effort follow-ups, patching only step
   instructions rather than overwriting the imported recipe.
-- Report Mealie sync failures in CLI output and exit with a nonzero status,
+- #90 Report Mealie sync failures in CLI output and exit with a nonzero status,
   including name-collision errors previously treated as successful duplicates.
 - The `.env` file is now written atomically and owner-only. `kptncook setup`,
   `kptncook kptncook-access-token` and the first-run scaffold used to truncate
