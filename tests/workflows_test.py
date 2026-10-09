@@ -4,8 +4,9 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+from pydantic import ValidationError
+from pydantic_core import PydanticSerializationError
 
-from kptncook.mealie import RecipeCleanupError
 from kptncook.models import Recipe
 from kptncook.repositories import RecipeInDb
 from kptncook.services import repository as repository_service
@@ -109,7 +110,7 @@ def test_load_repository_recipes_reports_invalid_entries(monkeypatch, minimal):
     assert result.invalid_entries[0].reason == "steps: Field required"
 
 
-def test_sync_with_mealie_skips_duplicates_and_logs_other_failures(
+def test_sync_with_mealie_reports_name_collisions_and_other_failures(
     monkeypatch, minimal, caplog
 ):
     warning = InvalidStoredRecipe(
@@ -169,19 +170,16 @@ def test_sync_with_mealie_skips_duplicates_and_logs_other_failures(
     assert result.created_count == 1
     assert result.invalid_repository_entries == [warning]
     assert seen_ids == ["recipe-1", "recipe-2", "recipe-3"]
-    assert result.skipped_existing == [
-        workflows.MealieSyncIssue(
-            name="Minimal Recipe 1", reason=workflows.MEALIE_NAME_CLASH_REASON
-        )
-    ]
-    assert result.failed == [
-        workflows.MealieSyncIssue(
-            name="Minimal Recipe 2", reason="HTTP 500: upstream exploded"
-        )
-    ]
-    assert "Minimal Recipe 2" in caplog.text
+    assert "Minimal Recipe" in caplog.text
     assert "upstream exploded" in caplog.text
-    assert "Skipping recipe Minimal Recipe 1" in caplog.text
+    assert "Recipe already exists" in caplog.text
+    assert len(result.failed_recipes) == 2
+    assert result.failed_recipes[0].recipe_id == "recipe-1"
+    assert result.failed_recipes[0].recipe_name == "Minimal Recipe"
+    assert "HTTP 409" in result.failed_recipes[0].reason
+    assert "Recipe already exists" in result.failed_recipes[0].reason
+    assert "HTTP 500" in result.failed_recipes[1].reason
+    assert "upstream exploded" in result.failed_recipes[1].reason
 
 
 def _patch_sync_sources(monkeypatch, minimal, fake_client, count: int) -> None:
@@ -232,23 +230,20 @@ def test_sync_with_mealie_continues_after_connection_and_unexpected_errors(
 
     assert seen_ids == ["recipe-1", "recipe-2", "recipe-3"]
     assert result.created_count == 1
-    assert result.skipped_existing == []
-    assert result.failed == [
-        workflows.MealieSyncIssue(
-            name="Minimal Recipe 1", reason="Request failed: connection refused"
-        ),
-        workflows.MealieSyncIssue(
-            name="Minimal Recipe 2", reason="ValueError: unexpected payload"
-        ),
-    ]
+    assert len(result.failed_recipes) == 2
+    assert result.failed_recipes[0].recipe_name == "Minimal Recipe"
+    assert "Request failed: connection refused" in result.failed_recipes[0].reason
+    assert "outcome is unknown" in result.failed_recipes[0].reason
+    assert result.failed_recipes[1] == workflows.MealieSyncFailure(
+        "recipe-2", "Minimal Recipe", "ValueError: unexpected payload"
+    )
 
 
 def test_sync_with_mealie_reports_name_clash_with_other_kptncook_recipe(
     monkeypatch, minimal
 ):
-    # Mealie already holds a correctly tagged kptncook recipe with the same name
-    # but a different kptncook id: the skip is reported without claiming the
-    # existing recipe is not a kptncook recipe.
+    # Same title is not the same identity. A server-side collision remains a
+    # visible failure, including when the existing recipe is from KptnCook.
     class FakeClient:
         def create_recipe(self, recipe_to_create):
             raise _status_error(400, detail_message="Recipe already exists")
@@ -267,32 +262,10 @@ def test_sync_with_mealie_reports_name_clash_with_other_kptncook_recipe(
 
     result = workflows.sync_with_mealie_result()
 
-    assert result.failed == []
-    assert [issue.name for issue in result.skipped_existing] == ["Minimal Recipe 1"]
-    reason = result.skipped_existing[0].reason
-    assert "another KptnCook recipe with the same title" in reason
-    assert "not marked" not in reason
-
-
-def test_sync_with_mealie_reports_partial_recipe_left_behind(monkeypatch, minimal):
-    class FakeClient:
-        def create_recipe(self, recipe_to_create):
-            cleanup_error = httpx.ConnectError("gone")
-            try:
-                raise httpx.ReadTimeout("slow")
-            except httpx.ReadTimeout as exc:
-                raise RecipeCleanupError("minimal-recipe-1", cleanup_error) from exc
-
-    _patch_sync_sources(monkeypatch, minimal, FakeClient(), 1)
-
-    result = workflows.sync_with_mealie_result()
-
-    assert result.created_count == 0
-    assert len(result.failed) == 1
-    reason = result.failed[0].reason
-    assert reason.startswith("Request failed: slow; ")
-    assert "could not delete the partially created Mealie recipe" in reason
-    assert "Delete recipe 'minimal-recipe-1' in Mealie" in reason
+    assert len(result.failed_recipes) == 1
+    assert result.failed_recipes[0].recipe_name == "Minimal Recipe"
+    assert "Recipe already exists" in result.failed_recipes[0].reason
+    assert result.failed_recipes[0].recipe_id == "recipe-1"
 
 
 def test_sync_with_mealie_prefilters_recipes_already_present_in_mealie(
@@ -344,6 +317,116 @@ def test_sync_with_mealie_prefilters_recipes_already_present_in_mealie(
     assert result.created_count == 1
     assert result.invalid_repository_entries == []
     assert seen_ids == ["recipe-2"]
+    assert result.failed_recipes == []
+
+
+def test_sync_result_defaults_do_not_share_failure_lists():
+    first = workflows.SyncWithMealieResult(0, [])
+    second = workflows.SyncWithMealieResult(0, [])
+
+    assert first.failed_recipes == []
+    assert first.failed_recipes is not second.failed_recipes
+
+
+@pytest.mark.parametrize(
+    "error, expected_reason",
+    [
+        (httpx.ReadTimeout("response timed out"), "ReadTimeout"),
+        (httpx.ConnectError("connection refused"), "connection refused"),
+        (httpx.HTTPError("transport failed"), "transport failed"),
+        (ValueError("invalid recipe payload"), "invalid recipe payload"),
+        (TypeError("not JSON serializable"), "not JSON serializable"),
+        (
+            ValidationError.from_exception_data(
+                "MealieRecipe", [{"type": "missing", "loc": ("name",), "input": {}}]
+            ),
+            "Field required",
+        ),
+        (
+            PydanticSerializationError("unsupported field type"),
+            "unsupported field type",
+        ),
+    ],
+)
+def test_sync_with_mealie_continues_after_create_failure(
+    monkeypatch, minimal, error, expected_reason
+):
+    recipes = [_recipe(minimal, oid=f"recipe-{index}") for index in (1, 2)]
+    created_ids = []
+
+    class FakeClient:
+        def create_recipe(self, recipe):
+            created_ids.append(recipe.extras["kptncook_id"])
+            if len(created_ids) == 1:
+                raise error
+            return SimpleNamespace(slug="created-recipe-2")
+
+    monkeypatch.setattr(workflows, "get_mealie_client", FakeClient)
+    monkeypatch.setattr(workflows, "get_kptncook_recipes_from_mealie", lambda _: [])
+    monkeypatch.setattr(
+        workflows,
+        "load_kptncook_recipes_from_repository",
+        lambda: RepositoryRecipesResult(recipes, []),
+    )
+    result = workflows.sync_with_mealie_result()
+
+    assert result.created_count == 1
+    assert created_ids == ["recipe-1", "recipe-2"]  # No retry or deletion.
+    assert len(result.failed_recipes) == 1
+    failure = result.failed_recipes[0]
+    assert failure.recipe_id == "recipe-1"
+    assert failure.recipe_name == "Minimal Recipe"
+    assert expected_reason in failure.reason
+    if isinstance(error, httpx.HTTPError):
+        assert "next sync" in failure.reason.lower()
+        assert "stored identity" in failure.reason.lower()
+    if isinstance(error, httpx.TimeoutException):
+        assert "unknown" in failure.reason.lower()
+
+
+def test_sync_with_mealie_continues_after_conversion_failure(monkeypatch, minimal):
+    recipes = [_recipe(minimal, oid=f"recipe-{index}") for index in (1, 2)]
+    real_convert = workflows.kptncook_to_mealie
+
+    def convert(recipe):
+        if recipe.id.oid == "recipe-1":
+            raise ValueError("invalid conversion")
+        return real_convert(recipe)
+
+    class FakeClient:
+        def create_recipe(self, recipe):
+            return SimpleNamespace(slug="created-recipe-2")
+
+    monkeypatch.setattr(workflows, "get_mealie_client", FakeClient)
+    monkeypatch.setattr(workflows, "get_kptncook_recipes_from_mealie", lambda _: [])
+    monkeypatch.setattr(
+        workflows,
+        "load_kptncook_recipes_from_repository",
+        lambda: RepositoryRecipesResult(recipes, []),
+    )
+    monkeypatch.setattr(workflows, "kptncook_to_mealie", convert)
+
+    result = workflows.sync_with_mealie_result()
+
+    assert result.created_count == 1
+    assert len(result.failed_recipes) == 1
+    assert result.failed_recipes[0].recipe_id == "recipe-1"
+    assert "invalid conversion" in result.failed_recipes[0].reason
+
+
+def test_sync_with_mealie_count_wrapper_does_not_hide_failures(monkeypatch):
+    monkeypatch.setattr(
+        workflows,
+        "sync_with_mealie_result",
+        lambda: workflows.SyncWithMealieResult(
+            created_count=1,
+            invalid_repository_entries=[],
+            failed_recipes=[workflows.MealieSyncFailure("recipe-1", "Soup", "bad")],
+        ),
+    )
+
+    with pytest.raises(workflows.UserFacingError, match="Soup.*recipe-1.*bad"):
+        workflows.sync_with_mealie()
 
 
 def test_backup_kptncook_favorites_resolves_and_saves_recipes(monkeypatch, minimal):

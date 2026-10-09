@@ -2,14 +2,17 @@ import datetime
 import io
 import json
 import logging
+import re
 import uuid
 from collections.abc import Callable
 from getpass import getpass
 from pathlib import Path
 from typing import Any
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import httpx
 from pydantic import UUID4, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
+from pydantic.alias_generators import to_camel
 
 from .exporter_utils import get_step_text
 from .config import get_settings
@@ -28,23 +31,11 @@ logger = logging.getLogger(__name__)
 ASSET_DOWNLOAD_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
 
-class RecipeCleanupError(Exception):
-    """Creating a recipe failed and its partial Mealie recipe could not be deleted.
-
-    ``__cause__`` holds the error that made the create fail; ``cleanup_error``
-    holds the error raised while deleting the partial recipe at ``slug``.
-    """
-
-    def __init__(self, slug: str, cleanup_error: BaseException):
-        super().__init__(
-            f"could not delete the partially created Mealie recipe {slug!r}: "
-            f"{cleanup_error}"
-        )
-        self.slug = slug
-        self.cleanup_error = cleanup_error
+class MealieModel(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
-class NameIsIdModel(BaseModel):
+class NameIsIdModel(MealieModel):
     model_config = ConfigDict(frozen=True)
 
     name: str
@@ -88,7 +79,7 @@ class RecipeUnit(UnitFoodBase):
     abbreviation: str = ""
 
 
-class RecipeIngredient(BaseModel):
+class RecipeIngredient(MealieModel):
     referenceId: UUID4 | None = None
     title: str | None = None
     note: str | None = None
@@ -98,7 +89,7 @@ class RecipeIngredient(BaseModel):
     quantity: float | None = 1
 
 
-class RecipeSummary(BaseModel):
+class RecipeSummary(MealieModel):
     id: UUID4 | None = None
 
     user_id: UUID4 | None = Field(None, alias="userId")
@@ -115,7 +106,7 @@ class RecipeSummary(BaseModel):
     perform_time: str | None = None
 
     description: str | None = ""
-    recipe_category: list[str] | None = []
+    recipe_category: list[RecipeCategory | str] | None = []
     tags: list[RecipeTag] | None = []
     # tags: list[RecipeTag | str] | None = []
     tools: list[RecipeTool] = []
@@ -128,18 +119,18 @@ class RecipeSummary(BaseModel):
     date_updated: datetime.datetime | None = None
 
 
-class IngredientReference(BaseModel):
+class IngredientReference(MealieModel):
     referenceId: UUID4 | None = None
 
 
-class RecipeStep(BaseModel):
+class RecipeStep(MealieModel):
     title: str | None = ""
     text: str
     ingredientReferences: list[IngredientReference] = []
     image: Image | None = None
 
 
-class Nutrition(BaseModel):
+class Nutrition(MealieModel):
     calories: str | None = None
     fatContent: str | None = None
     proteinContent: str | None = None
@@ -149,7 +140,7 @@ class Nutrition(BaseModel):
     sugarContent: str | None = None
 
 
-class RecipeSettings(BaseModel):
+class RecipeSettings(MealieModel):
     public: bool = True
     show_nutrition: bool = True
     show_assets: bool = False
@@ -159,13 +150,13 @@ class RecipeSettings(BaseModel):
     locked: bool = False
 
 
-class RecipeAsset(BaseModel):
+class RecipeAsset(MealieModel):
     name: str
     icon: str
     file_name: str | None = None
 
 
-class RecipeNote(BaseModel):
+class RecipeNote(MealieModel):
     title: str
     text: str | None = None
 
@@ -196,6 +187,7 @@ class MealieApiClient(BaseHttpClient):
         super().__init__(
             str(base_url), headers={}, timeout=DEFAULT_REQUEST_TIMEOUT, client=client
         )
+        self._archive_endpoint: str | None = None
 
     @property
     def logged_in(self):
@@ -247,43 +239,6 @@ class MealieApiClient(BaseHttpClient):
     def _build_recipestep_text(recipe_uuid, text, image_name):
         return f'{text} <img src="/api/media/recipes/{recipe_uuid}/assets/{image_name}" height="100%" width="100%"/>'
 
-    def enrich_recipe_with_step_images(self, recipe):
-        assets = []
-        for instruction in recipe.recipe_instructions:
-            try:
-                asset_properties = self.upload_asset(recipe.slug, instruction.image)
-            except httpx.HTTPError as exc:
-                logger.warning(
-                    "Skipping step image upload for recipe %s: %s", recipe.slug, exc
-                )
-                continue
-            except Exception:
-                logger.exception(
-                    "Skipping step image upload for recipe %s due to unexpected error",
-                    recipe.slug,
-                )
-                continue
-            uploaded_image_name = asset_properties["fileName"]
-            instruction.text = self._build_recipestep_text(
-                recipe.id, instruction.text, uploaded_image_name
-            )
-            assets.append(
-                RecipeAsset(
-                    name=asset_properties["name"],
-                    icon=asset_properties["icon"],
-                    file_name=asset_properties["fileName"],
-                )
-            )
-        recipe.assets = assets
-        return recipe
-
-    def _post_recipe_trunk_and_get_slug(self, recipe_name):
-        data = {"name": recipe_name}
-        r = self.post("/recipes", json=data)
-        r.raise_for_status()
-        slug = r.json()
-        return slug
-
     def _scrape_image_for_recipe(self, recipe, slug):
         if not recipe.image_url:
             return
@@ -295,16 +250,6 @@ class MealieApiClient(BaseHttpClient):
             headers={"Content-Type": "application/json"},
         )
         r.raise_for_status()
-
-    def _update_user_and_group_id(self, recipe, slug):
-        recipe_detail_path = f"/recipes/{slug}"
-        r = self.get(recipe_detail_path)
-        r.raise_for_status()
-        recipe_details = r.json()
-        update_attributes = ["id", "userId", "groupId"]
-        updated_details = {k: recipe_details[k] for k in update_attributes}
-        recipe = RecipeWithImage(**(recipe.dict() | updated_details))
-        return recipe
 
     def _get_page(self, endpoint_name, page_num, per_page=50):
         r = self.get(f"/{endpoint_name}?page={page_num}&perPage={per_page}")
@@ -399,65 +344,121 @@ class MealieApiClient(BaseHttpClient):
         recipe.tags = [name_to_tag_with_id[tag.name] for tag in recipe_tags]
         return recipe
 
-    def _put_recipe(self, recipe, slug) -> httpx.Response:
-        recipe_detail_path = f"/recipes/{slug}"
-        r = self.put(
-            recipe_detail_path,
-            content=recipe.model_dump_json(),
-            headers={"Content-Type": "application/json"},
+    def _get_archive_endpoint(self) -> str:
+        if self._archive_endpoint is None:
+            response = self.get("/app/about")
+            response.raise_for_status()
+            version = str(response.json()["version"])
+            # Mealie 2 and 3 renamed the legacy v1 create routes.
+            match = re.match(r"v?(\d+)\.", version)
+            if match is None:
+                # Development builds may not report a release number. Assume a
+                # current Mealie; a wrong route fails without creating anything.
+                logger.warning(
+                    "Unrecognized Mealie version %r; using the Mealie 2+ import route",
+                    version,
+                )
+            self._archive_endpoint = (
+                "/recipes/create-from-zip"
+                if match is not None and int(match.group(1)) < 2
+                else "/recipes/create/zip"
+            )
+        return self._archive_endpoint
+
+    def _import_recipe_archive(self, recipe: RecipeWithImage) -> dict[str, Any]:
+        # Native archives use snake_case, unlike the camelCase HTTP API. Omit
+        # remote identity and media: Mealie assigns ownership, IDs and collisions.
+        payload = recipe.model_dump(
+            mode="json",
+            exclude_none=True,
+            exclude={
+                "id": True,
+                "user_id": True,
+                "group_id": True,
+                "slug": True,
+                "image": True,
+                "image_url": True,
+                "recipe_instructions": {"__all__": {"image"}},
+            },
         )
-        r.raise_for_status()
-        return r
+        archive_bytes = io.BytesIO()
+        with ZipFile(archive_bytes, "w", compression=ZIP_DEFLATED) as archive:
+            archive.writestr("recipe.json", json.dumps(payload))
+        response = self.post(
+            self._get_archive_endpoint(),
+            files={
+                "archive": ("recipe.zip", archive_bytes.getvalue(), "application/zip")
+            },
+        )
+        # Never retry or roll back an ambiguous import. Identity was present at
+        # commit, so the next inventory pass can discover a completed recipe.
+        response.raise_for_status()
+        slug = TypeAdapter(str).validate_python(response.json())
+        response = self.get(f"/recipes/{slug}")
+        response.raise_for_status()
+        return response.json()
 
-    def _update_recipe(self, recipe, slug):
-        return Recipe.model_validate(self._put_recipe(recipe, slug).json())
+    def _attach_step_images(
+        self, recipe: Recipe, stored: dict[str, Any], source: RecipeWithImage
+    ) -> Recipe:
+        instructions = stored.get(
+            "recipeInstructions", stored.get("recipe_instructions", [])
+        )
+        changed = False
+        for instruction, source_step in zip(
+            instructions, source.recipe_instructions or []
+        ):
+            if source_step.image is None:
+                continue
+            try:
+                asset = self.upload_asset(recipe.slug, source_step.image)
+                # Keep server-assigned step IDs, references and other fields.
+                instruction["text"] = self._build_recipestep_text(
+                    recipe.id, instruction["text"], asset["fileName"]
+                )
+                changed = True
+            except Exception:
+                logger.warning(
+                    "Skipping step image for recipe %s", recipe.slug, exc_info=True
+                )
+        if changed:
+            response = self.request(
+                "PATCH",
+                f"/recipes/{recipe.slug}",
+                json={"recipeInstructions": instructions},
+            )
+            response.raise_for_status()
+            return Recipe.model_validate(response.json())
+        return recipe
 
-    def _fill_recipe_trunk(self, recipe, slug) -> httpx.Response:
-        recipe.slug = slug
-        self._scrape_image_for_recipe(recipe, slug)
-        recipe = self._update_user_and_group_id(recipe, slug)
+    def create_recipe(self, recipe: RecipeWithImage) -> Recipe:
+        self._get_archive_endpoint()
+        recipe = recipe.model_copy(deep=True)
         recipe = self._update_item_ids(recipe, "units", RecipeUnit, "unit")
         recipe = self._update_item_ids(recipe, "foods", RecipeFood, "food")
         recipe = self._update_tag_ids(recipe)
-        recipe = self.enrich_recipe_with_step_images(recipe)
-        return self._put_recipe(recipe, slug)
-
-    def create_recipe(self, recipe):
-        """Create ``recipe`` in Mealie.
-
-        Mealie only creates a recipe from a name, so this posts a bare "trunk"
-        recipe first and fills it with a final PUT. If any step between the
-        trunk POST and a successful PUT fails, the trunk is deleted again
-        (best-effort) and the original error is re-raised. If that delete
-        fails too, ``RecipeCleanupError`` is raised from the original error so
-        the caller can report the leftover slug.
-        """
-        slug = self._post_recipe_trunk_and_get_slug(recipe.name)
-        logger.debug("Created Mealie recipe slug: %s", slug)
+        stored = self._import_recipe_archive(recipe)
+        created = Recipe.model_validate(stored)
+        for key in ("source", "kptncook_id"):
+            if key in recipe.extras and created.extras.get(key) != recipe.extras[key]:
+                raise ValueError(
+                    f"Imported recipe {created.slug} is missing matching identity "
+                    "extras; delete it in Mealie before the next sync to avoid "
+                    "a duplicate"
+                )
         try:
-            response = self._fill_recipe_trunk(recipe, slug)
-        except BaseException as exc:
-            self._delete_partial_recipe(slug, exc)
-            raise
-        return Recipe.model_validate(response.json())
-
-    def _delete_partial_recipe(self, slug: str, error: BaseException) -> None:
-        logger.warning(
-            "Creating Mealie recipe %s failed (%s); deleting the partial recipe",
-            slug,
-            error,
-        )
-        try:
-            self.delete_via_slug(slug)
-        except Exception as cleanup_error:
-            logger.error(
-                "Could not delete partially created Mealie recipe %s: %s",
-                slug,
-                cleanup_error,
+            self._scrape_image_for_recipe(recipe, created.slug)
+        except Exception:
+            logger.warning(
+                "Skipping cover image for recipe %s", created.slug, exc_info=True
             )
-            if isinstance(error, Exception):
-                raise RecipeCleanupError(slug, cleanup_error) from error
-            # Let KeyboardInterrupt and friends propagate unchanged.
+        try:
+            created = self._attach_step_images(created, stored, recipe)
+        except Exception:
+            logger.warning(
+                "Skipping step image update for recipe %s", created.slug, exc_info=True
+            )
+        return created
 
     @staticmethod
     def validate_recipes(recipes):

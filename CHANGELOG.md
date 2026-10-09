@@ -2,6 +2,17 @@ Unreleased
 ==========
 
 ### Fixes
+- #90 Import fully identified recipes through Mealie's native ZIP endpoint
+  (v1 and v2/v3), avoiding orphaned skeletons and supporting distinct KptnCook
+  recipes with the same title. Preserve Mealie's assigned names and slugs, and
+  leave ambiguous network outcomes for the next identity-based sync to resolve
+  instead of deleting a potentially successful import. A Mealie version that
+  does not report a release number (such as a development build) uses the
+  v2/v3 import route.
+- Keep cover and step images as best-effort follow-ups, patching only step
+  instructions rather than overwriting the imported recipe.
+- Report Mealie sync failures in CLI output and exit with a nonzero status,
+  including name-collision errors previously treated as successful duplicates.
 - The `.env` file is now written atomically and owner-only. `kptncook setup`,
   `kptncook kptncook-access-token` and the first-run scaffold used to truncate
   the file and rewrite it in place, then `chmod 0600` it: a crash or full disk
@@ -16,16 +27,6 @@ Unreleased
   silently replaced the first (and any earlier export of that name was lost).
   The exporters now append the recipe id, then a counter, until the name is
   free, and report the names actually written.
-- `sync-with-mealie` no longer leaves empty recipes behind or hides failures.
-  Creating a recipe posts a bare recipe first and fills it in afterwards; if a
-  later step failed, the empty, untagged recipe stayed in Mealie, and every
-  following sync skipped it silently as "Recipe already exists". Now the
-  partial recipe is deleted again when a create fails (if that delete also
-  fails, the leftover slug is reported). Connection errors and timeouts only
-  fail the affected recipe instead of aborting the sync. The command now lists
-  recipes skipped because Mealie already has a recipe with the same name and
-  recipes that failed (with the reason), and exits with status 1 when any
-  recipe failed.
 
 ### Security
 - Refresh vulnerable locked dependencies flagged by `pip-audit`: anyio 4.14.2,

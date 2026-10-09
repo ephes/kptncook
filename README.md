@@ -137,20 +137,26 @@ $ kptncook recipes-with-ingredients --ingredient-id 123,456 --save
 
 `sync-with-mealie` (and `sync`) creates every locally saved recipe that is not
 yet in Mealie. Recipes are matched by the KptnCook id stored in the Mealie
-recipe's extras (`source: kptncook`), not by name. The summary means:
+recipe's extras (`source: kptncook`), not by name. A native ZIP import creates
+the complete recipe with those identity extras already present. Distinct
+KptnCook recipes with the same title can both be imported: Mealie assigns a
+unique name and slug, which subsequent updates preserve.
+
+Cover and step images are best-effort follow-ups. A media failure does not
+undo the core import, and step-image updates patch only the instructions.
+The summary means:
 
 * `Created N recipes`: recipes newly created in Mealie.
-* `Skipped N recipes because Mealie already has a recipe with the same name`:
-  Mealie refuses a second recipe with the same name. The existing one may be
-  another KptnCook recipe with the same title, your own recipe, or one left over
-  from a failed sync whose cleanup also failed. Rename or delete it in Mealie
-  and sync again to import the skipped recipe. Skips do not change the exit
-  status.
-* `Failed to create N recipes`: each line names the recipe and the reason (HTTP
-  status, connection error, timeout). Other recipes are still synced, and the
-  command exits with status 1. A failed recipe is deleted from Mealie again, so
-  the next sync retries it cleanly. If that delete fails too, the reason names
-  the slug of the partial recipe to delete by hand.
+* `Failed to sync N recipes`: each line names the recipe, its KptnCook id and
+  the reason (HTTP status, connection error, timeout or local processing
+  error). Other recipes are still synced, and the command exits with status 1.
+  Name-collision errors are failures, not successful identity matches.
+
+A timeout or malformed response may occur after Mealie committed the import.
+The client does not retry or delete the recipe after such an ambiguous result.
+Run the sync again: it first checks stored identity extras and skips any
+recipe already imported. Do not delete a recipe merely because its import
+response was lost.
 
 ### Export metadata
 
@@ -426,6 +432,65 @@ Run tests using uv:
 
 ```shell
 $ uv run pytest
+```
+
+## Disposable Mealie Integration Tests
+
+`tests/mealie_integration_test.py` exercises real HTTP against an externally
+provisioned **disposable** Mealie instance. It is skipped by default and requires
+all three variables below; never point it at your personal or production server.
+The URL is the API base (including `/api`), and the token must permit recipe
+creation, inventory reads, media uploads, and deletion.
+
+```shell
+$ export MEALIE_TEST_URL=http://127.0.0.1:19001/api
+$ read -rs MEALIE_TEST_TOKEN  # paste a disposable server token, then press Enter
+$ export MEALIE_TEST_TOKEN
+$ export MEALIE_TEST_DISPOSABLE=1
+$ uv run pytest -q tests/mealie_integration_test.py
+$ unset MEALIE_TEST_TOKEN MEALIE_TEST_URL MEALIE_TEST_DISPOSABLE
+```
+
+Run the same tests separately against pinned
+`ghcr.io/mealie-recipes/mealie:v1.12.0` and
+`ghcr.io/mealie-recipes/mealie:v3.28.0` instances. For example, start an isolated
+SQLite container on a localhost-only port (use another name/port for the other
+version):
+
+```shell
+$ docker run -d --name kptncook-mealie-v1-test \
+    -p 127.0.0.1:19001:9000 \
+    -e DB_ENGINE=sqlite -e ALLOW_SIGNUP=false \
+    ghcr.io/mealie-recipes/mealie:v1.12.0
+```
+
+Wait until `GET /api/app/about` succeeds before obtaining a token from the
+instance's login/API-token UI. The upstream installation checklists for
+[v1.12.0](https://github.com/mealie-recipes/mealie/blob/v1.12.0/docs/docs/documentation/getting-started/installation/installation-checklist.md)
+and [v3.28.0](https://github.com/mealie-recipes/mealie/blob/v3.28.0/docs/docs/documentation/getting-started/installation/installation-checklist.md)
+list the initial login as `changeme@example.com` / `MyPassword` (unless overridden).
+The client discovers the server version via
+`GET /app/about`; no test-specific version override is needed. Keep tokens out of
+logs, shell history, and tracked files. No KptnCook account or external KptnCook
+media is used: repository/conversion fixtures are local, and a tiny step image is
+served from an ephemeral localhost HTTP server.
+
+Coverage includes same-title recipes with distinct KptnCook identities, a
+second sync with no writes, ingredients/tags/instructions/nutrition roundtrip,
+and step-media enrichment via PATCH. A real HTTP transport also injects a read
+timeout **after** the server successfully commits an archive import; the next
+sync must discover the persisted identity without deleting or retrying it.
+Extras assertions allow Mealie to add ownership metadata.
+
+A `finally` inventory cleanup deletes only recipes carrying the exact randomly
+generated test identities, even when a committed response is lost. Recipe tags,
+foods, and units may remain, so discard the whole instance after testing. Stop
+and remove every test container (including after a failed run):
+
+```shell
+$ docker rm -f -v kptncook-mealie-v1-test
+# If provisioned:
+$ docker rm -f -v kptncook-mealie-v3-test
 ```
 
 ## Lines of Code
