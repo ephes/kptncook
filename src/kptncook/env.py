@@ -5,6 +5,7 @@ Environment configuration helpers for kptncook.
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 
 DEFAULT_API_KEY = "6q7QNKy-oIgk-IMuWisJ-jfN7s6"
@@ -63,15 +64,63 @@ def _tighten_env_permissions(env_path: Path) -> None:
         pass
 
 
+def _atomic_write_env(env_path: Path, content: str) -> None:
+    """Replace ``env_path`` with ``content`` without a window of exposure or loss.
+
+    The content goes to a temporary file in the same directory that is created
+    owner-only (``mkstemp`` uses ``O_CREAT | O_EXCL`` and mode 0600), is fsynced
+    and then moved over the target with ``os.replace``. Readers see either the
+    old file or the complete new one, never an empty or partial file, and the
+    secrets are never readable by other users. If ``env_path`` is a symlink the
+    file it points to is replaced, so the link itself is kept.
+    """
+    target = Path(os.path.realpath(env_path)) if env_path.is_symlink() else env_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=target.parent, prefix=f".{target.name}.", suffix=".tmp"
+    )
+    tmp_path = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w") as handle:
+            if hasattr(os, "fchmod"):
+                os.fchmod(handle.fileno(), ENV_FILE_MODE)
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, target)
+    except BaseException:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+        raise
+    _fsync_directory(target.parent)
+
+
+def _fsync_directory(directory: Path) -> None:
+    """Best-effort fsync of a directory so a rename survives a crash."""
+    if os.name == "nt":
+        return
+    try:
+        dir_fd = os.open(directory, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(dir_fd)
+    except OSError:
+        pass
+    finally:
+        os.close(dir_fd)
+
+
 def scaffold_env_file(env_path: Path = ENV_PATH) -> bool:
     try:
         if env_path.exists() and env_path.stat().st_size > 0:
             return False
     except OSError:
         return False
-    env_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        env_path.write_text(ENV_TEMPLATE)
+        _atomic_write_env(env_path, ENV_TEMPLATE)
     except OSError:
         return False
     _tighten_env_permissions(env_path)
@@ -94,10 +143,15 @@ def read_env_values(env_path: Path) -> dict[str, str]:
 
 
 def upsert_env_value(env_path: Path, key: str, value: str) -> None:
+    """Set ``key`` in the env file, keeping every other line.
+
+    Only a missing file counts as empty. Any other read error is raised so an
+    unreadable file is never replaced by one that holds just ``key``.
+    """
     try:
         content = env_path.read_text()
         lines = content.splitlines()
-    except OSError:
+    except FileNotFoundError:
         lines = []
     updated = False
     new_lines: list[str] = []
@@ -111,6 +165,5 @@ def upsert_env_value(env_path: Path, key: str, value: str) -> None:
         if new_lines and new_lines[-1].strip() != "":
             new_lines.append("")
         new_lines.append(f"{key}={value}")
-    env_path.parent.mkdir(parents=True, exist_ok=True)
-    env_path.write_text("\n".join(new_lines) + "\n")
+    _atomic_write_env(env_path, "\n".join(new_lines) + "\n")
     _tighten_env_permissions(env_path)

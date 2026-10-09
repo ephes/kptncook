@@ -68,7 +68,7 @@ module-name = ["kptncook", "kptncook_setup"]
 
 [tool.slopscope]
 exclude_languages = ["JSON", "Markdown"]
-exclude_dirs = [".beads", "notebooks"]
+exclude_dirs = ["notebooks"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"

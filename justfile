@@ -61,23 +61,9 @@ clean-build:
 
 # Remove Python file artifacts
 clean-pyc:
-    find . \( -path "./.venv" -o -path "./.beads" -o -path "./.git" \) -prune -o -name '*.pyc' -exec rm -f {} +
-    find . \( -path "./.venv" -o -path "./.beads" -o -path "./.git" \) -prune -o -name '*.pyo' -exec rm -f {} +
-    find . \( -path "./.venv" -o -path "./.beads" -o -path "./.git" \) -prune -o -name '*~' -exec rm -f {} +
+    find . \( -path "./.venv" -o -path "./.git" \) -prune -o -name '*.pyc' -exec rm -f {} +
+    find . \( -path "./.venv" -o -path "./.git" \) -prune -o -name '*.pyo' -exec rm -f {} +
+    find . \( -path "./.venv" -o -path "./.git" \) -prune -o -name '*~' -exec rm -f {} +
 
 # Remove all build and Python artifacts
 clean: clean-build clean-pyc
-
-# Beadsflow autopilot helpers (local checkout)
-beadsflow-dry EPIC:
-    uv run --project ../beadsflow beadsflow run {{EPIC}} --dry-run --verbose
-
-beadsflow-once EPIC:
-    uv run --project ../beadsflow beadsflow run {{EPIC}} --once --verbose
-
-beadsflow-run EPIC:
-    uv run --project ../beadsflow beadsflow run {{EPIC}} --interval 30 --verbose
-
-# Import GitHub issues into Beads epics
-beads-import-gh-issues *ARGS:
-    uv run python scripts/import_github_issues_to_beads.py {{ARGS}}

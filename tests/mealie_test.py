@@ -350,3 +350,14 @@ def test_kptncook_to_mealie_allows_missing_image_url():
     mealie_recipe = kptncook_to_mealie(fake_recipe, api_key="test")
 
     assert mealie_recipe.image_url is None
+
+
+def test_delete_via_slug_accepts_empty_response():
+    def handle(request):
+        assert request.method == "DELETE"
+        assert request.url.path == "/api/recipes/test"
+        return httpx.Response(204)
+
+    with httpx.Client(transport=httpx.MockTransport(handle)) as http:
+        client = MealieApiClient("http://mealie.local/api", client=http)
+        assert client.delete_via_slug("test") is None

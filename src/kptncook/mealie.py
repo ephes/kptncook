@@ -390,7 +390,7 @@ class MealieApiClient(BaseHttpClient):
         recipe.tags = [name_to_tag_with_id[tag.name] for tag in recipe_tags]
         return recipe
 
-    def _update_recipe(self, recipe, slug):
+    def _put_recipe(self, recipe, slug) -> httpx.Response:
         recipe_detail_path = f"/recipes/{slug}"
         r = self.put(
             recipe_detail_path,
@@ -398,7 +398,10 @@ class MealieApiClient(BaseHttpClient):
             headers={"Content-Type": "application/json"},
         )
         r.raise_for_status()
-        return Recipe.model_validate(r.json())
+        return r
+
+    def _update_recipe(self, recipe, slug):
+        return Recipe.model_validate(self._put_recipe(recipe, slug).json())
 
     def _get_archive_endpoint(self) -> str:
         if self._archive_endpoint is None:
@@ -541,7 +544,7 @@ class MealieApiClient(BaseHttpClient):
     def delete_via_slug(self, slug):
         r = self.delete(f"/recipes/{slug}")
         r.raise_for_status()
-        return r.json()
+        return r.json() if r.content else None
 
     def get_via_slug(self, slug):
         r = self.get(f"/recipes/{slug}")

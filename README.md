@@ -133,6 +133,31 @@ $ kptncook ingredients-popular
 $ kptncook recipes-with-ingredients --ingredient-id 123,456 --save
 ```
 
+### Mealie sync
+
+`sync-with-mealie` (and `sync`) creates every locally saved recipe that is not
+yet in Mealie. Recipes are matched by the KptnCook id stored in the Mealie
+recipe's extras (`source: kptncook`), not by name. A native ZIP import creates
+the complete recipe with those identity extras already present. Distinct
+KptnCook recipes with the same title can both be imported: Mealie assigns a
+unique name and slug, which subsequent updates preserve.
+
+Cover and step images are best-effort follow-ups. A media failure does not
+undo the core import, and step-image updates patch only the instructions.
+The summary means:
+
+* `Created N recipes`: recipes newly created in Mealie.
+* `Failed to sync N recipes`: each line names the recipe, its KptnCook id and
+  the reason (HTTP status, connection error, timeout or local processing
+  error). Other recipes are still synced, and the command exits with status 1.
+  Name-collision errors are failures, not successful identity matches.
+
+A timeout or malformed response may occur after Mealie committed the import.
+The client does not retry or delete the recipe after such an ambiguous result.
+Run the sync again: it first checks stored identity extras and skips any
+recipe already imported. Do not delete a recipe merely because its import
+response was lost.
+
 ### Export metadata
 
 Exports to Mealie and Tandoor include KptnCook active tags as tags/keywords
@@ -145,6 +170,14 @@ and instructions. Section headings and image alt text follow `KPTNCOOK_LANG`
 (German, English, Spanish, French, and Portuguese are recognized; other
 languages fall back to English), and `<timer>` placeholders in steps are
 replaced with their durations.
+
+The Paprika and Tandoor exports write their files into the current directory
+and never overwrite an existing file. If the preferred name (the asciified
+recipe title, or `allrecipes.paprikarecipes` for a Paprika export of several
+recipes) is taken, for example by an earlier export or by a second recipe with
+the same title, the recipe id and then a counter are appended
+(`Title-<recipe id>.zip`, `Title-<recipe id>-2.zip`, `allrecipes-2.paprikarecipes`).
+The command output lists the names that were actually written.
 
 ### Repository warnings
 
@@ -261,7 +294,7 @@ and other non-config commands do not force `.env` validation up front.
 
 Then set environment variables in the `~/.kptncook/.env` file (or directly in your shell). You'll need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie, set `MEALIE_API_TOKEN` or `MEALIE_USERNAME`/`MEALIE_PASSWORD`.
 
-When kptncook creates or updates `~/.kptncook/.env`, it applies owner-only read/write permissions (`0600`) where the platform supports it, because the file may contain access tokens, passwords, or trusted shell commands.
+When kptncook creates or updates `~/.kptncook/.env`, it applies owner-only read/write permissions (`0600`) where the platform supports it, because the file may contain access tokens, passwords, or trusted shell commands. Updates are written to an owner-only temporary file next to `.env` and then moved into place, so a failed write leaves the previous file intact.
 
 **Important:** The `.env` file must be created in the `~/.kptncook/` directory, NOT in the installation directory or by editing the `kptncook` executable.
 
@@ -370,23 +403,6 @@ Install the git hooks:
 $ uv run prek install -f
 ```
 
-## Beads Setup (Required)
-
-This repo uses Beads for issue tracking, and `.beads/` is committed.
-
-```shell
-$ bd onboard
-```
-
-If `bd onboard` is not available:
-
-```shell
-$ bd init
-$ bd hooks install
-```
-
-If your global gitignore ignores `.beads/`, remove `**/.beads/` or use `git add -f`.
-
 ## Quality Gates (Required)
 
 ```shell
@@ -492,27 +508,6 @@ counting when `cloc` is not installed. Compared to the previous project-local
 counter, totals no longer include that removed counter implementation itself;
 for example, the previous `cloc` total was 51 files and 6867 code lines, while
 the migrated `slopscope` report is 50 files and 6437 code lines.
-
-## Beadsflow
-
-Use the local beadsflow checkout:
-
-```shell
-$ just beadsflow-dry <epic-id>
-$ just beadsflow-once <epic-id>
-$ just beadsflow-run <epic-id>
-```
-
-## GitHub Issue Import
-
-Import GitHub issues into Beads epics (open issues by default), including
-comments. The importer is idempotent and uses `external_ref` as `gh-<number>`.
-
-```shell
-$ just beads-import-gh-issues
-$ just beads-import-gh-issues --repo OWNER/REPO --state open --limit 500
-$ just beads-import-gh-issues --dry-run
-```
 
 ## Release Process
 

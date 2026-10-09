@@ -11,6 +11,27 @@ Unreleased
   instructions rather than overwriting the imported recipe.
 - Report Mealie sync failures in CLI output and exit with a nonzero status,
   including name-collision errors previously treated as successful duplicates.
+- The `.env` file is now written atomically and owner-only. `kptncook setup`,
+  `kptncook kptncook-access-token` and the first-run scaffold used to truncate
+  the file and rewrite it in place, then `chmod 0600` it: a crash or full disk
+  in between left `.env` empty or partial (losing the Mealie password and API
+  key stored there), and a newly created file was readable by other users
+  until the `chmod`. The new content now goes to a 0600 temporary file in the
+  same directory, which is fsynced and moved over `.env`, so the old file stays
+  intact if the write fails. A symlinked `.env` keeps its link, and an
+  unreadable `.env` is no longer replaced by one holding a single key.
+- Paprika and Tandoor exports no longer overwrite existing files. Two recipes
+  with the same title used to export to the same file name, so the second
+  silently replaced the first (and any earlier export of that name was lost).
+  The exporters now append the recipe id, then a counter, until the name is
+  free, and report the names actually written.
+
+### Security
+- Refresh vulnerable locked dependencies flagged by `pip-audit`: anyio 4.14.2,
+  bleach 6.4.0, click 8.3.3, idna 3.15, jupyter-server 2.21.0, jupyterlab
+  4.5.11, mistune 3.3.3, nbconvert 7.17.1, pydantic-settings 2.14.2, pygments
+  2.20.0, pytest 9.0.3, python-dotenv 1.2.2, requests 2.33.0, soupsieve 2.9.0,
+  tornado 6.5.9 and urllib3 2.8.0.
 
 0.0.34 - 2026-06-16
 ===================

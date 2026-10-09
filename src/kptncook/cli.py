@@ -7,8 +7,8 @@ from typing import NoReturn, Optional, ParamSpec, TypeVar
 import click
 import typer
 from rich import print as rprint
-from rich.pretty import pprint
 from rich.markup import escape
+from rich.pretty import pprint
 from typer.main import get_command
 
 from kptncook.config import SettingsError, render_settings_error
@@ -198,11 +198,24 @@ def sync_with_mealie() -> None:
     result = _run_or_exit(sync_with_mealie_workflow)
     _print_repository_warnings(result.invalid_repository_entries)
     rprint(f"Created {result.created_count} recipes")
+    if result.skipped_existing:
+        rprint(
+            f"[yellow]Skipped {len(result.skipped_existing)} recipes because "
+            "Mealie already has a recipe with the same name:[/yellow]"
+        )
+        for issue in result.skipped_existing:
+            rprint(f"[yellow]- {escape(issue.name)}: {escape(issue.reason)}[/yellow]")
     if result.failed_recipes:
         rprint(f"[red]Failed to sync {len(result.failed_recipes)} recipes:[/red]")
         for failure in result.failed_recipes:
             detail = f"{failure.recipe_name} ({failure.recipe_id}): {failure.reason}"
             rprint(f"[red]- {escape(detail)}[/red]")
+    elif result.failed:
+        # Accept main's public result API without printing failures twice.
+        rprint(f"[red]Failed to create {len(result.failed)} recipes:[/red]")
+        for issue in result.failed:
+            rprint(f"[red]- {escape(issue.name)}: {escape(issue.reason)}[/red]")
+    if result.failed_recipes or result.failed or result.skipped_existing:
         sys.exit(1)
 
 

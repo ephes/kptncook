@@ -208,3 +208,49 @@ def test_export_expands_timer_placeholders(minimal, mocker, tmp_path, monkeypatc
     instruction = payload["steps"][0]["instruction"]
     assert "15 Min." in instruction
     assert "<timer>" not in instruction
+
+
+def _synthetic_recipe(minimal, oid: str, title: str) -> Recipe:
+    data = json.loads(json.dumps(minimal))
+    data["_id"] = {"$oid": oid}
+    data["localizedTitle"] = {"de": title}
+    recipe = Recipe.model_validate(data)
+    recipe.image_list = []
+    return recipe
+
+
+def test_export_keeps_same_titled_recipes_apart(minimal, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    first = _synthetic_recipe(minimal, "aaaaaaaaaaaaaaaaaaaaaaaa", "Synthetic Soup")
+    second = _synthetic_recipe(minimal, "bbbbbbbbbbbbbbbbbbbbbbbb", "Synthetic Soup")
+
+    filenames = TandoorExporter().export([first, second])
+
+    assert filenames == [
+        "Synthetic_Soup.zip",
+        "Synthetic_Soup-bbbbbbbbbbbbbbbbbbbbbbbb.zip",
+    ]
+    sources = []
+    for filename in filenames:
+        with zipfile.ZipFile(tmp_path / filename) as zip_file:
+            payload = json.loads(zip_file.read("recipe.json").decode("utf-8"))
+        sources.append(payload["source_url"])
+    assert len(set(sources)) == 2
+    zips = sorted(p.name for p in tmp_path.glob("*.zip"))
+    assert zips == sorted(filenames)
+
+
+def test_export_does_not_clobber_existing_file(minimal, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    existing = tmp_path / "Synthetic_Soup.zip"
+    existing.write_bytes(b"keep me")
+    recipe = _synthetic_recipe(minimal, "cccccccccccccccccccccccc", "Synthetic Soup")
+
+    first = TandoorExporter().export_recipe(recipe=recipe)
+    second = TandoorExporter().export_recipe(recipe=recipe)
+
+    assert existing.read_bytes() == b"keep me"
+    assert first == "Synthetic_Soup-cccccccccccccccccccccccc.zip"
+    assert second == "Synthetic_Soup-cccccccccccccccccccccccc-2.zip"
+    assert zipfile.is_zipfile(tmp_path / first)
+    assert zipfile.is_zipfile(tmp_path / second)

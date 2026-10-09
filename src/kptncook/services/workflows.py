@@ -53,6 +53,12 @@ class SearchResult:
 
 
 @dataclass(frozen=True)
+class MealieSyncIssue:
+    name: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class MealieSyncFailure:
     recipe_id: str
     recipe_name: str
@@ -63,6 +69,9 @@ class MealieSyncFailure:
 class SyncWithMealieResult:
     created_count: int
     invalid_repository_entries: list[InvalidStoredRecipe]
+    # Keep main's constructor order for callers using positional arguments.
+    failed: list[MealieSyncIssue] = field(default_factory=list)
+    skipped_existing: list[MealieSyncIssue] = field(default_factory=list)
     failed_recipes: list[MealieSyncFailure] = field(default_factory=list)
 
 
@@ -243,21 +252,11 @@ def sync_with_mealie_result() -> SyncWithMealieResult:
         recipe_name = localized_fallback(recipe.localized_title) or "Unknown title"
         try:
             client.create_recipe(kptncook_to_mealie(recipe))
-        except httpx.HTTPStatusError as exc:
-            reason = format_http_status_error(
-                exc.response, action="syncing recipe with Mealie"
-            )
-        except httpx.HTTPError as exc:
-            # A write may have succeeded even if its response never arrived.
-            reason = (
-                f"{type(exc).__name__}: {format_request_error(exc)}. "
-                "The sync outcome is unknown; the next sync checks stored identity "
-                "before creating recipes. No automatic retry or deletion was attempted."
-            )
         except Exception as exc:
             # Conversion, validation and serialization failures are local to this
-            # recipe; keep processing the rest of the batch.
-            reason = f"{type(exc).__name__}: {exc}"
+            # recipe; keep processing the rest of the batch. Name collisions are
+            # failures too, not evidence that this recipe's identity was imported.
+            reason = _record_mealie_failure(recipe_name, exc).reason
         else:
             created_count += 1
             continue
@@ -272,20 +271,57 @@ def sync_with_mealie_result() -> SyncWithMealieResult:
     return SyncWithMealieResult(
         created_count=created_count,
         invalid_repository_entries=repository_result.invalid_entries,
+        failed=[
+            MealieSyncIssue(failure.recipe_name, failure.reason)
+            for failure in failed_recipes
+        ],
         failed_recipes=failed_recipes,
     )
 
 
+MEALIE_NAME_CLASH_REASON = (
+    "Mealie already has a recipe with this name (another KptnCook recipe with "
+    "the same title, your own recipe, or one left over from a failed sync); "
+    "rename or delete it in Mealie and sync again to import this one"
+)
+
+
+def _describe_mealie_error(exc: BaseException) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return format_http_status_error(
+            exc.response, action="syncing recipe with Mealie"
+        )
+    if isinstance(exc, httpx.HTTPError):
+        return format_request_error(exc)
+    return f"{type(exc).__name__}: {exc}"
+
+
+def _record_mealie_failure(name: str, exc: Exception) -> MealieSyncIssue:
+    reason = _describe_mealie_error(exc)
+    if isinstance(exc, httpx.HTTPError) and not isinstance(exc, httpx.HTTPStatusError):
+        # A write may have succeeded even if its response never arrived.
+        reason = (
+            f"{type(exc).__name__}: {reason}. "
+            "The sync outcome is unknown; the next sync checks stored identity "
+            "before creating recipes. No automatic retry or deletion was attempted."
+        )
+    logger.warning("Failed to create recipe %s in Mealie: %s", name, reason)
+    return MealieSyncIssue(name=name, reason=reason)
+
+
 def sync_with_mealie() -> int:
     result = sync_with_mealie_result()
-    if result.failed_recipes:
-        details = "; ".join(
-            f"{failure.recipe_name} ({failure.recipe_id}): {failure.reason}"
-            for failure in result.failed_recipes
-        )
+    details = [
+        f"{failure.recipe_name} ({failure.recipe_id}): {failure.reason}"
+        for failure in result.failed_recipes
+    ]
+    if not details:
+        details.extend(f"{issue.name}: {issue.reason}" for issue in result.failed)
+    details.extend(f"{issue.name}: {issue.reason}" for issue in result.skipped_existing)
+    if details:
         raise UserFacingError(
             f"Created {result.created_count} recipes. "
-            f"Failed to sync {len(result.failed_recipes)} recipes: {details}"
+            f"Failed to sync {len(details)} recipes: {'; '.join(details)}"
         )
     return result.created_count
 

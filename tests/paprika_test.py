@@ -1,4 +1,5 @@
 import json
+import zipfile
 
 import httpx
 import pytest
@@ -181,3 +182,57 @@ def test_filter_unescaped_newline(minimal):
     data = json.loads(json_string)
     # Then the unescaped newline is converted to a space
     assert data["directions"] == "Alles parat? \n"
+
+
+def _synthetic_recipe(minimal, oid: str, title: str) -> Recipe:
+    data = dict(minimal)
+    data["_id"] = {"$oid": oid}
+    data["localizedTitle"] = {"de": title}
+    return Recipe.model_validate(data)
+
+
+@pytest.fixture
+def offline_generated_data(mocker):
+    return mocker.patch.object(
+        PaprikaExporter,
+        "get_generated_data",
+        return_value=GeneratedData(None, None, "2026-01-01 00:00:00", "0" * 64),
+    )
+
+
+@pytest.mark.usefixtures("offline_generated_data")
+def test_export_same_titled_recipes_produce_distinct_files(
+    minimal, tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    p = PaprikaExporter()
+    first = _synthetic_recipe(minimal, "aaaaaaaaaaaaaaaaaaaaaaaa", "Synthetic Stew")
+    second = _synthetic_recipe(minimal, "bbbbbbbbbbbbbbbbbbbbbbbb", "Synthetic Stew")
+
+    first_name = p.export(recipes=[first])
+    second_name = p.export(recipes=[second])
+
+    assert first_name == "Synthetic_Stew.paprikarecipes"
+    assert second_name == "Synthetic_Stew-bbbbbbbbbbbbbbbbbbbbbbbb.paprikarecipes"
+    assert (tmp_path / first_name).is_file()
+    assert (tmp_path / second_name).is_file()
+
+
+@pytest.mark.usefixtures("offline_generated_data")
+def test_export_does_not_clobber_existing_file(minimal, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "Synthetic_Stew.paprikarecipes").write_bytes(b"keep single")
+    (tmp_path / "allrecipes.paprikarecipes").write_bytes(b"keep all")
+    p = PaprikaExporter()
+    first = _synthetic_recipe(minimal, "aaaaaaaaaaaaaaaaaaaaaaaa", "Synthetic Stew")
+    second = _synthetic_recipe(minimal, "bbbbbbbbbbbbbbbbbbbbbbbb", "Other Stew")
+
+    single = p.export(recipes=[first])
+    combined = p.export(recipes=[first, second])
+
+    assert single == "Synthetic_Stew-aaaaaaaaaaaaaaaaaaaaaaaa.paprikarecipes"
+    assert combined == "allrecipes-2.paprikarecipes"
+    assert (tmp_path / "Synthetic_Stew.paprikarecipes").read_bytes() == b"keep single"
+    assert (tmp_path / "allrecipes.paprikarecipes").read_bytes() == b"keep all"
+    assert zipfile.is_zipfile(tmp_path / single)
+    assert zipfile.is_zipfile(tmp_path / combined)
