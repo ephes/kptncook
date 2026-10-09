@@ -6,7 +6,9 @@ Unreleased
   (v1 and v2/v3), avoiding orphaned skeletons and supporting distinct KptnCook
   recipes with the same title. Preserve Mealie's assigned names and slugs, and
   leave ambiguous network outcomes for the next identity-based sync to resolve
-  instead of deleting a potentially successful import.
+  instead of deleting a potentially successful import. A Mealie version that
+  does not report a release number (such as a development build) uses the
+  v2/v3 import route.
 - Keep cover and step images as best-effort follow-ups, patching only step
   instructions rather than overwriting the imported recipe.
 - Report Mealie sync failures in CLI output and exit with a nonzero status,

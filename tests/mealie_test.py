@@ -129,26 +129,6 @@ def test_login_with_token_preserves_existing_headers():
     assert client.headers["authorization"] == "Bearer token-123"
 
 
-def test_post_recipe_trunk_uses_json_request():
-    client = MealieApiClient("http://mealie.local/api")
-    seen = {}
-
-    def fake_post(path, **kwargs):
-        seen["path"] = path
-        seen["kwargs"] = kwargs
-        request = httpx.Request("POST", f"http://mealie.local/api{path}")
-        return httpx.Response(200, request=request, json="recipe-slug")
-
-    client.post = fake_post
-
-    slug = client._post_recipe_trunk_and_get_slug("Test recipe")
-
-    assert slug == "recipe-slug"
-    assert seen["path"] == "/recipes"
-    assert seen["kwargs"]["json"] == {"name": "Test recipe"}
-    assert "data" not in seen["kwargs"]
-
-
 def test_scrape_image_for_recipe_uses_json_content_type():
     client = MealieApiClient("http://mealie.local/api")
     recipe = RecipeWithImage(
@@ -224,32 +204,6 @@ def test_update_tag_ids_reuses_existing_tags_case_insensitively(monkeypatch):
     assert len(updated.tags) == 1
     assert updated.tags[0].id == existing_tag_id
     assert updated.tags[0].name == "Dessert"
-
-
-def test_update_recipe_uses_json_content_type():
-    client = MealieApiClient("http://mealie.local/api")
-    recipe = Recipe(name="Test recipe", slug="recipe-slug")
-    seen = {}
-
-    def fake_put(path, **kwargs):
-        seen["path"] = path
-        seen["kwargs"] = kwargs
-        request = httpx.Request("PUT", f"http://mealie.local/api{path}")
-        return httpx.Response(
-            200,
-            request=request,
-            json=recipe.model_dump(mode="json", by_alias=True),
-        )
-
-    client.put = fake_put
-
-    updated = client._update_recipe(recipe, "recipe-slug")
-
-    assert updated.name == "Test recipe"
-    assert seen["path"] == "/recipes/recipe-slug"
-    assert seen["kwargs"]["content"] == recipe.model_dump_json()
-    assert seen["kwargs"]["headers"]["Content-Type"] == "application/json"
-    assert "data" not in seen["kwargs"]
 
 
 def test_get_mealie_client_uses_token(monkeypatch):

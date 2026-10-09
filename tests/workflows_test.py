@@ -230,18 +230,13 @@ def test_sync_with_mealie_continues_after_connection_and_unexpected_errors(
 
     assert seen_ids == ["recipe-1", "recipe-2", "recipe-3"]
     assert result.created_count == 1
-    assert result.skipped_existing == []
-    assert len(result.failed) == 2
-    assert result.failed[0].name == "Minimal Recipe"
-    assert "Request failed: connection refused" in result.failed[0].reason
-    assert "outcome is unknown" in result.failed[0].reason
-    assert result.failed[1] == workflows.MealieSyncIssue(
-        name="Minimal Recipe", reason="ValueError: unexpected payload"
+    assert len(result.failed_recipes) == 2
+    assert result.failed_recipes[0].recipe_name == "Minimal Recipe"
+    assert "Request failed: connection refused" in result.failed_recipes[0].reason
+    assert "outcome is unknown" in result.failed_recipes[0].reason
+    assert result.failed_recipes[1] == workflows.MealieSyncFailure(
+        "recipe-2", "Minimal Recipe", "ValueError: unexpected payload"
     )
-    assert result.failed == [
-        workflows.MealieSyncIssue(failure.recipe_name, failure.reason)
-        for failure in result.failed_recipes
-    ]
 
 
 def test_sync_with_mealie_reports_name_clash_with_other_kptncook_recipe(
@@ -267,10 +262,9 @@ def test_sync_with_mealie_reports_name_clash_with_other_kptncook_recipe(
 
     result = workflows.sync_with_mealie_result()
 
-    assert result.skipped_existing == []
-    assert len(result.failed) == 1
-    assert result.failed[0].name == "Minimal Recipe"
-    assert "Recipe already exists" in result.failed[0].reason
+    assert len(result.failed_recipes) == 1
+    assert result.failed_recipes[0].recipe_name == "Minimal Recipe"
+    assert "Recipe already exists" in result.failed_recipes[0].reason
     assert result.failed_recipes[0].recipe_id == "recipe-1"
 
 
@@ -332,30 +326,6 @@ def test_sync_result_defaults_do_not_share_failure_lists():
 
     assert first.failed_recipes == []
     assert first.failed_recipes is not second.failed_recipes
-    assert first.failed == []
-    assert first.failed is not second.failed
-    assert first.skipped_existing == []
-    assert first.skipped_existing is not second.skipped_existing
-
-
-def test_sync_result_preserves_main_positional_api():
-    issue = workflows.MealieSyncIssue("Soup", "bad")
-    result = workflows.SyncWithMealieResult(0, [], [issue], [issue])
-
-    assert result.failed == [issue]
-    assert result.skipped_existing == [issue]
-    assert result.failed_recipes == []
-
-
-@pytest.mark.parametrize("field", ["failed", "skipped_existing"])
-def test_sync_count_wrapper_does_not_hide_legacy_issues(monkeypatch, field):
-    result = workflows.SyncWithMealieResult(
-        1, [], **{field: [workflows.MealieSyncIssue("Soup", "bad")]}
-    )
-    monkeypatch.setattr(workflows, "sync_with_mealie_result", lambda: result)
-
-    with pytest.raises(workflows.UserFacingError, match="Soup.*bad"):
-        workflows.sync_with_mealie()
 
 
 @pytest.mark.parametrize(

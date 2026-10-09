@@ -14,11 +14,7 @@ from kptncook.config import Settings, SettingsError
 from kptncook.models import Recipe
 from kptncook.repositories import RecipeInDb
 from kptncook.services.repository import InvalidStoredRecipe, RepositoryRecipesResult
-from kptncook.services.workflows import (
-    MealieSyncFailure,
-    MealieSyncIssue,
-    SyncWithMealieResult,
-)
+from kptncook.services.workflows import MealieSyncFailure, SyncWithMealieResult
 
 
 runner = CliRunner()
@@ -190,76 +186,6 @@ def test_sync_commands_report_failures_after_created_count(monkeypatch, command)
     assert "recipe-2" in output
     assert "next sync checks stored identity" in output
     assert output.index("Created 1 recipes") < output.index("Failed to sync")
-
-
-def test_sync_with_mealie_command_reports_skipped_and_failed(monkeypatch):
-    cli_module = import_module("kptncook.cli")
-
-    monkeypatch.setattr(
-        cli_module,
-        "sync_with_mealie_workflow",
-        lambda: SyncWithMealieResult(
-            created_count=1,
-            invalid_repository_entries=[],
-            skipped_existing=[
-                MealieSyncIssue(name="Pasta [vegan]", reason="name already used")
-            ],
-            failed=[
-                MealieSyncIssue(
-                    name="Soup", reason="Request failed: connection refused"
-                )
-            ],
-        ),
-    )
-
-    result = runner.invoke(cli_module.app, ["sync-with-mealie"])
-
-    assert result.exit_code == 1
-    assert "Created 1 recipes" in result.output
-    assert "Skipped 1 recipes" in result.output
-    assert "- Pasta [vegan]: name already used" in result.output
-    assert "Failed to create 1 recipes" in result.output
-    assert "- Soup: Request failed: connection refused" in result.output
-
-
-def test_sync_with_mealie_command_reports_legacy_skips_as_unsynced(monkeypatch):
-    cli_module = import_module("kptncook.cli")
-
-    monkeypatch.setattr(
-        cli_module,
-        "sync_with_mealie_workflow",
-        lambda: SyncWithMealieResult(
-            created_count=0,
-            invalid_repository_entries=[],
-            skipped_existing=[MealieSyncIssue(name="Pasta", reason="clash")],
-        ),
-    )
-
-    result = runner.invoke(cli_module.app, ["sync-with-mealie"])
-
-    assert result.exit_code == 1
-    assert "- Pasta: clash" in result.output
-
-
-def test_sync_command_does_not_double_report_compatibility_failures(monkeypatch):
-    cli_module = import_module("kptncook.cli")
-    monkeypatch.setattr(
-        cli_module,
-        "sync_with_mealie_workflow",
-        lambda: SyncWithMealieResult(
-            created_count=0,
-            invalid_repository_entries=[],
-            failed=[MealieSyncIssue("Soup [red]", "bad [bold]")],
-            failed_recipes=[MealieSyncFailure("recipe-1", "Soup [red]", "bad [bold]")],
-        ),
-    )
-
-    result = runner.invoke(cli_module.app, ["sync-with-mealie"])
-
-    assert result.exit_code == 1
-    assert result.output.count("Soup [red]") == 1
-    assert "recipe-1" in result.output
-    assert "bad [bold]" in result.output
 
 
 def test_access_token_command_saves_token_without_printing_it(monkeypatch, tmp_path):

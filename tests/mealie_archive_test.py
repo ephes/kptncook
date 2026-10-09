@@ -42,7 +42,10 @@ def archive_payload(request):
     ("version", "endpoint"),
     [
         ("v1.12.0", "/api/recipes/create-from-zip"),
+        ("1.12.0", "/api/recipes/create-from-zip"),
         ("v3.28.0", "/api/recipes/create/zip"),
+        # Unrecognized versions fall back to the current import route.
+        ("nightly", "/api/recipes/create/zip"),
     ],
 )
 def test_archive_import_has_identity_and_preserves_assigned_name(version, endpoint):
@@ -282,8 +285,10 @@ def test_categorized_recipe_remains_in_identity_inventory():
     assert Recipe(recipe_category=["Dinner"]).recipe_category == ["Dinner"]
 
 
-@pytest.mark.parametrize("about_status, version", [(503, "v3.28.0"), (200, "invalid")])
-def test_version_discovery_failure_does_not_mutate_entities(about_status, version):
+@pytest.mark.parametrize(
+    "about_status, about", [(503, {"version": "v3.28.0"}), (200, {})]
+)
+def test_version_discovery_failure_does_not_mutate_entities(about_status, about):
     writes = []
 
     def handle(request):
@@ -297,7 +302,7 @@ def test_version_discovery_failure_does_not_mutate_entities(about_status, versio
                 },
             )
         if request.url.path == "/api/app/about":
-            return httpx.Response(about_status, json={"version": version})
+            return httpx.Response(about_status, json=about)
         return httpx.Response(200, json={"items": [], "total_pages": 1})
 
     recipe = RecipeWithImage(
@@ -311,6 +316,6 @@ def test_version_discovery_failure_does_not_mutate_entities(about_status, versio
     )
     with httpx.Client(transport=httpx.MockTransport(handle)) as http:
         client = MealieApiClient("http://mealie.local/api", client=http)
-        with pytest.raises((httpx.HTTPStatusError, ValueError)):
+        with pytest.raises((httpx.HTTPStatusError, KeyError)):
             client.create_recipe(recipe)
     assert writes == []

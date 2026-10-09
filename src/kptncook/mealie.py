@@ -2,6 +2,7 @@ import datetime
 import io
 import json
 import logging
+import re
 import uuid
 from collections.abc import Callable
 from getpass import getpass
@@ -238,43 +239,6 @@ class MealieApiClient(BaseHttpClient):
     def _build_recipestep_text(recipe_uuid, text, image_name):
         return f'{text} <img src="/api/media/recipes/{recipe_uuid}/assets/{image_name}" height="100%" width="100%"/>'
 
-    def enrich_recipe_with_step_images(self, recipe):
-        assets = []
-        for instruction in recipe.recipe_instructions:
-            try:
-                asset_properties = self.upload_asset(recipe.slug, instruction.image)
-            except httpx.HTTPError as exc:
-                logger.warning(
-                    "Skipping step image upload for recipe %s: %s", recipe.slug, exc
-                )
-                continue
-            except Exception:
-                logger.exception(
-                    "Skipping step image upload for recipe %s due to unexpected error",
-                    recipe.slug,
-                )
-                continue
-            uploaded_image_name = asset_properties["fileName"]
-            instruction.text = self._build_recipestep_text(
-                recipe.id, instruction.text, uploaded_image_name
-            )
-            assets.append(
-                RecipeAsset(
-                    name=asset_properties["name"],
-                    icon=asset_properties["icon"],
-                    file_name=asset_properties["fileName"],
-                )
-            )
-        recipe.assets = assets
-        return recipe
-
-    def _post_recipe_trunk_and_get_slug(self, recipe_name):
-        data = {"name": recipe_name}
-        r = self.post("/recipes", json=data)
-        r.raise_for_status()
-        slug = r.json()
-        return slug
-
     def _scrape_image_for_recipe(self, recipe, slug):
         if not recipe.image_url:
             return
@@ -286,16 +250,6 @@ class MealieApiClient(BaseHttpClient):
             headers={"Content-Type": "application/json"},
         )
         r.raise_for_status()
-
-    def _update_user_and_group_id(self, recipe, slug):
-        recipe_detail_path = f"/recipes/{slug}"
-        r = self.get(recipe_detail_path)
-        r.raise_for_status()
-        recipe_details = r.json()
-        update_attributes = ["id", "userId", "groupId"]
-        updated_details = {k: recipe_details[k] for k in update_attributes}
-        recipe = RecipeWithImage(**(recipe.dict() | updated_details))
-        return recipe
 
     def _get_page(self, endpoint_name, page_num, per_page=50):
         r = self.get(f"/{endpoint_name}?page={page_num}&perPage={per_page}")
@@ -390,30 +344,24 @@ class MealieApiClient(BaseHttpClient):
         recipe.tags = [name_to_tag_with_id[tag.name] for tag in recipe_tags]
         return recipe
 
-    def _put_recipe(self, recipe, slug) -> httpx.Response:
-        recipe_detail_path = f"/recipes/{slug}"
-        r = self.put(
-            recipe_detail_path,
-            content=recipe.model_dump_json(),
-            headers={"Content-Type": "application/json"},
-        )
-        r.raise_for_status()
-        return r
-
-    def _update_recipe(self, recipe, slug):
-        return Recipe.model_validate(self._put_recipe(recipe, slug).json())
-
     def _get_archive_endpoint(self) -> str:
         if self._archive_endpoint is None:
             response = self.get("/app/about")
             response.raise_for_status()
-            version = response.json()["version"].lstrip("v")
+            version = str(response.json()["version"])
             # Mealie 2 and 3 renamed the legacy v1 create routes.
-            major_version = int(version.split(".", 1)[0])
+            match = re.match(r"v?(\d+)\.", version)
+            if match is None:
+                # Development builds may not report a release number. Assume a
+                # current Mealie; a wrong route fails without creating anything.
+                logger.warning(
+                    "Unrecognized Mealie version %r; using the Mealie 2+ import route",
+                    version,
+                )
             self._archive_endpoint = (
-                "/recipes/create/zip"
-                if major_version >= 2
-                else "/recipes/create-from-zip"
+                "/recipes/create-from-zip"
+                if match is not None and int(match.group(1)) < 2
+                else "/recipes/create/zip"
             )
         return self._archive_endpoint
 
@@ -494,7 +442,9 @@ class MealieApiClient(BaseHttpClient):
         for key in ("source", "kptncook_id"):
             if key in recipe.extras and created.extras.get(key) != recipe.extras[key]:
                 raise ValueError(
-                    f"Imported recipe {created.slug} is missing matching identity extras"
+                    f"Imported recipe {created.slug} is missing matching identity "
+                    "extras; delete it in Mealie before the next sync to avoid "
+                    "a duplicate"
                 )
         try:
             self._scrape_image_for_recipe(recipe, created.slug)
