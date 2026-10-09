@@ -3,6 +3,7 @@ import sys
 from datetime import date
 from pathlib import Path
 from importlib import import_module
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -142,6 +143,50 @@ def test_sync_with_mealie_command_smoke_renders_warning_summary(monkeypatch):
     assert "skipped 1 invalid stored recipe" in result.output
     assert "- broken: steps: Field required" in result.output
     assert "Created 2 recipes" in result.output
+
+
+@pytest.mark.parametrize("command", ["sync-with-mealie", "sync"])
+def test_sync_commands_report_failures_after_created_count(monkeypatch, command):
+    cli_module = import_module("kptncook.cli")
+    monkeypatch.setattr(cli_module, "save_todays_recipes_workflow", lambda: 0)
+    monkeypatch.setattr(
+        cli_module,
+        "sync_with_mealie_workflow",
+        lambda: SimpleNamespace(
+            created_count=1,
+            invalid_repository_entries=[
+                InvalidStoredRecipe(2, "broken", "steps: Field required")
+            ],
+            failed_recipes=[
+                SimpleNamespace(
+                    recipe_id="recipe-1",
+                    recipe_name="Soup [red]",
+                    reason="HTTP 409: Recipe already exists",
+                ),
+                SimpleNamespace(
+                    recipe_id="recipe-2",
+                    recipe_name="Salad",
+                    reason="ReadTimeout: outcome unknown. The next sync checks stored identity.",
+                ),
+            ],
+        ),
+    )
+
+    result = runner.invoke(cli_module.app, [command])
+
+    assert result.exit_code == 1
+    output = " ".join(result.output.split())
+    assert "Created 1 recipes" in output
+    assert "Warning:" in output
+    assert "broken: steps: Field required" in output
+    assert "Failed to sync 2 recipes" in output
+    assert "Soup [red]" in output
+    assert "recipe-1" in output
+    assert "Recipe already exists" in output
+    assert "Salad" in output
+    assert "recipe-2" in output
+    assert "next sync checks stored identity" in output
+    assert output.index("Created 1 recipes") < output.index("Failed to sync")
 
 
 def test_access_token_command_saves_token_without_printing_it(monkeypatch, tmp_path):

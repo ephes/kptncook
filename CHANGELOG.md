@@ -1,6 +1,17 @@
 Unreleased
 ==========
 
+### Fixes
+- #90 Import fully identified recipes through Mealie's native ZIP endpoint
+  (v1 and v2/v3), avoiding orphaned skeletons and supporting distinct KptnCook
+  recipes with the same title. Preserve Mealie's assigned names and slugs, and
+  leave ambiguous network outcomes for the next identity-based sync to resolve
+  instead of deleting a potentially successful import.
+- Keep cover and step images as best-effort follow-ups, patching only step
+  instructions rather than overwriting the imported recipe.
+- Report Mealie sync failures in CLI output and exit with a nonzero status,
+  including name-collision errors previously treated as successful duplicates.
+
 0.0.34 - 2026-06-16
 ===================
 

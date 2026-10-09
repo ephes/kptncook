@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
@@ -13,13 +13,12 @@ from kptncook.config import get_settings
 from kptncook.env import ENV_PATH
 from kptncook.http_errors import (
     UserFacingError,
-    extract_mealie_detail_message,
     format_http_status_error,
     format_request_error,
 )
 from kptncook.markdown_exporter import MarkdownExporter
 from kptncook.mealie import MealieApiClient, kptncook_to_mealie
-from kptncook.models import Recipe
+from kptncook.models import Recipe, localized_fallback
 from kptncook.paprika import PaprikaExporter
 from kptncook.password_manager import get_credentials
 from kptncook.repositories import RecipeInDb
@@ -54,9 +53,17 @@ class SearchResult:
 
 
 @dataclass(frozen=True)
+class MealieSyncFailure:
+    recipe_id: str
+    recipe_name: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class SyncWithMealieResult:
     created_count: int
     invalid_repository_entries: list[InvalidStoredRecipe]
+    failed_recipes: list[MealieSyncFailure] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -227,40 +234,60 @@ def sync_with_mealie_result() -> SyncWithMealieResult:
     client = get_mealie_client()
     kptncook_recipes_from_mealie = get_kptncook_recipes_from_mealie(client)
     repository_result = load_kptncook_recipes_from_repository()
-    kptncook_recipes_from_repository = [
-        kptncook_to_mealie(r) for r in repository_result.recipes
-    ]
-    ids_in_mealie = {r.extras["kptncook_id"] for r in kptncook_recipes_from_mealie}
-    ids_from_api = {r.extras["kptncook_id"] for r in kptncook_recipes_from_repository}
-    ids_to_add = ids_from_api - ids_in_mealie
-    recipes_to_add = [
-        recipe
-        for recipe in kptncook_recipes_from_repository
-        if recipe.extras.get("kptncook_id") in ids_to_add
-    ]
-    created_slugs: list[str] = []
-    for recipe in recipes_to_add:
+    ids_in_mealie = {r.extras.get("kptncook_id") for r in kptncook_recipes_from_mealie}
+    created_count = 0
+    failed_recipes: list[MealieSyncFailure] = []
+    for recipe in repository_result.recipes:
+        if recipe.id.oid in ids_in_mealie:
+            continue
+        recipe_name = localized_fallback(recipe.localized_title) or "Unknown title"
         try:
-            created = client.create_recipe(recipe)
-            created_slugs.append(created.slug)
+            client.create_recipe(kptncook_to_mealie(recipe))
         except httpx.HTTPStatusError as exc:
-            detail_message = extract_mealie_detail_message(exc.response)
-            if detail_message == "Recipe already exists":
-                continue
-            logger.warning(
-                "Failed to create recipe %s in Mealie (%s): %s",
-                recipe.name,
-                exc.response.status_code,
-                detail_message or exc,
+            reason = format_http_status_error(
+                exc.response, action="syncing recipe with Mealie"
             )
+        except httpx.HTTPError as exc:
+            # A write may have succeeded even if its response never arrived.
+            reason = (
+                f"{type(exc).__name__}: {format_request_error(exc)}. "
+                "The sync outcome is unknown; the next sync checks stored identity "
+                "before creating recipes. No automatic retry or deletion was attempted."
+            )
+        except Exception as exc:
+            # Conversion, validation and serialization failures are local to this
+            # recipe; keep processing the rest of the batch.
+            reason = f"{type(exc).__name__}: {exc}"
+        else:
+            created_count += 1
+            continue
+        failure = MealieSyncFailure(recipe.id.oid, recipe_name, reason)
+        failed_recipes.append(failure)
+        logger.warning(
+            "Failed to sync recipe %s (%s) with Mealie: %s",
+            failure.recipe_name,
+            failure.recipe_id,
+            failure.reason,
+        )
     return SyncWithMealieResult(
-        created_count=len(created_slugs),
+        created_count=created_count,
         invalid_repository_entries=repository_result.invalid_entries,
+        failed_recipes=failed_recipes,
     )
 
 
 def sync_with_mealie() -> int:
-    return sync_with_mealie_result().created_count
+    result = sync_with_mealie_result()
+    if result.failed_recipes:
+        details = "; ".join(
+            f"{failure.recipe_name} ({failure.recipe_id}): {failure.reason}"
+            for failure in result.failed_recipes
+        )
+        raise UserFacingError(
+            f"Created {result.created_count} recipes. "
+            f"Failed to sync {len(result.failed_recipes)} recipes: {details}"
+        )
+    return result.created_count
 
 
 def backup_kptncook_favorites() -> FavoritesBackupResult:

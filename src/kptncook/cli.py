@@ -8,6 +8,7 @@ import click
 import typer
 from rich import print as rprint
 from rich.pretty import pprint
+from rich.markup import escape
 from typer.main import get_command
 
 from kptncook.config import SettingsError, render_settings_error
@@ -190,17 +191,23 @@ def list_kptncook_dailies(
 
 
 @app.command(name="sync-with-mealie")
-def sync_with_mealie():
+def sync_with_mealie() -> None:
     """
     Sync locally saved recipes with mealie.
     """
     result = _run_or_exit(sync_with_mealie_workflow)
     _print_repository_warnings(result.invalid_repository_entries)
     rprint(f"Created {result.created_count} recipes")
+    if result.failed_recipes:
+        rprint(f"[red]Failed to sync {len(result.failed_recipes)} recipes:[/red]")
+        for failure in result.failed_recipes:
+            detail = f"{failure.recipe_name} ({failure.recipe_id}): {failure.reason}"
+            rprint(f"[red]- {escape(detail)}[/red]")
+        sys.exit(1)
 
 
 @app.command(name="sync")
-def sync():
+def sync() -> None:
     """
     Fetch recipes for today from api, save them to disk and sync with mealie
     afterwards.

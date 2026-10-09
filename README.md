@@ -418,6 +418,65 @@ Run tests using uv:
 $ uv run pytest
 ```
 
+## Disposable Mealie Integration Tests
+
+`tests/mealie_integration_test.py` exercises real HTTP against an externally
+provisioned **disposable** Mealie instance. It is skipped by default and requires
+all three variables below; never point it at your personal or production server.
+The URL is the API base (including `/api`), and the token must permit recipe
+creation, inventory reads, media uploads, and deletion.
+
+```shell
+$ export MEALIE_TEST_URL=http://127.0.0.1:19001/api
+$ read -rs MEALIE_TEST_TOKEN  # paste a disposable server token, then press Enter
+$ export MEALIE_TEST_TOKEN
+$ export MEALIE_TEST_DISPOSABLE=1
+$ uv run pytest -q tests/mealie_integration_test.py
+$ unset MEALIE_TEST_TOKEN MEALIE_TEST_URL MEALIE_TEST_DISPOSABLE
+```
+
+Run the same tests separately against pinned
+`ghcr.io/mealie-recipes/mealie:v1.12.0` and
+`ghcr.io/mealie-recipes/mealie:v3.28.0` instances. For example, start an isolated
+SQLite container on a localhost-only port (use another name/port for the other
+version):
+
+```shell
+$ docker run -d --name kptncook-mealie-v1-test \
+    -p 127.0.0.1:19001:9000 \
+    -e DB_ENGINE=sqlite -e ALLOW_SIGNUP=false \
+    ghcr.io/mealie-recipes/mealie:v1.12.0
+```
+
+Wait until `GET /api/app/about` succeeds before obtaining a token from the
+instance's login/API-token UI. The upstream installation checklists for
+[v1.12.0](https://github.com/mealie-recipes/mealie/blob/v1.12.0/docs/docs/documentation/getting-started/installation/installation-checklist.md)
+and [v3.28.0](https://github.com/mealie-recipes/mealie/blob/v3.28.0/docs/docs/documentation/getting-started/installation/installation-checklist.md)
+list the initial login as `changeme@example.com` / `MyPassword` (unless overridden).
+The client discovers the server version via
+`GET /app/about`; no test-specific version override is needed. Keep tokens out of
+logs, shell history, and tracked files. No KptnCook account or external KptnCook
+media is used: repository/conversion fixtures are local, and a tiny step image is
+served from an ephemeral localhost HTTP server.
+
+Coverage includes same-title recipes with distinct KptnCook identities, a
+second sync with no writes, ingredients/tags/instructions/nutrition roundtrip,
+and step-media enrichment via PATCH. A real HTTP transport also injects a read
+timeout **after** the server successfully commits an archive import; the next
+sync must discover the persisted identity without deleting or retrying it.
+Extras assertions allow Mealie to add ownership metadata.
+
+A `finally` inventory cleanup deletes only recipes carrying the exact randomly
+generated test identities, even when a committed response is lost. Recipe tags,
+foods, and units may remain, so discard the whole instance after testing. Stop
+and remove every test container (including after a failed run):
+
+```shell
+$ docker rm -f -v kptncook-mealie-v1-test
+# If provisioned:
+$ docker rm -f -v kptncook-mealie-v3-test
+```
+
 ## Lines of Code
 
 Show a Rich-formatted summary of lines by language, area (src, tests, scripts,
