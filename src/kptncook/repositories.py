@@ -75,9 +75,35 @@ class RecipeRepository:
     def _ensure_parent_dir(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
-    def create_backup(self):
-        if self.path.exists():
-            shutil.copyfile(self.path, self.backup_path)
+    def create_backup(self) -> None:
+        if not self.path.exists():
+            return
+        temp_path: Path | None = None
+        try:
+            with self.path.open("rb") as source:
+                with tempfile.NamedTemporaryFile(
+                    "wb",
+                    dir=self.path.parent,
+                    prefix=f".{self.backup_path.name}.",
+                    suffix=".tmp",
+                    delete=False,
+                ) as target:
+                    temp_path = Path(target.name)
+                    shutil.copyfileobj(source, target)
+                    target.flush()
+                    os.fsync(target.fileno())
+            os.replace(temp_path, self.backup_path)
+            self._fsync_directory()
+        except OSError as exc:
+            raise RepositoryError(
+                f"Could not write repository backup {self.backup_path}: {exc}"
+            ) from exc
+        finally:
+            if temp_path is not None:
+                try:
+                    temp_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     def _build_by_id(
         self, recipes: list[RecipeInDb] | RecipeListInDb

@@ -169,7 +169,11 @@ matter (servings, prep/cook time, link, image, tags) followed by ingredients
 and instructions. Section headings and image alt text follow `KPTNCOOK_LANG`
 (German, English, Spanish, French, and Portuguese are recognized; other
 languages fall back to English), and `<timer>` placeholders in steps are
-replaced with their durations.
+replaced with their durations. Existing Markdown files, including manual notes,
+are never overwritten: repeated exports create new files. If a title is taken,
+the recipe id and then a counter are appended (`Title-<recipe id>.md`,
+`Title-<recipe id>-2.md`). Files are created exclusively to prevent concurrent
+exports from overwriting each other. Command output lists the actual paths.
 
 The Paprika and Tandoor exports write their files into the current directory
 and never overwrite an existing file. If the preferred name (the asciified
@@ -186,6 +190,13 @@ that can no longer be parsed into full recipes. The command continues with the
 valid recipes instead of silently dropping the bad entries. If you need to
 recover, inspect `~/.kptncook/kptncook.json` and the previous snapshot in
 `~/.kptncook/kptncook.json.backup`.
+
+Before replacing the repository, its previous contents are copied to a sibling
+temporary backup, flushed and fsynced, then atomically moved over `.backup`.
+If copying, syncing or replacing the backup fails, the write reports an error
+and leaves both the main file and the existing recovery snapshot intact.
+Temporary files are cleaned up on failure. The main file is also replaced
+atomically; a later main-write failure leaves the completed backup available.
 
 ## Delete recipes
 

@@ -191,3 +191,67 @@ def test_add_recipe_uses_advisory_lock(tmpdir, monkeypatch):
 
     assert repositories_module.fcntl.LOCK_EX in calls
     assert repositories_module.fcntl.LOCK_UN in calls
+
+
+@pytest.mark.parametrize("failure", ["copy", "fsync", "replace"])
+def test_backup_failure_preserves_both_files(tmp_path, monkeypatch, failure):
+    repo = RecipeRepository(tmp_path)
+    recipe = RecipeInDb(date=date.today(), data={"_id": {"$oid": "1"}})
+    repo.add(recipe)
+    main_bytes = repo.path.read_bytes()
+    repo.backup_path.write_bytes(b"previous recovery snapshot")
+    backup_bytes = repo.backup_path.read_bytes()
+
+    def failing_copy(source, target):
+        target.write(b"partial")
+        raise OSError("copy failed")
+
+    def failing_fsync(fd):
+        raise OSError("fsync failed")
+
+    original_replace = repositories_module.os.replace
+
+    def failing_replace(source, target):
+        if target == repo.backup_path:
+            raise OSError("replace failed")
+        return original_replace(source, target)
+
+    if failure == "copy":
+        monkeypatch.setattr(repositories_module.shutil, "copyfileobj", failing_copy)
+    elif failure == "fsync":
+        monkeypatch.setattr(repositories_module.os, "fsync", failing_fsync)
+    else:
+        monkeypatch.setattr(repositories_module.os, "replace", failing_replace)
+
+    with pytest.raises(repositories_module.RepositoryError, match="backup"):
+        repo.add(recipe)
+    assert repo.path.read_bytes() == main_bytes
+    assert repo.backup_path.read_bytes() == backup_bytes
+    assert list(tmp_path.glob(".*.tmp")) == []
+
+
+def test_backup_is_synced_and_replaced_before_main(tmp_path, monkeypatch):
+    repo = RecipeRepository(tmp_path)
+    recipe = RecipeInDb(date=date.today(), data={"_id": {"$oid": "1"}})
+    repo.add(recipe)
+    previous = repo.path.read_bytes()
+    events = []
+    original_fsync = repositories_module.os.fsync
+    original_replace = repositories_module.os.replace
+
+    def tracking_fsync(fd):
+        events.append("fsync")
+        return original_fsync(fd)
+
+    def tracking_replace(source, target):
+        events.append(target)
+        if target == repo.path:
+            assert repo.backup_path.read_bytes() == previous
+        return original_replace(source, target)
+
+    monkeypatch.setattr(repositories_module.os, "fsync", tracking_fsync)
+    monkeypatch.setattr(repositories_module.os, "replace", tracking_replace)
+    repo.add(recipe)
+    assert events[0] == "fsync"
+    assert events[1] == repo.backup_path
+    assert events.index(repo.backup_path) < events.index(repo.path)
