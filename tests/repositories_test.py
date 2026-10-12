@@ -255,3 +255,72 @@ def test_backup_is_synced_and_replaced_before_main(tmp_path, monkeypatch):
     assert events[0] == "fsync"
     assert events[1] == repo.backup_path
     assert events.index(repo.backup_path) < events.index(repo.path)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {},
+        {"_id": None},
+        {"_id": []},
+        {"_id": "secret"},
+        {"_id": {}},
+        {"_id": {"$oid": []}},
+        {"_id": {"$oid": {}}},
+        {"_id": {"$oid": None}},
+        {"_id": {"$oid": ""}},
+        {"_id": {"$oid": 1}},
+    ],
+)
+@pytest.mark.parametrize("operation", ["list_by_id", "add", "add_list", "delete"])
+def test_malformed_id_preserves_repository(tmp_path, data, operation):
+    repo = RecipeRepository(tmp_path)
+    original = json.dumps([{"date": "2026-10-12", "data": data}]).encode()
+    repo.path.write_bytes(original)
+    repo.backup_path.write_bytes(b"recovery")
+    valid = RecipeInDb(date=date.today(), data={"_id": {"$oid": "valid"}})
+    with pytest.raises(
+        repositories_module.RepositoryError, match="record 1.*identifier"
+    ) as error:
+        if operation == "list_by_id":
+            repo.list_by_id()
+        elif operation == "add":
+            repo.add(valid)
+        elif operation == "add_list":
+            repo.add_list([valid])
+        else:
+            repo.delete_by_ids(["valid"])
+    assert "secret" not in str(error.value)
+    assert repo.path.read_bytes() == original
+    assert repo.backup_path.read_bytes() == b"recovery"
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {},
+        {"_id": None},
+        {"_id": {"$oid": []}},
+        {"_id": {"$oid": 123}},
+        {"_id": {"$oid": ""}},
+    ],
+)
+@pytest.mark.parametrize("operation", ["add", "add_list"])
+def test_malformed_incoming_id_preserves_repository(tmp_path, data, operation):
+    repo = RecipeRepository(tmp_path)
+    repo.path.write_bytes(b"[]")
+    repo.backup_path.write_bytes(b"recovery")
+    invalid = RecipeInDb(date=date.today(), data=data)
+    with pytest.raises(repositories_module.RepositoryError, match="invalid identifier"):
+        if operation == "add":
+            repo.add(invalid)
+        else:
+            repo.add_list(
+                [
+                    RecipeInDb(date=date.today(), data={"_id": {"$oid": "valid"}}),
+                    invalid,
+                ]
+            )
+    assert repo.path.read_bytes() == b"[]"
+    assert repo.backup_path.read_bytes() == b"recovery"
+    assert not repo.lock_path.exists()

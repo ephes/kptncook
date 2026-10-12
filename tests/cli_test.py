@@ -269,3 +269,27 @@ def test_discovery_list_save_command_smoke_uses_service_result(monkeypatch, mini
     assert result.exit_code == 0
     assert captured["recipes"] == [recipe]
     assert "Added 1 recipes to local repository" in result.output
+
+
+def test_delete_malformed_identifier_reports_controlled_error(tmp_path, monkeypatch):
+    import json
+    from kptncook.repositories import RecipeRepository
+    from kptncook.services import repository
+
+    repo = RecipeRepository(tmp_path)
+    original = json.dumps(
+        [{"date": "2026-10-12", "data": {"_id": {"$oid": []}}}]
+    ).encode()
+    repo.path.write_bytes(original)
+    repo.backup_path.write_bytes(b"recovery")
+    monkeypatch.setattr(repository, "get_repository", lambda: repo)
+    result = runner.invoke(
+        import_module("kptncook.cli").app,
+        ["delete-recipes", "--oid", "valid", "--force"],
+    )
+    assert result.exit_code == 1
+    assert "record 1" in result.output
+    assert "invalid identifier" in result.output
+    assert "Traceback" not in result.output
+    assert repo.path.read_bytes() == original
+    assert repo.backup_path.read_bytes() == b"recovery"

@@ -185,6 +185,12 @@ The command output lists the names that were actually written.
 
 ### Repository warnings
 
+Incoming recipes are validated before any repository write.
+Identifier-based reads and mutations reject records whose `_id.$oid` is not a
+nonempty string. The error identifies the record position without exposing its
+payload; mutations leave the repository and recovery backup unchanged. Repair
+the malformed record manually before retrying.
+
 Repository-backed commands now warn if `kptncook.json` contains stored entries
 that can no longer be parsed into full recipes. The command continues with the
 valid recipes instead of silently dropping the bad entries. If you need to
@@ -528,6 +534,10 @@ Use the helper commands below from a clean worktree:
    ```shell
    $ just release-prepare <version>
    ```
+   Preparation validates both replacement texts before writing either file.
+   Each file is replaced atomically; if the second write fails, the changelog
+   is restored. Invalid inputs preserve both original files.
+
    This moves the current `Unreleased` section into a dated changelog entry and
    bumps `version` in `pyproject.toml`. `kptncook.__version__` is derived from
    package metadata, so no second version file needs updating.
