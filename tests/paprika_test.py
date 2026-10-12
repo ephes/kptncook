@@ -137,8 +137,7 @@ def test_render(minimal, mocker):
         '   "categories":["Kptncook"]\n'
         "}"
     )
-    expected = PaprikaExporter.unescaped_newline.sub(" ", expected)
-    assert actual == expected
+    assert json.loads(actual) == json.loads(expected)
 
 
 def test_render_expands_timer_placeholders(minimal, mocker):
@@ -166,22 +165,12 @@ def test_render_expands_timer_placeholders(minimal, mocker):
     assert "<timer>" not in data["directions"]
 
 
-def test_filter_unescaped_newline(minimal):
-    """
-    Test that unescaped newlines are converted to a space.
-
-    Unescaped newlines in the recipe title are invalid in JSON, so
-    Paprika would not be able to import the recipe.
-    """
-    # Given a recipe with an unescaped newline in the title
+@pytest.mark.usefixtures("offline_generated_data")
+def test_preserve_newline(minimal):
     recipe = Recipe.model_validate(minimal)
-    recipe.steps[0].title.de = "Alles parat?\n"  # add unescaped newline
-    paprika_exporter = PaprikaExporter()
-    # When the recipe is rendered as a JSON string
-    json_string = paprika_exporter.get_recipe_as_json_string(recipe=recipe)
-    data = json.loads(json_string)
-    # Then the unescaped newline is converted to a space
-    assert data["directions"] == "Alles parat? \n"
+    recipe.steps[0].title.de = "Alles parat?\n"
+    data = json.loads(PaprikaExporter().get_recipe_as_json_string(recipe))
+    assert data["directions"] == "Alles parat?\n\n"
 
 
 def _synthetic_recipe(minimal, oid: str, title: str) -> Recipe:
@@ -236,3 +225,52 @@ def test_export_does_not_clobber_existing_file(minimal, tmp_path, monkeypatch):
     assert (tmp_path / "allrecipes.paprikarecipes").read_bytes() == b"keep all"
     assert zipfile.is_zipfile(tmp_path / single)
     assert zipfile.is_zipfile(tmp_path / combined)
+
+
+@pytest.mark.usefixtures("offline_generated_data")
+def test_export_text_roundtrip(full_recipe, minimal, tmp_path, monkeypatch):
+    import gzip
+
+    monkeypatch.chdir(tmp_path)
+    text = 'Quoted "food" \\folder\t日本語\nnext'
+    recipe = Recipe.model_validate(full_recipe)
+    recipe.localized_title.de = text
+    recipe.steps[0].title.de = text
+    recipe.ingredients[0].ingredient.uncountable_title.de = text
+    exporter = PaprikaExporter()
+    filename = exporter.export([recipe, Recipe.model_validate(minimal)])
+    with zipfile.ZipFile(tmp_path / filename) as archive:
+        assert len(archive.namelist()) == 2
+        data = json.loads(
+            gzip.decompress(archive.read(f"recipe_{recipe.id.oid}.paprikarecipe"))
+        )
+    assert data["name"] == text
+    assert data["directions"].startswith(text + "\n")
+    assert text in data["ingredients"]
+
+
+@pytest.mark.usefixtures("offline_generated_data")
+@pytest.mark.parametrize("failure", [None, "zip", "move"])
+def test_export_cleans_workdir(minimal, tmp_path, monkeypatch, mocker, failure):
+    workdir = tmp_path / "temporary"
+    workdir.mkdir()
+    monkeypatch.setattr("tempfile.tempdir", str(workdir))
+    monkeypatch.chdir(tmp_path)
+    if failure:
+        name = "write_zip" if failure == "zip" else "move_to_free_target"
+        mocker.patch(f"kptncook.paprika.{name}", side_effect=OSError("injected"))
+        with pytest.raises(OSError, match="injected"):
+            PaprikaExporter().export([Recipe.model_validate(minimal)])
+    else:
+        filename = PaprikaExporter().export([Recipe.model_validate(minimal)])
+        assert (tmp_path / filename).is_file()
+    assert list(workdir.iterdir()) == []
+
+
+@pytest.mark.usefixtures("offline_generated_data")
+def test_missing_cover_is_empty(minimal):
+    data = json.loads(
+        PaprikaExporter().get_recipe_as_json_string(Recipe.model_validate(minimal))
+    )
+    assert data["photo"] == ""
+    assert data["photo_data"] == ""
