@@ -108,7 +108,17 @@ class RecipeRepository:
     def _build_by_id(
         self, recipes: list[RecipeInDb] | RecipeListInDb
     ) -> dict[str, RecipeInDb]:
-        return {recipe.id: recipe for recipe in recipes}
+        by_id: dict[str, RecipeInDb] = {}
+        for position, recipe in enumerate(recipes, start=1):
+            identifier = recipe.data.get("_id")
+            oid = identifier.get("$oid") if isinstance(identifier, dict) else None
+            if not isinstance(oid, str) or not oid.strip():
+                raise RepositoryError(
+                    f"Repository record {position} has an invalid identifier; "
+                    "expected _id.$oid to be a nonempty string."
+                )
+            by_id[oid] = recipe
+        return by_id
 
     def _fsync_directory(self) -> None:
         try:
@@ -198,16 +208,17 @@ class RecipeRepository:
         return not any(recipe.date == _date for recipe in self.list())
 
     def add(self, recipe: RecipeInDb):
+        incoming = self._build_by_id([recipe])
         with self._write_lock():
             locked = self._build_by_id(self._fetch_all())
-            locked[recipe.id] = recipe
+            locked.update(incoming)
             self._write_models(locked)
 
     def add_list(self, recipes: list[RecipeInDb]):
+        incoming = self._build_by_id(recipes)
         with self._write_lock():
             locked = self._build_by_id(self._fetch_all())
-            for recipe in recipes:
-                locked[recipe.id] = recipe
+            locked.update(incoming)
             self._write_models(locked)
 
     def delete_by_ids(self, ids: list[str]) -> tuple[list[str], list[str]]:

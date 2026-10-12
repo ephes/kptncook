@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import tempfile
 import re
 import subprocess
 from dataclasses import dataclass
@@ -85,12 +87,11 @@ def _read_release_notes(changelog_path: Path, version: str) -> ReleaseNotes:
     )
 
 
-def update_changelog_for_release(
-    changelog_path: Path, *, version: str, release_date: str
-) -> None:
+def _updated_changelog(
+    changelog_text: str, changelog_path: Path, *, version: str, release_date: str
+) -> str:
     _validate_version(version)
     normalized_date = _validate_release_date(release_date)
-    changelog_text = changelog_path.read_text()
     unreleased_body, trailing = _split_changelog(changelog_text)
     if not unreleased_body:
         raise ReleaseError("Unreleased changelog section is empty.")
@@ -109,21 +110,56 @@ def update_changelog_for_release(
     parts = [UNRELEASED_PREFIX, "\n", release_notes.render()]
     if trailing:
         parts.extend(["\n", trailing, "" if trailing.endswith("\n") else "\n"])
-    changelog_path.write_text("".join(parts))
+    return "".join(parts)
 
 
-def update_pyproject_version(pyproject_path: Path, *, version: str) -> None:
+def _updated_pyproject(
+    pyproject_text: str, pyproject_path: Path, *, version: str
+) -> str:
     _validate_version(version)
-    pyproject_text = pyproject_path.read_text()
     updated_text, replacements = re.subn(
-        r'(?m)^version = "([^"]+)"$',
+        r'(?m)^version = "([^"]+)"(?=\r?$)',
         f'version = "{version}"',
         pyproject_text,
         count=1,
     )
     if replacements != 1:
         raise ReleaseError(f"Could not update version in {pyproject_path}.")
-    pyproject_path.write_text(updated_text)
+    return updated_text
+
+
+def _atomic_replace(path: Path, content: bytes) -> None:
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.chmod(path.stat().st_mode & 0o777)
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def update_changelog_for_release(
+    changelog_path: Path, *, version: str, release_date: str
+) -> None:
+    text = _updated_changelog(
+        changelog_path.read_text(),
+        changelog_path,
+        version=version,
+        release_date=release_date,
+    )
+    _atomic_replace(changelog_path, text.encode("utf-8"))
+
+
+def update_pyproject_version(pyproject_path: Path, *, version: str) -> None:
+    text = _updated_pyproject(
+        pyproject_path.read_text(), pyproject_path, version=version
+    )
+    _atomic_replace(pyproject_path, text.encode("utf-8"))
 
 
 def prepare_release(
@@ -134,12 +170,28 @@ def prepare_release(
     release_date: str | None = None,
 ) -> str:
     normalized_date = _validate_release_date(release_date or date.today().isoformat())
-    update_changelog_for_release(
-        changelog_path,
-        version=version,
-        release_date=normalized_date,
-    )
-    update_pyproject_version(pyproject_path, version=version)
+    try:
+        original_changelog = changelog_path.read_bytes()
+        original_project = pyproject_path.read_bytes()
+        changelog = _updated_changelog(
+            original_changelog.decode("utf-8")
+            .replace("\r\n", "\n")
+            .replace("\r", "\n"),
+            changelog_path,
+            version=version,
+            release_date=normalized_date,
+        )
+        project = _updated_pyproject(
+            original_project.decode("utf-8"), pyproject_path, version=version
+        )
+        _atomic_replace(changelog_path, changelog.encode("utf-8"))
+        try:
+            _atomic_replace(pyproject_path, project.encode("utf-8"))
+        except OSError:
+            _atomic_replace(changelog_path, original_changelog)
+            raise
+    except (OSError, UnicodeError) as exc:
+        raise ReleaseError(f"Could not prepare release: {exc}") from exc
     return normalized_date
 
 

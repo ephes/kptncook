@@ -185,3 +185,58 @@ def test_main_propagates_gh_failure(tmp_path, mocker):
         main(["--changelog", str(changelog_path), "draft", "0.0.30"])
 
     assert exc_info.value.code == 2
+
+
+@pytest.mark.parametrize("version_line", ["", "version = '0.0.29'\n"])
+def test_prepare_invalid_version_preserves_files(tmp_path, version_line):
+    changelog = tmp_path / "CHANGELOG.md"
+    project = tmp_path / "pyproject.toml"
+    changelog.write_bytes(b"Unreleased\n==========\n\n- Keep notes.\r\n")
+    project.write_text("[project]\n" + version_line)
+    originals = changelog.read_bytes(), project.read_bytes()
+    with pytest.raises(ReleaseError, match="Could not update version"):
+        prepare_release(changelog, project, version="0.0.30")
+    assert (changelog.read_bytes(), project.read_bytes()) == originals
+
+
+def test_prepare_second_replace_failure_preserves_files(tmp_path, monkeypatch):
+    import os
+
+    changelog = tmp_path / "CHANGELOG.md"
+    project = tmp_path / "pyproject.toml"
+    changelog.write_bytes(b"Unreleased\n==========\n\n- Keep notes.\r\n")
+    project.write_bytes(b'[project]\nversion = "0.0.29"\r\n')
+    originals = changelog.read_bytes(), project.read_bytes()
+    replace = os.replace
+    failed = []
+
+    def fail_project(source, target):
+        if target == project:
+            failed.append(True)
+            raise OSError("injected second write failure")
+        return replace(source, target)
+
+    monkeypatch.setattr(os, "replace", fail_project)
+    with pytest.raises(ReleaseError, match="injected second write failure"):
+        prepare_release(changelog, project, version="0.0.30")
+    assert failed == [True]
+    assert (changelog.read_bytes(), project.read_bytes()) == originals
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "CHANGELOG.md",
+        "pyproject.toml",
+    ]
+
+
+def test_prepare_accepts_crlf_changelog(tmp_path):
+    changelog = tmp_path / "CHANGELOG.md"
+    project = tmp_path / "pyproject.toml"
+    changelog.write_bytes(
+        b"Unreleased\r\n==========\r\n\r\n- Keep notes.\r\n\r\n0.0.29 - 2026-02-11\r\n===================\r\n\r\n- Previous.\r\n"
+    )
+    project.write_bytes(b'[project]\r\nversion = "0.0.29"\r\n')
+    prepare_release(changelog, project, version="0.0.30", release_date="2026-10-12")
+    text = changelog.read_text()
+    assert "0.0.30 - 2026-10-12" in text
+    assert "0.0.29 - 2026-02-11" in text
+    assert "- Keep notes." in text
+    assert 'version = "0.0.30"' in project.read_text()

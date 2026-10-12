@@ -4,6 +4,10 @@ Unreleased
 ### Fixes
 - Paprika exports preserve JSON text faithfully and clean up temporary archive
   files on success and failure, without silently omitting serialization errors.
+- Reject malformed incoming and stored identifiers with bounded repository errors, preserving
+  primary and backup files during refused mutations.
+- Release preparation validates both files before atomic replacement and restores
+  the changelog if updating pyproject fails.
 - Markdown exports preserve existing files and manual notes across invocations,
   appending the recipe id and then a counter and creating files exclusively.
 - Repository recovery backups are flushed, fsynced and atomically replaced.
