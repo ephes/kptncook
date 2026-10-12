@@ -182,6 +182,9 @@ recipes) is taken, for example by an earlier export or by a second recipe with
 the same title, the recipe id and then a counter are appended
 (`Title-<recipe id>.zip`, `Title-<recipe id>-2.zip`, `allrecipes-2.paprikarecipes`).
 The command output lists the names that were actually written.
+Paprika preserves quotes, backslashes, whitespace and Unicode in recipe text.
+Its temporary archive files are removed on success and failure; only the final
+export persists. Export errors are reported instead of silently omitting recipes.
 
 ### Repository warnings
 

@@ -13,7 +13,6 @@ import gzip
 import json
 import logging
 import os
-import re
 import secrets
 import tempfile
 from datetime import datetime
@@ -21,7 +20,6 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from jinja2 import Template
 
 from kptncook.config import get_settings
 from kptncook.exporter_utils import (
@@ -33,32 +31,6 @@ from kptncook.exporter_utils import (
 )
 from kptncook.ingredient_groups import iter_ingredient_groups
 from kptncook.models import Image, Ingredient, Recipe, localized_fallback
-
-PAPRIKA_RECIPE_TEMPLATE = """{
-   "uid":"{{recipe.id.oid}}",
-   "name":"{{localized_fallback(recipe.localized_title)|default('',true)}}",
-   "directions": "{% for step in recipe.steps %}{{get_step_text(step)|default('',true)}}\\n{% endfor %}",
-   "servings":"2",
-   "rating":0,
-   "difficulty":"",
-   "ingredients":"{{ingredients_text}}",
-   "notes":"",
-   "created":"{{dtnow}}",
-   "image_url":null,
-   "cook_time":"{{recipe.cooking_time|default('',true)}}",
-   "prep_time":"{{recipe.preparation_time|default('',true)}}",
-   "source":"Kptncook",
-   "source_url":"",
-   "hash" : "{{hash}}",
-   "photo_hash":null,
-   "photos":[],
-   "photo": "{{cover_filename}}",
-   "nutritional_info":"{% for nutrient, amount in recipe.recipe_nutrition %}{{nutrient}}: {{amount}}\\n{% endfor %}",
-   "photo_data":"{{cover_img}}",
-   "photo_large":null,
-   "categories":["Kptncook"]
-}
-"""  # noqa: E501
 
 logger = logging.getLogger(__name__)
 IMAGE_DOWNLOAD_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
@@ -75,27 +47,23 @@ class GeneratedData:
 
 
 class PaprikaExporter:
-    invalid_control_chars = re.compile(r"[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]")
-    template = Template(PAPRIKA_RECIPE_TEMPLATE, trim_blocks=True)
-    unescaped_newline = re.compile(r"(?<!\\)\n")
-
     def export(self, recipes: list[Recipe]) -> str:
         export_data = self.get_export_data(recipes=recipes)
         filename = self.get_export_filename(export_data=export_data, recipes=recipes)
-        tmp_dir = tempfile.mkdtemp()
-        filename_full_path = self.save_recipes(
-            export_data=export_data, directory=tmp_dir, filename=filename
-        )
-        # never overwrite an existing export; pick a free name instead
-        disambiguator = recipes[0].id.oid if len(export_data) == 1 else None
-        target = move_to_free_target(
-            source=filename_full_path,
-            directory=Path.cwd(),
-            stem=Path(filename).stem,
-            extension=Path(filename).suffix,
-            disambiguator=disambiguator,
-        )
-        return target.name
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            filename_full_path = self.save_recipes(
+                export_data=export_data, directory=tmp_dir, filename=filename
+            )
+            # never overwrite an existing export; pick a free name instead
+            disambiguator = recipes[0].id.oid if len(export_data) == 1 else None
+            target = move_to_free_target(
+                source=filename_full_path,
+                directory=Path.cwd(),
+                stem=Path(filename).stem,
+                extension=Path(filename).suffix,
+                disambiguator=disambiguator,
+            )
+            return target.name
 
     def get_export_filename(
         self, export_data: dict[str, str], recipes: list[Recipe]
@@ -119,21 +87,36 @@ class PaprikaExporter:
 
     def get_recipe_as_json_string(self, recipe: Recipe) -> str:
         generated = self.get_generated_data(recipe=recipe)
-        ingredients_text = self.get_ingredients_text(recipe.ingredients)
-        recipe_as_json = self.template.render(
-            recipe=recipe,
-            localized_fallback=localized_fallback,
-            get_step_text=get_step_text,
-            dtnow=generated.dtnow,
-            cover_filename=generated.cover_filename,
-            hash=generated.hash,
-            cover_img=generated.cover_img,
-            ingredients_text=ingredients_text,
-        )
-        recipe_as_json = self.invalid_control_chars.sub("", recipe_as_json)
-        recipe_as_json = self.unescaped_newline.sub(" ", recipe_as_json)
-        json.loads(recipe_as_json)  # check if valid json
-        return recipe_as_json
+        document = {
+            "uid": str(recipe.id.oid),
+            "name": localized_fallback(recipe.localized_title) or "",
+            "directions": "".join(
+                (get_step_text(step) or "") + "\n" for step in recipe.steps
+            ),
+            "servings": "2",
+            "rating": 0,
+            "difficulty": "",
+            "ingredients": self.get_ingredients_text(recipe.ingredients),
+            "notes": "",
+            "created": generated.dtnow,
+            "image_url": None,
+            "cook_time": str(recipe.cooking_time or ""),
+            "prep_time": str(recipe.preparation_time or ""),
+            "source": "Kptncook",
+            "source_url": "",
+            "hash": generated.hash,
+            "photo_hash": None,
+            "photos": [],
+            "photo": generated.cover_filename or "",
+            "nutritional_info": "".join(
+                f"{nutrient}: {amount}\n"
+                for nutrient, amount in recipe.recipe_nutrition
+            ),
+            "photo_data": generated.cover_img or "",
+            "photo_large": None,
+            "categories": ["Kptncook"],
+        }
+        return json.dumps(document, ensure_ascii=False)
 
     def get_ingredients_text(self, ingredients: list[Ingredient]) -> str:
         lines = []
@@ -146,7 +129,7 @@ class PaprikaExporter:
                     lines.append(line)
         if not lines:
             return ""
-        return "\\n".join(lines) + "\\n"
+        return "\n".join(lines) + "\n"
 
     def format_ingredient_line(self, ingredient: Ingredient) -> str:
         parts: list[str] = []
@@ -162,14 +145,10 @@ class PaprikaExporter:
         return " ".join(part for part in parts if part).strip()
 
     def get_export_data(self, recipes: list[Recipe]) -> dict[str, str]:
-        export_data = dict()
-        for recipe in recipes:
-            try:
-                recipe_as_json = self.get_recipe_as_json_string(recipe=recipe)
-                export_data[str(recipe.id.oid)] = recipe_as_json
-            except json.JSONDecodeError as e:
-                logger.warning("Could not parse recipe %s: %s", recipe.id.oid, e)
-        return export_data
+        return {
+            str(recipe.id.oid): self.get_recipe_as_json_string(recipe)
+            for recipe in recipes
+        }
 
     def save_recipes(
         self, export_data: dict[str, Any], filename: str, directory: str
