@@ -180,3 +180,37 @@ def test_export_handles_secondary_filename_collisions():
 
     assert len({str(path) for path in written}) == 3
     assert all(path.exists() for path in written)
+
+
+def test_export_preserves_previous_exports_and_manual_notes(exporter):
+    first = build_recipe(_id={"$oid": "1"})
+    second = build_recipe(_id={"$oid": "2"})
+    [original] = exporter.export([first])
+    original.write_text("My handwritten notes", encoding="utf-8")
+    [other] = exporter.export([second])
+    other_bytes = other.read_bytes()
+    [repeated] = exporter.export([second])
+
+    assert original.read_text(encoding="utf-8") == "My handwritten notes"
+    assert other.read_bytes() == other_bytes
+    assert other.name == "Test Rezept-2.md"
+    assert repeated.name == "Test Rezept-2-2.md"
+    assert repeated.read_text(encoding="utf-8") == exporter.render_recipe(second)
+
+
+def test_export_retries_when_another_writer_claims_name(exporter, monkeypatch):
+    from pathlib import Path
+
+    original_open = Path.open
+    claimed = []
+
+    def racing_open(path, mode="r", *args, **kwargs):
+        if mode == "x" and not claimed:
+            claimed.append(path)
+            path.write_text("Other writer", encoding="utf-8")
+        return original_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", racing_open)
+    [written] = exporter.export([build_recipe()])
+    assert claimed[0].read_text(encoding="utf-8") == "Other writer"
+    assert written.name == "Test Rezept-1.md"

@@ -1,6 +1,12 @@
 Unreleased
 ==========
 
+### Fixes
+- Markdown exports preserve existing files and manual notes across invocations,
+  appending the recipe id and then a counter and creating files exclusively.
+- Repository recovery backups are flushed, fsynced and atomically replaced.
+  Backup I/O failures preserve both existing files and report a repository error.
+
 0.0.35 - 2026-10-09
 ===================
 

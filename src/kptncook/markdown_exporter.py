@@ -88,7 +88,6 @@ def _is_prep_step(step: RecipeStep) -> bool:
 class MarkdownExporter:
     def export(self, recipes: Iterable[Recipe]) -> list[Path]:
         written: list[Path] = []
-        used_stems: set[str] = set()
 
         out_dir = get_settings().root / "export_md"
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -96,16 +95,27 @@ class MarkdownExporter:
         for recipe in recipes:
             title = localized_fallback(recipe.localized_title) or "recipe"
             base = sanitize_filename(title)
-            # keep one file per recipe even when titles (or suffixed stems) collide
+            content = self.render_recipe(recipe)
             stem = base
             counter = 1
-            while stem in used_stems:
-                suffix = recipe.id.oid if counter == 1 else f"{recipe.id.oid}-{counter}"
-                stem = f"{base}-{suffix}"
-                counter += 1
-            used_stems.add(stem)
-            out_path = out_dir / f"{stem}.md"
-            out_path.write_text(self.render_recipe(recipe), encoding="utf-8")
+            while True:
+                out_path = out_dir / f"{stem}.md"
+                try:
+                    output = out_path.open("x", encoding="utf-8")
+                except FileExistsError:
+                    suffix = (
+                        recipe.id.oid if counter == 1 else f"{recipe.id.oid}-{counter}"
+                    )
+                    stem = f"{base}-{suffix}"
+                    counter += 1
+                    continue
+                try:
+                    with output:
+                        output.write(content)
+                except BaseException:
+                    out_path.unlink(missing_ok=True)
+                    raise
+                break
             written.append(out_path)
         return written
 
