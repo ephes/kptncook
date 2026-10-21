@@ -1,6 +1,11 @@
 Unreleased
 ==========
 
+### Security
+- Update the locked certifi CA bundle to 2026.10.19 for the eMudhra/emSign CA compromise
+  ([GHSA-6q48-6c7w-9gw2](https://github.com/certifi/python-certifi/security/advisories/GHSA-6q48-6c7w-9gw2)).
+  Lock-only change; re-sync environments created from the lock.
+
 ### Fixes
 - Paprika exports preserve JSON text faithfully and clean up temporary archive
   files on success and failure, without silently omitting serialization errors.
