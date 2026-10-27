@@ -4,6 +4,7 @@ from importlib import import_module
 import httpx
 import pytest
 import typer
+from typer.testing import CliRunner
 
 import kptncook as cli_mod
 from kptncook.api import KptnCookClient, _collect_recipe_identifiers
@@ -67,7 +68,7 @@ def test_list_dailies_includes_filters(monkeypatch):
     client.list_dailies(
         recipe_filter="veggie",
         zone="+02:00",
-        is_subscribed=True,
+        is_subscribed=False,
         lang="fr",
         store="ch",
         preferences="rt:diet_vegetarian,",
@@ -81,7 +82,69 @@ def test_list_dailies_includes_filters(monkeypatch):
     assert params["preferences"] == "rt:diet_vegetarian,"
     assert params["recipeFilter"] == "veggie"
     assert params["zone"] == "+02:00"
-    assert params["isSubscribed"] == "true"
+    assert params["isSubscribed"] == "false"
+
+
+def test_list_dailies_omits_is_subscribed_by_default(monkeypatch):
+    captured = {}
+    client = KptnCookClient(base_url="https://example.com", api_key="test-key")
+
+    def fake_get(path, **kwargs):
+        captured["params"] = kwargs.get("params", {})
+        return _json_response(client.to_url(path), [])
+
+    monkeypatch.setattr(client, "get", fake_get)
+    client.list_dailies(lang="de", store="de", preferences="")
+
+    assert "isSubscribed" not in captured["params"]
+
+
+def test_list_dailies_rejects_subscription_claim(monkeypatch):
+    client = KptnCookClient(base_url="https://example.com", api_key="test-key")
+
+    def fake_get(*_args, **_kwargs):
+        raise AssertionError("no request may be sent")
+
+    monkeypatch.setattr(client, "get", fake_get)
+
+    with pytest.raises(ValueError, match="not supported"):
+        client.list_dailies(is_subscribed=True)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [
+        (["dailies"], None),
+        (["dailies", "--not-subscribed"], False),
+    ],
+)
+def test_dailies_cli_subscription_option(monkeypatch, args, expected):
+    cli_module = import_module("kptncook.cli")
+    captured = {}
+
+    def fake_workflow(**kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(cli_module, "list_dailies_workflow", fake_workflow)
+
+    result = CliRunner().invoke(cli_module.app, args)
+
+    assert result.exit_code == 0, result.output
+    assert captured["is_subscribed"] is expected
+
+
+def test_dailies_cli_has_no_subscribed_option(monkeypatch):
+    cli_module = import_module("kptncook.cli")
+
+    def fake_workflow(**_kwargs):
+        raise AssertionError("workflow must not run")
+
+    monkeypatch.setattr(cli_module, "list_dailies_workflow", fake_workflow)
+
+    result = CliRunner().invoke(cli_module.app, ["dailies", "--subscribed"])
+
+    assert result.exit_code == 2
 
 
 def test_collect_recipe_identifiers_from_summaries():

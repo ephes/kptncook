@@ -158,10 +158,10 @@ def list_kptncook_dailies(
     zone: str | None = typer.Option(
         None, "--zone", help="Filter daily recipes by zone."
     ),
-    is_subscribed: bool | None = typer.Option(
-        None,
-        "--subscribed/--not-subscribed",
-        help="Filter daily recipes by subscription status.",
+    not_subscribed: bool = typer.Option(
+        False,
+        "--not-subscribed",
+        help="Send isSubscribed=false, as the free KptnCook app does.",
     ),
     save: bool = typer.Option(
         False,
@@ -177,7 +177,7 @@ def list_kptncook_dailies(
         list_dailies_workflow,
         recipe_filter=recipe_filter,
         zone=zone,
-        is_subscribed=is_subscribed,
+        is_subscribed=False if not_subscribed is True else None,
     )
     if not recipes:
         rprint("No recipes found.")
