@@ -1,6 +1,9 @@
 Unreleased
 ==========
 
+0.0.36 - 2026-10-27
+===================
+
 ### Breaking changes
 - Remove `kptncook dailies --subscribed`. The client no longer sends
   `isSubscribed=true`; `KptnCookClient.list_dailies()` and the dailies
