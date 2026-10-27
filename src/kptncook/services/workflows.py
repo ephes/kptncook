@@ -4,7 +4,7 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 
@@ -206,7 +206,7 @@ def list_dailies(
     *,
     recipe_filter: str | None = None,
     zone: str | None = None,
-    is_subscribed: bool | None = None,
+    is_subscribed: Literal[False] | None = None,
 ) -> list[RecipeInDb]:
     try:
         return KptnCookClient().list_dailies(

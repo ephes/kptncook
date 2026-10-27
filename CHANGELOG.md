@@ -1,6 +1,14 @@
 Unreleased
 ==========
 
+### Breaking changes
+- Remove `kptncook dailies --subscribed`. The client no longer sends
+  `isSubscribed=true`; `KptnCookClient.list_dailies()` and the dailies
+  workflow accept only `is_subscribed=False` or `None` and raise
+  `ValueError` for `True`. `--not-subscribed` (sends `isSubscribed=false`, as
+  the free app does) and the default (parameter omitted) are unchanged.
+  Scripts that pass `--subscribed` now fail with a usage error.
+
 ### Security
 - Update the locked certifi CA bundle to 2026.10.19 for the eMudhra/emSign CA compromise
   ([GHSA-6q48-6c7w-9gw2](https://github.com/certifi/python-certifi/security/advisories/GHSA-6q48-6c7w-9gw2)).

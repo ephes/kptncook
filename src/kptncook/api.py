@@ -228,14 +228,23 @@ class KptnCookClient(BaseHttpClient):
         *,
         recipe_filter: str | None = None,
         zone: str | None = None,
-        is_subscribed: bool | None = None,
+        is_subscribed: Literal[False] | None = None,
         lang: str | None = None,
         store: str | None = None,
         preferences: str | None = None,
     ) -> list[RecipeInDb]:
         """
         Get daily recipes from kptncook api.
+
+        ``is_subscribed=False`` sends ``isSubscribed=false``, as the free app
+        does. ``None`` omits the parameter. Claiming a subscription
+        (``True``) is not supported.
         """
+        if is_subscribed is not None and is_subscribed is not False:
+            raise ValueError(
+                "is_subscribed only accepts False or None; "
+                "claiming a subscription is not supported"
+            )
         params = self._standard_query_params(
             lang=lang, store=store, preferences=preferences
         )
@@ -243,8 +252,8 @@ class KptnCookClient(BaseHttpClient):
             params["recipeFilter"] = recipe_filter
         if zone is not None:
             params["zone"] = zone
-        if is_subscribed is not None:
-            params["isSubscribed"] = "true" if is_subscribed else "false"
+        if is_subscribed is False:
+            params["isSubscribed"] = "false"
         response = self.get("/dailies", params=params)
         response.raise_for_status()
         payload = _extract_dailies_payload(response.json())

@@ -219,15 +219,18 @@ $ kptncook delete-recipes 0 --force
 
 ## Dailies
 
-Filter dailies by API fields such as recipeFilter (for example `veggie`), zone
-(timezone offset like `+02:00`), and subscription status (`--subscribed` and
-`--not-subscribed` are mutually exclusive). Add `--save` to store the daily
-recipes in the local repository.
+Filter dailies by API fields such as recipeFilter (for example `veggie`) and
+zone (timezone offset like `+02:00`). Add `--save` to store the daily recipes
+in the local repository.
+
+By default, no subscription status is sent. `--not-subscribed` sends
+`isSubscribed=false`, as the free KptnCook app does; in a comparison on
+2026-10-27 this changed only the retailer data in the response, which no
+exporter uses. There is no option to claim a subscription.
 
 ```shell
 $ kptncook dailies
 $ kptncook dailies --zone +02:00 --recipe-filter veggie --save
-$ kptncook dailies --subscribed
 $ kptncook dailies --not-subscribed --save
 ```
 
