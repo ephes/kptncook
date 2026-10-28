@@ -8,6 +8,20 @@ Thanks to [this blogpost](https://medium.com/analytics-vidhya/reversing-and-anal
 
 It's in pre alpha status and currently slightly unmaintained. If you want to step in, please let me know.
 
+## Disclaimer
+
+This is an unofficial tool. It is not affiliated with, endorsed by, or
+supported by KptnCook. "KptnCook" is used only to describe which service the
+tool works with.
+
+- It talks to KptnCook's undocumented mobile API, which can change or stop
+  working at any time.
+- It is meant for personal use, such as backing up your own favorites into
+  your own recipe manager. Recipe texts and images remain the property of
+  their rights holders; do not republish them.
+- You are responsible for how you use it, including complying with
+  KptnCook's terms of service.
+
 ## Maintenance disclosure
 
 This repository is maintained with substantial assistance from coding agents.

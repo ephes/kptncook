@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+### Documentation
+- Add a README disclaimer: the tool is unofficial and not affiliated with
+  KptnCook, uses an undocumented API, and is meant for personal use.
+
 0.0.36 - 2026-10-27
 ===================
 
