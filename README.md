@@ -435,6 +435,12 @@ Install the development environment:
 $ uv sync
 ```
 
+uv uses the newest installed Python that matches `requires-python` (3.10 or
+newer, including 3.15). To use a specific interpreter, pass it explicitly, for
+example `uv sync -p 3.13`. The locked compiled dependencies ship prebuilt
+wheels for these versions, so no Rust toolchain is needed; a few small packages
+(such as `pyyaml` on 3.15 or `watchdog` on macOS) are still built locally.
+
 Install the git hooks:
 ```shell
 $ uv run prek install -f
