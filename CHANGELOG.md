@@ -5,6 +5,15 @@ Unreleased
 - Add a README disclaimer: the tool is unofficial and not affiliated with
   KptnCook, uses an undocumented API, and is meant for personal use.
 
+### Developer Experience
+- `uv sync`, `uv run`, and `just check` work again when uv picks Python 3.15.
+  The lock now has `rpds-py` 2026.9.1 (via jupyterlab → jsonschema) and
+  `pydantic` 2.14.1 / `pydantic-core` 2.50.1, which ship 3.15 wheels, so these
+  no longer fall back to source builds that failed. `cffi`, `librt`,
+  `markupsafe`, and `pywinpty` were also updated to releases with 3.15 wheels.
+  Python 3.10 keeps `rpds-py` 0.30.0. Lock-only change: the supported Python
+  range (`>=3.10`) and the package's dependency ranges are unchanged.
+
 0.0.36 - 2026-10-27
 ===================
 

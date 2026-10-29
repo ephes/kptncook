@@ -435,6 +435,17 @@ Install the development environment:
 $ uv sync
 ```
 
+uv chooses an interpreter that matches `requires-python` (3.10 or newer,
+including 3.15) through its interpreter discovery: it reuses an existing
+project `.venv` when that still matches, and otherwise picks a Python based on
+its discovery rules (for example a `.python-version` file or the order of
+interpreters on `PATH`), so the version can differ between machines. To use a
+specific interpreter, pass it explicitly, for example `uv sync -p 3.13`; uv
+recreates `.venv` if it was built for a different Python. The locked compiled
+dependencies ship prebuilt
+wheels for these versions, so no Rust toolchain is needed; a few small packages
+(such as `pyyaml` on 3.15 or `watchdog` on macOS) are still built locally.
+
 Install the git hooks:
 ```shell
 $ uv run prek install -f
