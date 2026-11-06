@@ -4,6 +4,7 @@ from datetime import date
 from importlib import import_module
 
 import pytest
+from click import unstyle
 from typer.testing import CliRunner
 
 from kptncook.repositories import RecipeInDb
@@ -181,8 +182,9 @@ def test_selection_rejects_empty_input_before_workflows(mocker, selection, blank
     )
 
     assert result.exit_code == (1 if blank else 2)
-    assert ("non-empty" if blank else "Missing option") in result.output
-    assert option in result.output
+    output = unstyle(result.output)
+    assert ("non-empty" if blank else "Missing option") in output
+    assert option in output
     workflow.assert_not_called()
     save_workflow.assert_not_called()
 

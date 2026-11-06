@@ -5,6 +5,7 @@ Unreleased
 - Cover discovery and popular-ingredient CLI output, ingredient/onboarding
   selection and explicit saves, and Paprika/Tandoor/Markdown command dispatch,
   destinations, repository warnings and failure exits with synthetic workflows.
+  Keep output assertions independent of terminal width and error coloring.
 
 ### Security
 - Audit the frozen runtime and development graph in CI with pinned pip-audit;
