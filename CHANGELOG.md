@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+### Fixes
+- Recipe OIDs require exactly 24 ASCII hexadecimal characters; pasted OID URLs
+  accept query strings and fragments while preserving short UID precedence.
+
 0.0.37 - 2026-10-29
 ===================
 

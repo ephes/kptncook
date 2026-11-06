@@ -128,6 +128,10 @@ Commands:
   export-recipes-to-markdown Export a recipe by id or all recipes to Markdown files
 ```
 
+Recipe IDs can be short share UIDs or 24 ASCII hexadecimal characters (case
+insensitive). You can paste recipe URLs with query strings or fragments, or
+text containing an OID. Short UIDs take precedence when both are present.
+
 ## Quick examples
 
 Short snippets for the new discovery/dailies/onboarding/ingredient commands

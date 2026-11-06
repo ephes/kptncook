@@ -37,3 +37,20 @@ from kptncook.api import parse_id
 def test_parse_id(test_input, expected):
     print(test_input, expected)
     assert parse_id(test_input) == expected
+
+
+@pytest.mark.parametrize("value", ["z" * 24, "ä" * 24, "Ａ" * 24, "0" * 23 + "g"])
+def test_reject_nonhex_oid(value):
+    assert parse_id(value) is None
+
+
+@pytest.mark.parametrize("suffix", ["", "?lang=de", "#recipe", "?lang=de#recipe"])
+def test_oid_url_boundaries(suffix):
+    oid = "aB0123456789cDEF01234567"
+    assert parse_id(f"https://share.kptncook.com/{oid}{suffix}") == ("oid", oid)
+
+
+def test_pasted_oid_and_uid_precedence():
+    oid = "a" * 24
+    assert parse_id(f"Recipe: {oid}, next") == ("oid", oid)
+    assert parse_id(f"{oid}/Ab12cd3") == ("uid", "Ab12cd3")
