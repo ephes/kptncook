@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Security
+- Audit the frozen runtime and development graph in CI with pinned pip-audit;
+  document the identical local command and coverage.
 - Refresh notebook/build tooling to setuptools 84.2.1 and Tornado 6.6.
   JupyterLab now installs on Python 3.11+ because the fixed Tornado drops 3.10;
   the recipe client and other development tools retain Python 3.10 support.

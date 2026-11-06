@@ -625,3 +625,13 @@ tools without JupyterLab. Smoke-check notebooks with
 The notebook/build lock uses setuptools 84.2.1 and Tornado 6.6 to address
 PYSEC-2026-3447, GHSA-xmj3-9gf7-h52w and CVE-2026-116577/115927/116578.
 These findings concern development tools; they do not establish a recipe API exploit.
+
+Run the same frozen dependency audit as CI with
+`uv run --frozen python scripts/audit_python.py` (Python 3.13 in CI).
+It exports runtime dependencies and all dependency groups, including the default
+`dev` group's notebook/build tooling; there are no optional extras. The pinned
+pip-audit 2.10.1 checks registry packages applicable to the active interpreter
+and platform. This does not audit other interpreter/platform marker branches or
+separate build-backend/hook environments. Export errors and advisory findings
+both fail the command; it never updates the lock. CI has read-only repository
+permissions and a ten-minute audit timeout.
