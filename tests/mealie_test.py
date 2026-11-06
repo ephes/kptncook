@@ -10,7 +10,6 @@ from kptncook import _extract_mealie_detail_message
 from kptncook.config import settings
 from kptncook.http_errors import UserFacingError
 from kptncook.mealie import (
-    ASSET_DOWNLOAD_TIMEOUT,
     MealieApiClient,
     Recipe,
     RecipeTag,
@@ -86,11 +85,9 @@ def test_upload_asset_follows_redirects(monkeypatch):
     image = Image(name="step.jpg", url="http://images.kptncook.com/step.jpg")
     seen = {}
 
-    def fake_get(url, follow_redirects=False, **kwargs):
+    def fake_download(url, follow_redirects=False):
         seen["follow_redirects"] = follow_redirects
-        seen["timeout"] = kwargs.get("timeout")
-        request = httpx.Request("GET", url)
-        return httpx.Response(200, request=request, content=b"image-bytes")
+        return b"image-bytes"
 
     def fake_post(path, data=None, files=None, **kwargs):
         request = httpx.Request("POST", f"http://mealie.local/api{path}")
@@ -100,13 +97,12 @@ def test_upload_asset_follows_redirects(monkeypatch):
             json={"fileName": "step.jpg", "name": "step", "icon": "mdi-file-image"},
         )
 
-    monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setattr("kptncook.mealie.download_image", fake_download)
     client.post = fake_post
 
     result = client.upload_asset("recipe-slug", image)
 
     assert seen["follow_redirects"] is True
-    assert seen["timeout"] == ASSET_DOWNLOAD_TIMEOUT
     assert result["fileName"] == "step.jpg"
 
 

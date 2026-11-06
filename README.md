@@ -128,6 +128,10 @@ Commands:
   export-recipes-to-markdown Export a recipe by id or all recipes to Markdown files
 ```
 
+Recipe IDs can be short share UIDs or 24 ASCII hexadecimal characters (case
+insensitive). You can paste recipe URLs with query strings or fragments, or
+text containing an OID. Short UIDs take precedence when both are present.
+
 ## Quick examples
 
 Short snippets for the new discovery/dailies/onboarding/ingredient commands
@@ -171,6 +175,12 @@ The client does not retry or delete the recipe after such an ambiguous result.
 Run the sync again: it first checks stored identity extras and skips any
 recipe already imported. Do not delete a recipe merely because its import
 response was lost.
+
+Image downloads for Paprika and Tandoor covers and Mealie step assets are
+limited to 10 MiB per image and 60 seconds for the entire transfer (including
+redirects). Failed, oversized, or slow images are skipped; recipe text is
+still exported or imported. Downloads request uncompressed responses; servers
+that send compressed images despite that request are skipped to bound memory.
 
 ### Export metadata
 

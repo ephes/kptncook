@@ -454,22 +454,20 @@ def looks_like_uid(token: str) -> bool:
 
 
 def looks_like_oid(token: str) -> bool:
-    correct_len = len(token) == 24
-    is_hex = token.isalnum()
-    return correct_len and is_hex
+    return re.fullmatch(r"[0-9a-fA-F]{24}", token) is not None
 
 
 def parse_id(text: str) -> tuple[Literal["oid", "uid"], str] | None:
     """
-    Parse recipe id (uid or uid) from url/text.
+    Parse recipe id (uid or oid) from url/text.
     """
     try:
-        uid = next(part for part in re.split(r"/|\?", text) if looks_like_uid(part))
+        uid = next(part for part in re.split(r"[/?#]", text) if looks_like_uid(part))
         return "uid", uid
     except StopIteration:
         pass
     try:
-        oid = next(part for part in re.split(r" |,|/", text) if looks_like_oid(part))
+        oid = next(part for part in re.split(r"[\s,/?#]", text) if looks_like_oid(part))
         return "oid", oid
     except StopIteration:
         pass

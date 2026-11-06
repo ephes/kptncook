@@ -210,15 +210,7 @@ def test_media_failures_leave_core_import_successful(failed_operation):
         client = MealieApiClient("http://mealie.local/api", client=http)
         # Only the external image download is replaced; Mealie HTTP remains real.
         with pytest.MonkeyPatch.context() as patch:
-            patch.setattr(
-                httpx,
-                "get",
-                lambda *a, **kw: httpx.Response(
-                    200,
-                    content=b"image",
-                    request=httpx.Request("GET", "https://images.example/step.jpg"),
-                ),
-            )
+            patch.setattr("kptncook.mealie.download_image", lambda *a, **kw: b"image")
             result = client.create_recipe(recipe)
     assert result.slug == "test-1"
     assert result.extras["kptncook_id"] == "id"

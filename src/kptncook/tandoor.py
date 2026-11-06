@@ -21,6 +21,7 @@ from kptncook.exporter_utils import (
     write_zip,
     ZipContent,
 )
+from kptncook.image_download import download_image
 from kptncook.ingredient_groups import iter_ingredient_groups
 from kptncook.models import (
     Ingredient,
@@ -32,7 +33,6 @@ from kptncook.models import (
 )
 
 logger = logging.getLogger(__name__)
-IMAGE_DOWNLOAD_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
 
 class TandoorExporter:
@@ -83,12 +83,7 @@ class TandoorExporter:
         if cover_url is None:
             return None
         try:
-            response = httpx.get(
-                cover_url,
-                follow_redirects=True,
-                timeout=IMAGE_DOWNLOAD_TIMEOUT,
-            )
-            response.raise_for_status()
+            return download_image(cover_url, follow_redirects=True)
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 logger.info(
@@ -97,18 +92,15 @@ class TandoorExporter:
                 )
             else:
                 logger.warning(
-                    "While trying to fetch the cover img a HTTP error occurred: %s: %s",
+                    "While trying to fetch the cover img a HTTP error occurred: %s",
                     exc.response.status_code,
-                    exc,
                 )
             return None
-        except httpx.RequestError as exc:
+        except httpx.RequestError:
             logger.warning(
-                "While trying to fetch the cover img a network error occurred: %s",
-                exc,
+                "Skipping cover image: download failed or exceeded limits",
             )
             return None
-        return response.content
 
     def get_recipe_payload(self, recipe: Recipe) -> dict[str, Any]:
         return {

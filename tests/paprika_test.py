@@ -21,8 +21,8 @@ def test_get_cover_img_as_base64_string(full_recipe, mocker):
     p = PaprikaExporter()
     recipe = Recipe.model_validate(full_recipe)
     mocker.patch(
-        "kptncook.paprika.httpx.get",
-        return_value=mocker.Mock(content=b"foobar", status_code=200),
+        "kptncook.paprika.download_image",
+        return_value=b"foobar",
     )
     cover_info = p.get_cover_img_as_base64_string(recipe=recipe)
     assert isinstance(cover_info, tuple) is True
@@ -37,19 +37,14 @@ def test_get_cover_img_as_base64_string(full_recipe, mocker):
 def test_get_cover_img_as_base64_string_can_handle_404(full_recipe, mocker):
     p = PaprikaExporter()
     recipe = Recipe.model_validate(full_recipe)
+    request = httpx.Request("GET", "https://images.example/missing.jpg")
+    response = httpx.Response(404, request=request)
     mocker.patch(
-        "kptncook.paprika.httpx.get",
-        return_value=mocker.Mock(content=b"foobar", status_code=404),
-    )
-    # hm, looks weird, but works.
-    m = mocker.patch("kptncook.paprika.httpx.get")
-    mock_response = mocker.Mock()
-    mock_response.raise_for_status = mocker.Mock(
+        "kptncook.paprika.download_image",
         side_effect=httpx.HTTPStatusError(
-            message="404 File not found", response=mock_response, request=mocker.Mock()
-        )
+            "Not found", request=request, response=response
+        ),
     )
-    m.return_value = mock_response
     assert p.get_cover_img_as_base64_string(recipe=recipe) == (None, None)
 
 
@@ -58,8 +53,8 @@ def test_export_single_recipe(full_recipe, mocker, tmp_path, monkeypatch):
     recipe = Recipe.model_validate(full_recipe)
     monkeypatch.chdir(tmp_path)
     mocker.patch(
-        "kptncook.paprika.httpx.get",
-        return_value=mocker.Mock(content=b"foobar", status_code=200),
+        "kptncook.paprika.download_image",
+        return_value=b"foobar",
     )
     p.export(recipes=[recipe])
     expected_file = (
@@ -75,8 +70,8 @@ def test_export_all_recipes(full_recipe, minimal, mocker, tmp_path, monkeypatch)
     recipe2 = Recipe.model_validate(minimal)
     monkeypatch.chdir(tmp_path)
     mocker.patch(
-        "kptncook.paprika.httpx.get",
-        return_value=mocker.Mock(content=b"foobar", status_code=200),
+        "kptncook.paprika.download_image",
+        return_value=b"foobar",
     )
     p.export(recipes=[recipe1, recipe2])
     expected_file = "allrecipes.paprikarecipes"
