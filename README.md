@@ -508,7 +508,8 @@ CLI browsing and export contracts run without accounts, network services or
 export files. Run `uv run pytest tests/cli_browsing_test.py` to exercise the
 registered commands with synthetic workflow results: discovery display and
 `--no-quick-search`, ingredient/tag normalization, explicit `--save`, export
-format and optional recipe ID dispatch, warnings and failure exits.
+format and optional recipe ID dispatch, warnings and failure exits. Assertions
+use a fixed console width and strip error styling to work on colored CI consoles.
 
 ## Disposable Mealie Integration Tests
 
