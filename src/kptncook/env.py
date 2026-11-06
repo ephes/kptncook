@@ -6,11 +6,13 @@ from __future__ import annotations
 
 import os
 import tempfile
-from pathlib import Path
-from contextlib import contextmanager
 from collections.abc import Iterator
+from contextlib import contextmanager
+from io import StringIO
+from pathlib import Path
 
 import portalocker
+from dotenv import dotenv_values, set_key
 
 DEFAULT_API_KEY = "6q7QNKy-oIgk-IMuWisJ-jfN7s6"
 ENV_FILE_MODE = 0o600
@@ -68,7 +70,9 @@ def _tighten_env_permissions(env_path: Path) -> None:
         pass
 
 
-def _atomic_write_env(env_path: Path, content: str) -> None:
+def _atomic_write_env(
+    env_path: Path, content: str, *, assignment: tuple[str, str] | None = None
+) -> None:
     """Replace ``env_path`` with ``content`` without a window of exposure or loss.
 
     The content goes to a temporary file in the same directory that is created
@@ -85,10 +89,16 @@ def _atomic_write_env(env_path: Path, content: str) -> None:
     )
     tmp_path = Path(tmp_name)
     try:
-        with os.fdopen(fd, "w") as handle:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+        if assignment is not None:
+            key, value = assignment
+            # set_key escapes single quotes; also escape backslashes because
+            # python-dotenv decodes doubled backslashes in single-quoted values.
+            set_key(tmp_path, key, value.replace("\\", "\\\\"), quote_mode="always")
+        with tmp_path.open("r+", encoding="utf-8") as handle:
             if hasattr(os, "fchmod"):
                 os.fchmod(handle.fileno(), ENV_FILE_MODE)
-            handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp_path, target)
@@ -129,11 +139,14 @@ def _locked_env_path(env_path: Path) -> Iterator[Path]:
     lock_path = target.with_name(f".{target.name}.lock")
     fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, ENV_FILE_MODE)
     with os.fdopen(fd, "a") as handle:
-        portalocker.lock(handle, portalocker.LOCK_EX)
         try:
-            yield target
-        finally:
-            portalocker.unlock(handle)
+            portalocker.lock(handle, portalocker.LOCK_EX)
+            try:
+                yield target
+            finally:
+                portalocker.unlock(handle)
+        except portalocker.exceptions.LockException as exc:
+            raise OSError("Could not lock configuration file") from exc
 
 
 def scaffold_env_file(env_path: Path = ENV_PATH) -> bool:
@@ -149,18 +162,15 @@ def scaffold_env_file(env_path: Path = ENV_PATH) -> bool:
 
 
 def read_env_values(env_path: Path) -> dict[str, str]:
-    values: dict[str, str] = {}
     try:
-        content = env_path.read_text()
+        content = env_path.read_text(encoding="utf-8")
     except OSError:
-        return values
-    for line in content.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
-            continue
-        key, value = stripped.split("=", 1)
-        values[key.strip()] = value.strip().strip('"')
-    return values
+        return {}
+    return {
+        key: value
+        for key, value in dotenv_values(stream=StringIO(content)).items()
+        if value is not None
+    }
 
 
 def upsert_env_value(env_path: Path, key: str, value: str) -> None:
@@ -171,21 +181,8 @@ def upsert_env_value(env_path: Path, key: str, value: str) -> None:
     """
     with _locked_env_path(env_path) as target:
         try:
-            content = target.read_text()
-            lines = content.splitlines()
+            content = target.read_text(encoding="utf-8")
         except FileNotFoundError:
-            lines = []
-        updated = False
-        new_lines: list[str] = []
-        for line in lines:
-            if line.strip().startswith(f"{key}="):
-                new_lines.append(f"{key}={value}")
-                updated = True
-            else:
-                new_lines.append(line)
-        if not updated:
-            if new_lines and new_lines[-1].strip() != "":
-                new_lines.append("")
-            new_lines.append(f"{key}={value}")
-        _atomic_write_env(target, "\n".join(new_lines) + "\n")
+            content = ""
+        _atomic_write_env(target, content, assignment=(key, value))
         _tighten_env_permissions(target)

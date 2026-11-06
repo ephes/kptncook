@@ -43,6 +43,7 @@ dependencies = [
     "jinja2",
     "pathvalidate",
     "portalocker>=3.2",
+    "python-dotenv>=1.2.2",
 ]
 
 [dependency-groups]

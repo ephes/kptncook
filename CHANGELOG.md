@@ -9,6 +9,8 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Use consistent dotenv parsing in setup/runtime and quote saved values, updating
+  spaced/export assignments while retaining unrelated comments and keys.
 - Serialize cooperating configuration writers, including scaffolding and symlink
   targets, so concurrent key updates preserve each other.
 - Bound Paprika, Tandoor, and Mealie image downloads to 10 MiB and a 60-second

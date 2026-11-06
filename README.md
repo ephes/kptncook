@@ -347,8 +347,13 @@ Cooperating setup/token writers hold an OS file lock across rereading and atomic
 publication, so concurrent updates preserve other keys. Paths are resolved before
 locking, including symlink targets. The stable sibling `.<filename>.lock` (for
 `.env`, `..env.lock`) is retained after use; do not delete it while writers may
-be running. Manual editors must coordinate separately. Scaffolding uses the same
-lock and does not overwrite an existing nonempty configuration.
+be running. Manual editors must coordinate separately. Setup and runtime use python-dotenv
+syntax, including single/double quotes, `export`, spaced assignments and inline
+comments. Updates quote literal values (including backslashes, quotes, spaces,
+`#` and newlines) and preserve unrelated lines. Normal python-dotenv `${VAR}`
+interpolation still applies when reading configuration. Scaffolding uses the same
+lock and does not overwrite an existing nonempty configuration. If the filesystem
+cannot provide a lock, updates fail without replacing the configuration.
 
 **Important:** The `.env` file must be created in the `~/.kptncook/` directory, NOT in the installation directory or by editing the `kptncook` executable.
 
