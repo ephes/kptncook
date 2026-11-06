@@ -7,6 +7,10 @@ from __future__ import annotations
 import os
 import tempfile
 from pathlib import Path
+from contextlib import contextmanager
+from collections.abc import Iterator
+
+import portalocker
 
 DEFAULT_API_KEY = "6q7QNKy-oIgk-IMuWisJ-jfN7s6"
 ENV_FILE_MODE = 0o600
@@ -113,17 +117,34 @@ def _fsync_directory(directory: Path) -> None:
         os.close(dir_fd)
 
 
+@contextmanager
+def _locked_env_path(env_path: Path) -> Iterator[Path]:
+    """Serialize cooperating writers on a stable sibling of the resolved target.
+
+    Never remove the lock file: waiting writers must all lock the same inode,
+    even though atomic publication replaces the env file's inode.
+    """
+    target = env_path.resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = target.with_name(f".{target.name}.lock")
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, ENV_FILE_MODE)
+    with os.fdopen(fd, "a") as handle:
+        portalocker.lock(handle, portalocker.LOCK_EX)
+        try:
+            yield target
+        finally:
+            portalocker.unlock(handle)
+
+
 def scaffold_env_file(env_path: Path = ENV_PATH) -> bool:
     try:
-        if env_path.exists() and env_path.stat().st_size > 0:
-            return False
+        with _locked_env_path(env_path) as target:
+            if target.exists() and target.stat().st_size > 0:
+                return False
+            _atomic_write_env(target, ENV_TEMPLATE)
+            _tighten_env_permissions(target)
     except OSError:
         return False
-    try:
-        _atomic_write_env(env_path, ENV_TEMPLATE)
-    except OSError:
-        return False
-    _tighten_env_permissions(env_path)
     return True
 
 
@@ -148,22 +169,23 @@ def upsert_env_value(env_path: Path, key: str, value: str) -> None:
     Only a missing file counts as empty. Any other read error is raised so an
     unreadable file is never replaced by one that holds just ``key``.
     """
-    try:
-        content = env_path.read_text()
-        lines = content.splitlines()
-    except FileNotFoundError:
-        lines = []
-    updated = False
-    new_lines: list[str] = []
-    for line in lines:
-        if line.strip().startswith(f"{key}="):
+    with _locked_env_path(env_path) as target:
+        try:
+            content = target.read_text()
+            lines = content.splitlines()
+        except FileNotFoundError:
+            lines = []
+        updated = False
+        new_lines: list[str] = []
+        for line in lines:
+            if line.strip().startswith(f"{key}="):
+                new_lines.append(f"{key}={value}")
+                updated = True
+            else:
+                new_lines.append(line)
+        if not updated:
+            if new_lines and new_lines[-1].strip() != "":
+                new_lines.append("")
             new_lines.append(f"{key}={value}")
-            updated = True
-        else:
-            new_lines.append(line)
-    if not updated:
-        if new_lines and new_lines[-1].strip() != "":
-            new_lines.append("")
-        new_lines.append(f"{key}={value}")
-    _atomic_write_env(env_path, "\n".join(new_lines) + "\n")
-    _tighten_env_permissions(env_path)
+        _atomic_write_env(target, "\n".join(new_lines) + "\n")
+        _tighten_env_permissions(target)

@@ -1,4 +1,7 @@
 import os
+import multiprocessing
+
+import pytest
 import stat
 
 from pathlib import Path
@@ -154,7 +157,11 @@ def test_upsert_env_value_failure_leaves_old_file_unchanged(tmp_path, monkeypatc
         raise AssertionError("expected the write failure to propagate")
 
     assert env_path.read_text() == original
-    assert sorted(p.name for p in tmp_path.iterdir()) == [".env"]
+    import portalocker
+
+    with portalocker.Lock(tmp_path / "..env.lock", timeout=0):
+        pass  # failed publication released the OS lock
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["..env.lock", ".env"]
 
 
 def test_scaffold_env_file_failure_returns_false_and_cleans_up(tmp_path, monkeypatch):
@@ -168,7 +175,7 @@ def test_scaffold_env_file_failure_returns_false_and_cleans_up(tmp_path, monkeyp
     monkeypatch.setattr(env_module.os, "replace", failing_replace)
 
     assert scaffold_env_file(env_path) is False
-    assert list(tmp_path.iterdir()) == []
+    assert [p.name for p in tmp_path.iterdir()] == ["..env.lock"]
 
 
 def test_upsert_env_value_keeps_other_keys(tmp_path):
@@ -227,3 +234,76 @@ def test_upsert_env_value_keeps_symlink(tmp_path):
         real_env.read_text() == "KPTNCOOK_API_KEY=abc\n\nKPTNCOOK_ACCESS_TOKEN=token\n"
     )
     assert stat.S_IMODE(real_env.stat().st_mode) == 0o600
+
+
+def _concurrent_env_writer(path, key, value, entered, release, read, started):
+    """Synthetic process worker: pause the first writer just before publication."""
+    import kptncook.env as env_module
+
+    original_write = env_module._atomic_write_env
+    original_read = Path.read_text
+
+    def write(*args, **kwargs):
+        if entered is not None:
+            entered.set()
+            assert release.wait(10)
+        return original_write(*args, **kwargs)
+
+    def read_text(self, *args, **kwargs):
+        if self.resolve() == path.resolve() and read is not None:
+            read.set()
+        return original_read(self, *args, **kwargs)
+
+    env_module._atomic_write_env = write
+    Path.read_text = read_text
+    if started is not None:
+        started.set()
+    if key is None:
+        scaffold_env_file(path)
+    else:
+        upsert_env_value(path, key, value)
+
+
+@pytest.mark.parametrize("second_key", ["SECOND", "FIRST", None])
+@pytest.mark.parametrize("alias", [False, True])
+def test_concurrent_env_updates_serialize_before_read(tmp_path, second_key, alias):
+    context = multiprocessing.get_context("spawn")
+    env_path = tmp_path / ".env"
+    env_path.write_text("KEEP=synthetic\n")
+    second_path = env_path
+    if alias:
+        second_path = tmp_path / "alias.env"
+        try:
+            second_path.symlink_to(env_path)
+        except OSError:
+            pytest.skip("symlink creation unavailable")
+    entered, release, read, started = [context.Event() for _ in range(4)]
+    first = context.Process(
+        target=_concurrent_env_writer,
+        args=(env_path, "FIRST", "one", entered, release, None, None),
+    )
+    second = context.Process(
+        target=_concurrent_env_writer,
+        args=(second_path, second_key, "two", None, None, read, started),
+    )
+    first.start()
+    try:
+        assert entered.wait(10)
+        second.start()
+        assert started.wait(10)
+        assert not read.wait(0.5), "second writer read while first update was pending"
+    finally:
+        release.set()
+        for process in (first, second):
+            if process.pid is not None:
+                process.join(10)
+                if process.is_alive():
+                    process.terminate()
+                    process.join(10)
+    assert first.exitcode == second.exitcode == 0
+    values = read_env_values(env_path)
+    assert values["KEEP"] == "synthetic"
+    if second_key is not None:
+        assert values[second_key] == "two"
+    if second_key != "FIRST":
+        assert values["FIRST"] == "one"

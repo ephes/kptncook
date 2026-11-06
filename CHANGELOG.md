@@ -9,6 +9,8 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Serialize cooperating configuration writers, including scaffolding and symlink
+  targets, so concurrent key updates preserve each other.
 - Bound Paprika, Tandoor, and Mealie image downloads to 10 MiB and a 60-second
   total deadline; skip failed images while preserving recipe text and cleanup.
 - Recipe OIDs require exactly 24 ASCII hexadecimal characters; pasted OID URLs

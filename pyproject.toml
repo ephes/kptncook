@@ -41,7 +41,8 @@ dependencies = [
     "click",
     "unidecode",
     "jinja2",
-    "pathvalidate"
+    "pathvalidate",
+    "portalocker>=3.2",
 ]
 
 [dependency-groups]

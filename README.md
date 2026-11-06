@@ -343,6 +343,13 @@ Then set environment variables in the `~/.kptncook/.env` file (or directly in yo
 
 When kptncook creates or updates `~/.kptncook/.env`, it applies owner-only read/write permissions (`0600`) where the platform supports it, because the file may contain access tokens, passwords, or trusted shell commands. Updates are written to an owner-only temporary file next to `.env` and then moved into place, so a failed write leaves the previous file intact.
 
+Cooperating setup/token writers hold an OS file lock across rereading and atomic
+publication, so concurrent updates preserve other keys. Paths are resolved before
+locking, including symlink targets. The stable sibling `.<filename>.lock` (for
+`.env`, `..env.lock`) is retained after use; do not delete it while writers may
+be running. Manual editors must coordinate separately. Scaffolding uses the same
+lock and does not overwrite an existing nonempty configuration.
+
 **Important:** The `.env` file must be created in the `~/.kptncook/` directory, NOT in the installation directory or by editing the `kptncook` executable.
 
 If you want to back up your favorite recipes from KptnCook, you have to set the `KPTNCOOK_ACCESS_TOKEN` variable as well. You can obtain the access token by running `kptncook kptncook-access-token`; the command fetches the token and saves `KPTNCOOK_ACCESS_TOKEN` into `~/.kptncook/.env` instead of printing the raw token to stdout. But you need a kptncook account to do that.
