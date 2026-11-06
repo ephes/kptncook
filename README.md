@@ -504,6 +504,12 @@ Run tests using uv:
 $ uv run pytest
 ```
 
+CLI browsing and export contracts run without accounts, network services or
+export files. Run `uv run pytest tests/cli_browsing_test.py` to exercise the
+registered commands with synthetic workflow results: discovery display and
+`--no-quick-search`, ingredient/tag normalization, explicit `--save`, export
+format and optional recipe ID dispatch, warnings and failure exits.
+
 ## Disposable Mealie Integration Tests
 
 `tests/mealie_integration_test.py` exercises real HTTP against an externally
