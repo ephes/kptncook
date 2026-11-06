@@ -343,6 +343,18 @@ Then set environment variables in the `~/.kptncook/.env` file (or directly in yo
 
 When kptncook creates or updates `~/.kptncook/.env`, it applies owner-only read/write permissions (`0600`) where the platform supports it, because the file may contain access tokens, passwords, or trusted shell commands. Updates are written to an owner-only temporary file next to `.env` and then moved into place, so a failed write leaves the previous file intact.
 
+Cooperating setup/token writers hold an OS file lock across rereading and atomic
+publication, so concurrent updates preserve other keys. Paths are resolved before
+locking, including symlink targets. The stable sibling `.<filename>.lock` (for
+`.env`, `..env.lock`) is retained after use; do not delete it while writers may
+be running. Manual editors must coordinate separately. Setup and runtime use python-dotenv
+syntax, including single/double quotes, `export`, spaced assignments and inline
+comments. Updates quote literal values (including backslashes, quotes, spaces,
+`#` and newlines) and preserve unrelated lines. Normal python-dotenv `${VAR}`
+interpolation still applies when reading configuration. Scaffolding uses the same
+lock and does not overwrite an existing nonempty configuration. If the filesystem
+cannot provide a lock, updates fail without replacing the configuration.
+
 **Important:** The `.env` file must be created in the `~/.kptncook/` directory, NOT in the installation directory or by editing the `kptncook` executable.
 
 If you want to back up your favorite recipes from KptnCook, you have to set the `KPTNCOOK_ACCESS_TOKEN` variable as well. You can obtain the access token by running `kptncook kptncook-access-token`; the command fetches the token and saves `KPTNCOOK_ACCESS_TOKEN` into `~/.kptncook/.env` instead of printing the raw token to stdout. But you need a kptncook account to do that.
@@ -613,3 +625,25 @@ After running `just check`, publish the package to PyPI using uv:
 ```shell
 $ uv publish --token your_token
 ```
+
+## Development dependency checks
+
+Run `uv sync --frozen`, then `just lint`, `just typecheck`, and `just test`.
+The recipe client supports Python 3.10+. Notebook tooling (JupyterLab in the
+`dev` group) requires Python 3.11+; Python 3.10 installs the other development
+tools without JupyterLab. Smoke-check notebooks with
+`uv run --frozen python -c "import jupyterlab, tornado, setuptools"` on Python 3.11+.
+
+The notebook/build lock uses setuptools 84.2.1 and Tornado 6.6 to address
+PYSEC-2026-3447, GHSA-xmj3-9gf7-h52w and CVE-2026-116577/115927/116578.
+These findings concern development tools; they do not establish a recipe API exploit.
+
+Run the same frozen dependency audit as CI with
+`uv run --frozen python scripts/audit_python.py` (Python 3.13 in CI).
+It exports runtime dependencies and all dependency groups, including the default
+`dev` group's notebook/build tooling; there are no optional extras. The pinned
+pip-audit 2.10.1 checks registry packages applicable to the active interpreter
+and platform. This does not audit other interpreter/platform marker branches or
+separate build-backend/hook environments. Export errors and advisory findings
+both fail the command; it never updates the lock. CI has read-only repository
+permissions and a ten-minute audit timeout.

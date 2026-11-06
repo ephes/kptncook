@@ -1,7 +1,18 @@
 Unreleased
 ==========
 
+### Security
+- Audit the frozen runtime and development graph in CI with pinned pip-audit;
+  document the identical local command and coverage.
+- Refresh notebook/build tooling to setuptools 84.2.1 and Tornado 6.6.
+  JupyterLab now installs on Python 3.11+ because the fixed Tornado drops 3.10;
+  the recipe client and other development tools retain Python 3.10 support.
+
 ### Fixes
+- Use consistent dotenv parsing in setup/runtime and quote saved values, updating
+  spaced/export assignments while retaining unrelated comments and keys.
+- Serialize cooperating configuration writers, including scaffolding and symlink
+  targets, so concurrent key updates preserve each other.
 - Bound Paprika, Tandoor, and Mealie image downloads to 10 MiB and a 60-second
   total deadline; skip failed images while preserving recipe text and cleanup.
 - Recipe OIDs require exactly 24 ASCII hexadecimal characters; pasted OID URLs

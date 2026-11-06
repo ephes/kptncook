@@ -41,12 +41,14 @@ dependencies = [
     "click",
     "unidecode",
     "jinja2",
-    "pathvalidate"
+    "pathvalidate",
+    "portalocker>=3.2",
+    "python-dotenv>=1.2.2",
 ]
 
 [dependency-groups]
 dev = [
-    "jupyterlab >= 3.2.9",
+    "jupyterlab >= 3.2.9; python_version >= '3.11'",
     "mkdocs >= 1.2",
     "mypy",
     "prek>=0.3.9",
