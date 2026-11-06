@@ -176,6 +176,12 @@ Run the sync again: it first checks stored identity extras and skips any
 recipe already imported. Do not delete a recipe merely because its import
 response was lost.
 
+Image downloads for Paprika and Tandoor covers and Mealie step assets are
+limited to 10 MiB per image and 60 seconds for the entire transfer (including
+redirects). Failed, oversized, or slow images are skipped; recipe text is
+still exported or imported. Downloads request uncompressed responses; servers
+that send compressed images despite that request are skipped to bound memory.
+
 ### Export metadata
 
 Exports to Mealie and Tandoor include KptnCook active tags as tags/keywords

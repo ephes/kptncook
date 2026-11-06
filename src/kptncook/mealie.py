@@ -17,6 +17,7 @@ from pydantic.alias_generators import to_camel
 from .exporter_utils import get_step_text
 from .config import get_settings
 from .http_client import BaseHttpClient, DEFAULT_REQUEST_TIMEOUT
+from .image_download import download_image
 from .ingredient_groups import iter_ingredient_groups
 from .models import (
     Image,
@@ -27,8 +28,6 @@ from .models import (
 from .models import Recipe as KptnCookRecipe
 
 logger = logging.getLogger(__name__)
-
-ASSET_DOWNLOAD_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
 
 class MealieModel(BaseModel):
@@ -210,14 +209,7 @@ class MealieApiClient(BaseHttpClient):
 
     def upload_asset(self, recipe_slug, image: Image):
         # download image
-        r = httpx.get(
-            image.url,
-            follow_redirects=True,
-            timeout=ASSET_DOWNLOAD_TIMEOUT,
-        )
-        r.raise_for_status()
-
-        download = io.BytesIO(r.content)
+        download = io.BytesIO(download_image(image.url, follow_redirects=True))
 
         # upload to mealie
         name = Path(image.name)
@@ -417,9 +409,14 @@ class MealieApiClient(BaseHttpClient):
                     recipe.id, instruction["text"], asset["fileName"]
                 )
                 changed = True
-            except Exception:
+            except Exception as exc:
+                reason = (
+                    f"HTTP {exc.response.status_code}"
+                    if isinstance(exc, httpx.HTTPStatusError)
+                    else type(exc).__name__
+                )
                 logger.warning(
-                    "Skipping step image for recipe %s", recipe.slug, exc_info=True
+                    "Skipping step image for recipe %s (%s)", recipe.slug, reason
                 )
         if changed:
             response = self.request(

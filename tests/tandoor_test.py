@@ -4,7 +4,7 @@ import zipfile
 import httpx
 
 from kptncook.models import Recipe
-from kptncook.tandoor import IMAGE_DOWNLOAD_TIMEOUT, TandoorExporter
+from kptncook.tandoor import TandoorExporter
 
 
 def test_export_recipe_writes_zip_with_image(
@@ -19,10 +19,9 @@ def test_export_recipe_writes_zip_with_image(
         autospec=True,
         return_value="https://example.com/cover.jpg",
     )
-    mock_response = mocker.Mock()
-    mock_response.content = b"image-bytes"
-    mock_response.raise_for_status = mocker.Mock()
-    httpx_get = mocker.patch("kptncook.tandoor.httpx.get", return_value=mock_response)
+    httpx_get = mocker.patch(
+        "kptncook.tandoor.download_image", return_value=b"image-bytes"
+    )
 
     filename = exporter.export_recipe(recipe=recipe)
 
@@ -42,7 +41,6 @@ def test_export_recipe_writes_zip_with_image(
     httpx_get.assert_called_once_with(
         "https://example.com/cover.jpg",
         follow_redirects=True,
-        timeout=IMAGE_DOWNLOAD_TIMEOUT,
     )
 
 
@@ -67,7 +65,10 @@ def test_export_recipe_skips_missing_cover_image(
             response=mock_response,
         )
     )
-    mocker.patch("kptncook.tandoor.httpx.get", return_value=mock_response)
+    mocker.patch(
+        "kptncook.tandoor.download_image",
+        side_effect=mock_response.raise_for_status.side_effect,
+    )
 
     filename = exporter.export_recipe(recipe=recipe)
 
@@ -85,7 +86,7 @@ def test_export_recipe_skips_when_no_cover_image(
     recipe = Recipe.model_validate(full_recipe)
     recipe.image_list = []
     monkeypatch.chdir(tmp_path)
-    httpx_get = mocker.patch("kptncook.tandoor.httpx.get")
+    httpx_get = mocker.patch("kptncook.tandoor.download_image")
     get_image_url = mocker.patch.object(Recipe, "get_image_url", autospec=True)
 
     filename = exporter.export_recipe(recipe=recipe)
@@ -197,8 +198,8 @@ def test_export_expands_timer_placeholders(minimal, mocker, tmp_path, monkeypatc
         return_value="https://example.com/cover.jpg",
     )
     mocker.patch(
-        "kptncook.tandoor.httpx.get",
-        return_value=mocker.Mock(content=b"image", raise_for_status=mocker.Mock()),
+        "kptncook.tandoor.download_image",
+        return_value=b"image",
     )
 
     filename = exporter.export_recipe(recipe=recipe)

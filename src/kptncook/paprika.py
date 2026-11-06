@@ -29,11 +29,11 @@ from kptncook.exporter_utils import (
     move_to_free_target,
     write_zip,
 )
+from kptncook.image_download import download_image
 from kptncook.ingredient_groups import iter_ingredient_groups
 from kptncook.models import Image, Ingredient, Recipe, localized_fallback
 
 logger = logging.getLogger(__name__)
-IMAGE_DOWNLOAD_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
 
 class GeneratedData:
@@ -174,20 +174,21 @@ class PaprikaExporter:
         if not isinstance(cover_url, str):
             raise ValueError("Cover URL must be a string")
         try:
-            response = httpx.get(cover_url, timeout=IMAGE_DOWNLOAD_TIMEOUT)
-            response.raise_for_status()
+            image_bytes = download_image(cover_url)
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 title = localized_fallback(recipe.localized_title) or "kptncook-recipe"
                 logger.warning('Cover image for "%s" not found online any more.', title)
             else:
                 logger.error(
-                    "HTTP error while fetching cover image (%s): %s",
+                    "HTTP error while fetching cover image (%s)",
                     exc.response.status_code,
-                    exc,
                 )
             return None, None
-        return cover.name, base64.b64encode(response.content).decode("utf-8")
+        except httpx.RequestError:
+            logger.warning("Skipping cover image: download failed or exceeded limits")
+            return None, None
+        return cover.name, base64.b64encode(image_bytes).decode("utf-8")
 
     def asciify_string(self, s: str) -> str:
         return asciify_string(s)

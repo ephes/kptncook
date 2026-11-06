@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Bound Paprika, Tandoor, and Mealie image downloads to 10 MiB and a 60-second
+  total deadline; skip failed images while preserving recipe text and cleanup.
 - Recipe OIDs require exactly 24 ASCII hexadecimal characters; pasted OID URLs
   accept query strings and fragments while preserving short UID precedence.
 
