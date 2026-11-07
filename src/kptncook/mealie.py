@@ -4,6 +4,8 @@ import json
 import logging
 import re
 import uuid
+from html import escape
+from urllib.parse import quote
 from collections.abc import Callable
 from getpass import getpass
 from pathlib import Path
@@ -244,7 +246,16 @@ class MealieApiClient(BaseHttpClient):
 
     @staticmethod
     def _build_recipestep_text(recipe_uuid, text, image_name):
-        return f'{text} <img src="/api/media/recipes/{recipe_uuid}/assets/{image_name}" height="100%" width="100%"/>'
+        components = [str(recipe_uuid), image_name]
+        if any(component in ("", ".", "..") for component in components):
+            raise ValueError("Invalid Mealie media path component")
+        recipe_path, image_path = (
+            quote(component, safe="") for component in components
+        )
+        media_url = escape(
+            f"/api/media/recipes/{recipe_path}/assets/{image_path}", quote=True
+        )
+        return f'{text} <img src="{media_url}" height="100%" width="100%"/>'
 
     def _scrape_image_for_recipe(self, recipe, slug):
         if not recipe.image_url:
@@ -743,5 +754,10 @@ def kptncook_to_mealie(
         "tags": kptncook_to_mealie_tags(kcin.active_tags),
         "extras": {"kptncook_id": kcin.id.oid, "source": "kptncook"},
     }
-    logger.debug("Mealie recipe payload kwargs: %s", kwargs)
+    logger.debug(
+        "Converted recipe %s: %d ingredients, %d instructions",
+        kcin.id.oid,
+        len(ingredients),
+        len(kwargs["recipe_instructions"]),
+    )
     return RecipeWithImage(**kwargs)

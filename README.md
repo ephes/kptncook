@@ -160,6 +160,11 @@ the complete recipe with those identity extras already present. Distinct
 KptnCook recipes with the same title can both be imported: Mealie assigns a
 unique name and slug, which subsequent updates preserve.
 
+Step-media URL components are percent-encoded and the final HTML attribute is
+escaped, so server-returned filenames remain data. Existing instruction markup
+is preserved. Conversion DEBUG logs contain only recipe identity and counts;
+cover and nested step image URLs (including API keys) are never logged there.
+
 Cover and step images are best-effort follow-ups. A media failure does not
 undo the core import, and step-image updates patch only the instructions.
 The summary means:
