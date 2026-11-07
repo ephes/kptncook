@@ -15,6 +15,8 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Validate Mealie organizer page shapes and login tokens before consuming replies;
+  preserve existing authorization after malformed login responses.
 - Use consistent dotenv parsing in setup/runtime and quote saved values, updating
   spaced/export assignments while retaining unrelated comments and keys.
 - Serialize cooperating configuration writers, including scaffolding and symlink
