@@ -292,6 +292,7 @@ def test_kptncook_to_mealie_allows_missing_image_url():
         recipe_nutrition=SimpleNamespace(calories=1, protein=2, fat=3, carbohydrate=4),
         preparation_time=10,
         cooking_time=5,
+        servings=2,
         steps=[],
         active_tags=None,
         id=RecipeId.model_validate({"$oid": "abc123"}),

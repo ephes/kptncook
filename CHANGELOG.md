@@ -15,6 +15,14 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Resolve local single-recipe Paprika, Tandoor and Markdown exports by stored
+  short UID as well as OID, preserving missing/ambiguous selection errors.
+- Preserve explicit portion counts across all exporters, with a two-portion
+  fallback and unchanged ingredient totals.
+- Quote Markdown front-matter strings so tags and URLs retain punctuation and
+  newlines without changing YAML structure.
+- Close workflow-owned KptnCook clients after login, today/dailies, discovery,
+  onboarding, ingredient queries and recipe search, including processing failures.
 - Bound Mealie inventory acquisition to a configurable elapsed budget (120 seconds
   by default, up to 86400 for large libraries) across pages
   and sync detail reads; cap request timeouts by the remaining budget and refuse

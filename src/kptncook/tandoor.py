@@ -106,7 +106,7 @@ class TandoorExporter:
         return {
             "name": localized_fallback(recipe.localized_title) or "",
             "description": localized_fallback(recipe.author_comment) or "",
-            "servings": 3,
+            "servings": recipe.servings,
             "source_url": self.get_source_url(recipe=recipe),
             "working_time": recipe.preparation_time,
             "waiting_time": recipe.cooking_time,

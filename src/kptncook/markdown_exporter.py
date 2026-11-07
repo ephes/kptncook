@@ -9,6 +9,7 @@ Recipe content (titles, steps, ingredient names) follows the project-wide
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from datetime import date
 from pathlib import Path
@@ -19,12 +20,6 @@ from .config import get_settings
 from .exporter_utils import get_cover, replace_timers_in_step
 from .ingredient_groups import iter_ingredient_groups
 from .models import Ingredient, LocalizedString, Recipe, RecipeStep, localized_fallback
-
-# KptnCook quantities are already totals for the recipe's standard portions, so
-# they are emitted as-is (matching the Paprika and Mealie exporters). This value
-# is only used for the ``servings`` front matter when the recipe omits an
-# explicit portion count.
-DEFAULT_SERVINGS = 2
 
 # Localized structural labels. Recipe content language is governed by
 # ``localized_fallback``; only the headings/alt text below are language-aware.
@@ -85,6 +80,15 @@ def _is_prep_step(step: RecipeStep) -> bool:
     return False
 
 
+def _yaml_string(value: str) -> str:
+    # Keep astral characters intact; JSON's surrogate escapes are not valid YAML.
+    # Escape raw Unicode line breaks/controls so YAML cannot fold or reject them.
+    return "".join(
+        char if char.isprintable() else f"\\U{ord(char):08x}"
+        for char in json.dumps(value, ensure_ascii=False)
+    )
+
+
 class MarkdownExporter:
     def export(self, recipes: Iterable[Recipe]) -> list[Path]:
         written: list[Path] = []
@@ -126,15 +130,17 @@ class MarkdownExporter:
         lines: list[str] = ["---"]
         lines.append(f"date: {date.today().isoformat()}")
 
-        servings = recipe.fixed_portion_count or DEFAULT_SERVINGS
+        servings = recipe.servings
         lines.append(f"servings: {servings}")
 
-        lines.append(f"prepTime: {recipe.preparation_time}m")
+        lines.append(f"prepTime: {_yaml_string(f'{recipe.preparation_time}m')}")
         if recipe.cooking_time is not None:
-            lines.append(f"cookTime: {recipe.cooking_time}m")
-        lines.append("author: KptnCook")
+            lines.append(f"cookTime: {_yaml_string(f'{recipe.cooking_time}m')}")
+        lines.append('author: "KptnCook"')
         recipe_ref = recipe.uid or recipe.id.oid
-        lines.append(f"link: https://mobile.kptncook.com/recipe/pinterest/{recipe_ref}")
+        lines.append(
+            f"link: {_yaml_string(f'https://mobile.kptncook.com/recipe/pinterest/{recipe_ref}')}"
+        )
 
         # cover image (prefer the last step image, else the cover image)
         last_step_image = recipe.steps[-1].image if recipe.steps else None
@@ -144,16 +150,16 @@ class MarkdownExporter:
         )
 
         if image_url:
-            lines.append(f"image: {image_url}")
+            lines.append(f"image: {_yaml_string(image_url)}")
 
         lines.append("tags:")
 
         if recipe.rtype == "Vegan":
-            lines.append("  - vegan")
+            lines.append('  - "vegan"')
 
         if recipe.active_tags:
             for tag in self._transform_tags(recipe.active_tags):
-                lines.append(f"  - {tag}")
+                lines.append(f"  - {_yaml_string(tag)}")
 
             if (
                 "cooking_time_under_20" in recipe.active_tags

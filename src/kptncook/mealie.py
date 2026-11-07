@@ -782,7 +782,7 @@ def kptncook_to_mealie(
         ),
         "prep_time": kcin.preparation_time,
         "cook_time": kcin.cooking_time,
-        "recipe_yield": "1 Portionen",
+        "recipe_yield": f"{kcin.servings} Portionen",
         "recipe_instructions": kptncook_to_mealie_steps(
             kcin.steps, api_key, ingredient_id_to_reference_ids
         ),
