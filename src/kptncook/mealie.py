@@ -29,6 +29,13 @@ from .models import Recipe as KptnCookRecipe
 
 logger = logging.getLogger(__name__)
 
+MAX_INVENTORY_PAGES = 1000
+MAX_INVENTORY_ITEMS = 50_000
+
+
+class MealieInventoryError(ValueError):
+    """An incomplete inventory must not be used to decide remote writes."""
+
 
 class MealieModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
@@ -109,7 +116,7 @@ class RecipeSummary(MealieModel):
     tags: list[RecipeTag] | None = []
     # tags: list[RecipeTag | str] | None = []
     tools: list[RecipeTool] = []
-    rating: int | None = None
+    rating: float | None = None
     org_url: str | None = Field(None, alias="orgURL")
 
     recipe_ingredient: list[RecipeIngredient] | None = []
@@ -256,32 +263,90 @@ class MealieApiClient(BaseHttpClient):
         try:
             return r.json()
         except ValueError:
-            raise ValueError("Invalid Mealie inventory: expected JSON") from None
+            raise MealieInventoryError(
+                "Invalid Mealie inventory: expected JSON"
+            ) from None
 
     @staticmethod
     def _validate_page(payload):
         if not isinstance(payload, dict):
-            raise ValueError("Invalid Mealie inventory: expected a page object")
+            raise MealieInventoryError(
+                "Invalid Mealie inventory: expected a page object"
+            )
         items = payload.get("items")
         total_pages = payload.get("total_pages")
         if not isinstance(items, list) or any(
             not isinstance(item, dict) for item in items
         ):
-            raise ValueError("Invalid Mealie inventory: expected a list of objects")
-        if type(total_pages) is not int or total_pages < 0:
-            raise ValueError(
-                "Invalid Mealie inventory: expected a nonnegative page count"
+            raise MealieInventoryError(
+                "Invalid Mealie inventory: expected a list of objects"
+            )
+        if type(total_pages) is not int or not 0 <= total_pages <= MAX_INVENTORY_PAGES:
+            raise MealieInventoryError(
+                "Invalid Mealie inventory: page count outside the supported budget"
             )
         if total_pages == 0 and items:
-            raise ValueError("Invalid Mealie inventory: items with zero pages")
+            raise MealieInventoryError(
+                "Invalid Mealie inventory: items with zero pages"
+            )
         return items, total_pages
 
     def _get_all_items(self, endpoint_name):
-        items, total_pages = self._validate_page(self._get_page(endpoint_name, 1))
-        all_items = list(items)
-        for page_num in range(2, total_pages + 1):
-            items, _ = self._validate_page(self._get_page(endpoint_name, page_num))
+        all_items = []
+        seen = set()
+        total_pages = None
+        total = None
+        page_num = 1
+        while total_pages is None or page_num <= total_pages:
+            payload = self._get_page(endpoint_name, page_num)
+            items, pages = self._validate_page(payload)
+            if total_pages is None:
+                total_pages = pages
+                total = payload.get("total")
+            if pages != total_pages or payload.get("total") != total:
+                raise MealieInventoryError(
+                    "Incomplete Mealie inventory: pagination totals changed"
+                )
+            if "page" in payload and (
+                type(payload["page"]) is not int or payload["page"] != page_num
+            ):
+                raise MealieInventoryError(
+                    "Incomplete Mealie inventory: unexpected page number"
+                )
+            if total is not None and (
+                type(total) is not int or not 0 <= total <= MAX_INVENTORY_ITEMS
+            ):
+                raise MealieInventoryError(
+                    "Invalid Mealie inventory: item total outside the supported budget"
+                )
+            if not items and total_pages > 1:
+                raise MealieInventoryError("Incomplete Mealie inventory: empty page")
+            if len(all_items) + len(items) > MAX_INVENTORY_ITEMS:
+                raise MealieInventoryError(
+                    "Incomplete Mealie inventory: item budget exceeded"
+                )
+            for item in items:
+                # IDs catch repeated entities even if their presentation changes.
+                identity = next(
+                    (
+                        (key, str(item[key]))
+                        for key in ("id", "slug", "name")
+                        if item.get(key)
+                    ),
+                    None,
+                )
+                key = identity or ("payload", json.dumps(item, sort_keys=True))
+                if key in seen:
+                    raise MealieInventoryError(
+                        "Incomplete Mealie inventory: repeated item"
+                    )
+                seen.add(key)
             all_items.extend(items)
+            page_num += 1
+        if total is not None and len(all_items) != total:
+            raise MealieInventoryError(
+                "Incomplete Mealie inventory: item total does not match"
+            )
         return all_items
 
     def _create_item(self, endpoint_name, item):
@@ -483,33 +548,28 @@ class MealieApiClient(BaseHttpClient):
     @staticmethod
     def validate_recipes(recipes):
         validated_recipes = []
-        for recipe in recipes:
+        for position, recipe in enumerate(recipes, start=1):
             try:
-                validated_recipe = Recipe.model_validate(recipe)
-                validated_recipes.append(validated_recipe)
-            except ValidationError as e:
-                logger.error(
-                    "Could not parse recipe {recipe_id}".format(recipe_id=recipe["id"])
+                validated = Recipe.model_validate(recipe)
+            except ValidationError:
+                raise MealieInventoryError(
+                    f"Incomplete Mealie inventory: invalid recipe at position {position}"
+                ) from None
+            if not validated.slug.strip() or (
+                validated.extras.get("source") == "kptncook"
+                and (
+                    not isinstance(validated.extras.get("kptncook_id"), str)
+                    or not validated.extras["kptncook_id"].strip()
                 )
-                logger.exception(e)
-                continue
+            ):
+                raise MealieInventoryError(
+                    f"Incomplete Mealie inventory: unreadable identity at position {position}"
+                )
+            validated_recipes.append(validated)
         return validated_recipes
 
     def get_all_recipes(self):
-        all_recipes = []
-
-        r = self.get("/recipes?page=1&perPage=50")
-        r.raise_for_status()
-        all_recipes.extend(self.validate_recipes(r.json()["items"]))
-
-        page = 2
-        while page <= r.json()["total_pages"]:
-            r = self.get(f"/recipes?page={page}&perPage=50")
-            r.raise_for_status()
-            all_recipes.extend(self.validate_recipes(r.json()["items"]))
-            page += 1
-
-        return all_recipes
+        return self.validate_recipes(self._get_all_items("recipes"))
 
     def delete_via_slug(self, slug):
         r = self.delete(f"/recipes/{slug}")
@@ -519,7 +579,13 @@ class MealieApiClient(BaseHttpClient):
     def get_via_slug(self, slug):
         r = self.get(f"/recipes/{slug}")
         r.raise_for_status()
-        return Recipe.model_validate(r.json())
+        try:
+            payload = r.json()
+        except ValueError:
+            raise MealieInventoryError(
+                "Invalid Mealie inventory: expected recipe JSON"
+            ) from None
+        return self.validate_recipes([payload])[0]
 
 
 def kptncook_to_mealie_ingredients(

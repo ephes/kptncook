@@ -15,6 +15,8 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Require complete validated Mealie recipe inventories before sync writes; reject
+  invalid rows and inconsistent/repeated pagination within finite page/item limits.
 - Close factory-owned clients after failed Mealie authentication and on every
   sync/favorites-backup exit; retain caller ownership of healthy factory clients.
 - Validate Mealie organizer page shapes and login tokens before consuming replies;

@@ -182,6 +182,14 @@ redirects). Failed, oversized, or slow images are skipped; recipe text is
 still exported or imported. Downloads request uncompressed responses; servers
 that send compressed images despite that request are skipped to bound memory.
 
+Sync requires a complete, validated remote recipe inventory, including every
+recipe detail. An invalid recipe or unreadable imported identity stops the run
+before any organizer or archive creates, with a bounded positional diagnostic.
+Check the indicated upstream record and rerun; invalid records are never silently skipped.
+Recipe and organizer inventories allow at most 1,000 pages and 50,000 items.
+Changing totals, mismatched reported counts/page numbers, repeated identities and
+empty pages in a multi-page inventory abort the acquisition before writes.
+
 Mealie organizer pages must contain a list of objects and a nonnegative integer
 `total_pages` (zero is allowed only for an empty inventory). Invalid pages abort
 listing before organizer creation. Successful password login requires a nonempty

@@ -73,11 +73,12 @@ def test_parse_mealie_recipe_pydantic_update():
     assert recipe.name == mealie_recipe["name"]
 
 
-def test_skip_validation_errors():
+def test_inventory_validation_errors_are_not_skipped():
     invalid_recipes = [
         {"id": "123", "nutrition": "not a nutrition dict"},
     ]
-    assert MealieApiClient.validate_recipes(invalid_recipes) == []
+    with pytest.raises(ValueError, match="inventory.*position 1"):
+        MealieApiClient.validate_recipes(invalid_recipes)
 
 
 def test_upload_asset_follows_redirects(monkeypatch):
