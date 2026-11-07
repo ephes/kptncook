@@ -15,6 +15,10 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Refuse duplicate stored/incoming OIDs, including identical duplicates, before
+  ambiguous mutations; preserve main and backup bytes on refusal.
+- Use the established portable repository lock backend and refuse writes on
+  locking failure instead of silently running without ownership.
 - Encode Mealie media URL path components and escape image attributes while
   retaining instruction markup; omit signed image URLs from conversion logs.
 - Serialize same-user Mealie syncs per canonical target across inventory/create;

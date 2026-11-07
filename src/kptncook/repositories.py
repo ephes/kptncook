@@ -14,10 +14,7 @@ from pathlib import Path
 from typing import List  # noqa F401
 from collections.abc import Iterator
 
-try:
-    import fcntl
-except ImportError:  # pragma: no cover - only used on platforms without fcntl
-    fcntl = None  # type: ignore[assignment]
+import portalocker
 
 from pydantic import BaseModel, RootModel, ValidationError
 
@@ -106,17 +103,29 @@ class RecipeRepository:
                     pass
 
     def _build_by_id(
-        self, recipes: list[RecipeInDb] | RecipeListInDb
+        self, recipes: list[RecipeInDb] | RecipeListInDb, *, source: str = "Repository"
     ) -> dict[str, RecipeInDb]:
         by_id: dict[str, RecipeInDb] = {}
+        positions: dict[str, int] = {}
         for position, recipe in enumerate(recipes, start=1):
             identifier = recipe.data.get("_id")
             oid = identifier.get("$oid") if isinstance(identifier, dict) else None
             if not isinstance(oid, str) or not oid.strip():
                 raise RepositoryError(
-                    f"Repository record {position} has an invalid identifier; "
+                    f"{source} record {position} has an invalid identifier; "
                     "expected _id.$oid to be a nonempty string."
                 )
+            if oid in positions:
+                action = (
+                    "check the incoming batch before retrying."
+                    if source == "Incoming"
+                    else "repair duplicates before retrying."
+                )
+                raise RepositoryError(
+                    f"{source} record {position} has a duplicate identifier "
+                    f"already used by record {positions[oid]}; {action}"
+                )
+            positions[oid] = position
             by_id[oid] = recipe
         return by_id
 
@@ -136,13 +145,17 @@ class RecipeRepository:
     def _write_lock(self) -> Iterator[None]:
         self._ensure_parent_dir()
         with self.lock_path.open("a+", encoding="utf-8") as lock_file:
-            if fcntl is not None:
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                portalocker.lock(lock_file, portalocker.LOCK_EX)
+            except portalocker.exceptions.LockException as exc:
+                raise RepositoryError(
+                    "Could not lock the recipe repository; mutations require supported "
+                    "OS advisory locking. Use a local filesystem with locking support."
+                ) from exc
             try:
                 yield
             finally:
-                if fcntl is not None:
-                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                portalocker.unlock(lock_file)
 
     def _write_models(self, locked):
         self.create_backup()
@@ -208,14 +221,14 @@ class RecipeRepository:
         return not any(recipe.date == _date for recipe in self.list())
 
     def add(self, recipe: RecipeInDb):
-        incoming = self._build_by_id([recipe])
+        incoming = self._build_by_id([recipe], source="Incoming")
         with self._write_lock():
             locked = self._build_by_id(self._fetch_all())
             locked.update(incoming)
             self._write_models(locked)
 
     def add_list(self, recipes: list[RecipeInDb]):
-        incoming = self._build_by_id(recipes)
+        incoming = self._build_by_id(recipes, source="Incoming")
         with self._write_lock():
             locked = self._build_by_id(self._fetch_all())
             locked.update(incoming)
