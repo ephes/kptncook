@@ -4,7 +4,7 @@ import hashlib
 import logging
 import os
 from collections.abc import Iterator, Sequence
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -127,8 +127,14 @@ def load_recipe_from_repository_by_id(id_: str) -> RepositoryRecipesResult:
     parsed = parse_id(id_)
     if parsed is None:
         raise UserFacingError("Could not parse id")
-    _, id_value = parsed
-    return load_recipe_from_repository_by_oid(id_value)
+    id_type, id_value = parsed
+    if id_type == "oid":
+        return load_recipe_from_repository_by_oid(id_value)
+    result = load_kptncook_recipes_from_repository()
+    return RepositoryRecipesResult(
+        recipes=[recipe for recipe in result.recipes if recipe.uid == id_value],
+        invalid_entries=result.invalid_entries,
+    )
 
 
 def _repository_id_map() -> dict[object, RecipeInDb]:
@@ -153,7 +159,8 @@ def _delete_repository_ids(ids: list[str]) -> tuple[list[str], list[str]]:
 
 
 def get_today_recipes() -> list[RecipeInDb]:
-    return KptnCookClient().list_today()
+    with closing(KptnCookClient()) as client:
+        return client.list_today()
 
 
 def save_todays_recipes() -> int:
@@ -254,18 +261,19 @@ def list_dailies(
     zone: str | None = None,
     is_subscribed: Literal[False] | None = None,
 ) -> list[RecipeInDb]:
-    try:
-        return KptnCookClient().list_dailies(
-            recipe_filter=recipe_filter,
-            zone=zone,
-            is_subscribed=is_subscribed,
-        )
-    except httpx.HTTPStatusError as exc:
-        raise UserFacingError(
-            format_http_status_error(exc.response, action="fetching dailies")
-        ) from exc
-    except httpx.HTTPError as exc:
-        raise UserFacingError(format_request_error(exc)) from exc
+    with closing(KptnCookClient()) as client:
+        try:
+            return client.list_dailies(
+                recipe_filter=recipe_filter,
+                zone=zone,
+                is_subscribed=is_subscribed,
+            )
+        except httpx.HTTPStatusError as exc:
+            raise UserFacingError(
+                format_http_status_error(exc.response, action="fetching dailies")
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise UserFacingError(format_request_error(exc)) from exc
 
 
 def _require_access_token() -> None:
@@ -427,94 +435,99 @@ def get_kptncook_access_token() -> str:
     if not username or not password:
         raise UserFacingError("Failed to get credentials")
 
-    client = KptnCookClient()
-    try:
-        return client.get_access_token(username, password)
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 401:
-            message = (
-                "Login failed (HTTP 401). Check your email/password and make sure "
-                "KPTNCOOK_API_KEY is set to your real API key (not a placeholder)."
-            )
-        else:
-            message = format_http_status_error(
-                exc.response, action="getting access token"
-            )
-        raise UserFacingError(message) from exc
-    except httpx.HTTPError as exc:
-        raise UserFacingError(format_request_error(exc)) from exc
+    with closing(KptnCookClient()) as client:
+        try:
+            return client.get_access_token(username, password)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 401:
+                message = (
+                    "Login failed (HTTP 401). Check your email/password and make sure "
+                    "KPTNCOOK_API_KEY is set to your real API key (not a placeholder)."
+                )
+            else:
+                message = format_http_status_error(
+                    exc.response, action="getting access token"
+                )
+            raise UserFacingError(message) from exc
+        except httpx.HTTPError as exc:
+            raise UserFacingError(format_request_error(exc)) from exc
 
 
 def get_discovery_screen() -> DiscoveryScreenData:
-    try:
-        payload = KptnCookClient().get_discovery_screen()
-    except httpx.HTTPStatusError as exc:
-        raise UserFacingError(
-            format_http_status_error(exc.response, action="fetching discovery screen")
-        ) from exc
-    except httpx.HTTPError as exc:
-        raise UserFacingError(format_request_error(exc)) from exc
-    return parse_discovery_screen(payload)
+    with closing(KptnCookClient()) as client:
+        try:
+            payload = client.get_discovery_screen()
+        except httpx.HTTPStatusError as exc:
+            raise UserFacingError(
+                format_http_status_error(
+                    exc.response, action="fetching discovery screen"
+                )
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise UserFacingError(format_request_error(exc)) from exc
+        return parse_discovery_screen(payload)
 
 
 def get_discovery_list_recipes(
     *, list_type: str, list_id: str | None
 ) -> list[RecipeInDb]:
-    client = KptnCookClient()
-    try:
-        items = client.get_discovery_list(list_type=list_type, list_id=list_id)
-    except httpx.HTTPStatusError as exc:
-        raise UserFacingError(
-            format_http_status_error(exc.response, action="fetching discovery list")
-        ) from exc
-    except httpx.HTTPError as exc:
-        raise UserFacingError(format_request_error(exc)) from exc
-    return _resolve_recipe_summaries(client, items, action="resolving recipes")
+    with closing(KptnCookClient()) as client:
+        try:
+            items = client.get_discovery_list(list_type=list_type, list_id=list_id)
+        except httpx.HTTPStatusError as exc:
+            raise UserFacingError(
+                format_http_status_error(exc.response, action="fetching discovery list")
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise UserFacingError(format_request_error(exc)) from exc
+        return _resolve_recipe_summaries(client, items, action="resolving recipes")
 
 
 def list_popular_ingredients() -> list[dict[str, object]]:
     _require_access_token()
-    client = KptnCookClient()
-    try:
-        return client.list_popular_ingredients()
-    except httpx.HTTPStatusError as exc:
-        raise UserFacingError(
-            format_http_status_error(
-                exc.response, action="fetching popular ingredients"
-            )
-        ) from exc
-    except httpx.HTTPError as exc:
-        raise UserFacingError(format_request_error(exc)) from exc
+    with closing(KptnCookClient()) as client:
+        try:
+            return client.list_popular_ingredients()
+        except httpx.HTTPStatusError as exc:
+            raise UserFacingError(
+                format_http_status_error(
+                    exc.response, action="fetching popular ingredients"
+                )
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise UserFacingError(format_request_error(exc)) from exc
 
 
 def get_recipes_with_ingredients(ingredient_ids: list[str]) -> list[RecipeInDb]:
     _require_access_token()
-    client = KptnCookClient()
-    try:
-        items = client.get_recipes_with_ingredients(ingredient_ids=ingredient_ids)
-    except httpx.HTTPStatusError as exc:
-        raise UserFacingError(
-            format_http_status_error(
-                exc.response,
-                action="fetching recipes with ingredients",
-            )
-        ) from exc
-    except httpx.HTTPError as exc:
-        raise UserFacingError(format_request_error(exc)) from exc
-    return _resolve_recipe_summaries(client, items, action="resolving recipes")
+    with closing(KptnCookClient()) as client:
+        try:
+            items = client.get_recipes_with_ingredients(ingredient_ids=ingredient_ids)
+        except httpx.HTTPStatusError as exc:
+            raise UserFacingError(
+                format_http_status_error(
+                    exc.response,
+                    action="fetching recipes with ingredients",
+                )
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise UserFacingError(format_request_error(exc)) from exc
+        return _resolve_recipe_summaries(client, items, action="resolving recipes")
 
 
 def get_onboarding_recipes(tags: list[str]) -> list[RecipeInDb]:
-    client = KptnCookClient()
-    try:
-        items = client.get_onboarding_recipes(tags=tags)
-    except httpx.HTTPStatusError as exc:
-        raise UserFacingError(
-            format_http_status_error(exc.response, action="fetching onboarding recipes")
-        ) from exc
-    except httpx.HTTPError as exc:
-        raise UserFacingError(format_request_error(exc)) from exc
-    return _resolve_recipe_summaries(client, items, action="resolving recipes")
+    with closing(KptnCookClient()) as client:
+        try:
+            items = client.get_onboarding_recipes(tags=tags)
+        except httpx.HTTPStatusError as exc:
+            raise UserFacingError(
+                format_http_status_error(
+                    exc.response, action="fetching onboarding recipes"
+                )
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise UserFacingError(format_request_error(exc)) from exc
+        return _resolve_recipe_summaries(client, items, action="resolving recipes")
 
 
 def delete_recipes_by_selection(
@@ -576,21 +589,22 @@ def search_recipe_by_id(id_: str) -> SearchResult:
         raise UserFacingError("Could not parse id")
 
     id_type, id_value = parsed
-    try:
-        recipes = KptnCookClient().get_by_ids([(id_type, id_value)])
-    except httpx.HTTPStatusError as exc:
-        raise UserFacingError(
-            format_http_status_error(exc.response, action="fetching recipe")
-        ) from exc
-    except httpx.HTTPError as exc:
-        raise UserFacingError(format_request_error(exc)) from exc
+    with closing(KptnCookClient()) as client:
+        try:
+            recipes = client.get_by_ids([(id_type, id_value)])
+        except httpx.HTTPStatusError as exc:
+            raise UserFacingError(
+                format_http_status_error(exc.response, action="fetching recipe")
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise UserFacingError(format_request_error(exc)) from exc
 
-    if len(recipes) == 0:
-        raise UserFacingError("Could not find recipe")
+        if len(recipes) == 0:
+            raise UserFacingError("Could not find recipe")
 
-    recipe = recipes[0]
-    _save_repository_entries([recipe])
-    return SearchResult(id_type=id_type, id_value=id_value, recipe=recipe)
+        recipe = recipes[0]
+        _save_repository_entries([recipe])
+        return SearchResult(id_type=id_type, id_value=id_value, recipe=recipe)
 
 
 def get_recipe_by_id(id_: str):

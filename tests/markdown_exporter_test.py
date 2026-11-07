@@ -93,7 +93,7 @@ def test_cooktime_omitted_when_missing(exporter):
     recipe = build_recipe()
     recipe.cooking_time = None
     md = exporter.render_recipe(recipe)
-    assert "prepTime: 5m" in md
+    assert 'prepTime: "5m"' in md
     assert "cookTime" not in md
 
 
@@ -124,9 +124,9 @@ def test_tag_filtering_and_transforms(exporter):
         ],
     )
     md = exporter.render_recipe(recipe)
-    assert "  - vegan" in md
-    assert "  - season/spring" in md
-    assert "  - comfort_food" in md  # upstream typo corrected
+    assert '  - "vegan"' in md
+    assert '  - "season/spring"' in md
+    assert '  - "comfort_food"' in md  # upstream typo corrected
     assert "simple: true" in md
     # filtered-out tags
     assert "diet_vegetarian" not in md
@@ -137,7 +137,7 @@ def test_tag_filtering_and_transforms(exporter):
 def test_link_falls_back_to_recipe_id_when_uid_missing(exporter):
     recipe = build_recipe(uid=None, _id={"$oid": "deadbeef"})
     md = exporter.render_recipe(recipe)
-    assert "link: https://mobile.kptncook.com/recipe/pinterest/deadbeef" in md
+    assert 'link: "https://mobile.kptncook.com/recipe/pinterest/deadbeef"' in md
     assert "/None" not in md
 
 

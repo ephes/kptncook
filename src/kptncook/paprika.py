@@ -93,7 +93,7 @@ class PaprikaExporter:
             "directions": "".join(
                 (get_step_text(step) or "") + "\n" for step in recipe.steps
             ),
-            "servings": "2",
+            "servings": str(recipe.servings),
             "rating": 0,
             "difficulty": "",
             "ingredients": self.get_ingredients_text(recipe.ingredients),

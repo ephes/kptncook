@@ -131,6 +131,10 @@ Commands:
 Recipe IDs can be short share UIDs or 24 ASCII hexadecimal characters (case
 insensitive). You can paste recipe URLs with query strings or fragments, or
 text containing an OID. Short UIDs take precedence when both are present.
+Local single-recipe exports to Paprika, Tandoor and Markdown accept either the
+stored short UID or OID (including parsed recipe URLs). A missing selector
+match or multiple matching recipes produces an error; selection never fetches
+from the network.
 
 ## Quick examples
 
@@ -228,7 +232,8 @@ string token; malformed replies leave any existing authorization unchanged.
 
 Library callers own healthy clients returned by `get_mealie_client()` and should
 close them or use a context manager. Failed authentication closes the new client.
-Sync and favorites backup close their own clients on success and every failure;
+Sync, favorites backup, login, today/dailies, discovery, onboarding, ingredient
+queries and recipe search close their own clients on success and every failure;
 closing a wrapper around a borrowed HTTPX client keeps that shared client usable.
 Request headers with the same exact key override wrapper defaults, and explicit
 timeouts override the
@@ -239,6 +244,13 @@ HTTPX requests with a synthetic transport, including exceptional context exits.
 
 Exports to Mealie and Tandoor include KptnCook active tags as tags/keywords
 (verbatim).
+
+All exporters preserve the recipe's explicit `fixedPortionCount`, falling back
+to the standard two portions when it is absent. Ingredient quantities are recipe
+totals and are exported unchanged. Tandoor and Markdown use numeric `servings`,
+Paprika uses a decimal string, and Mealie uses the string `<count> Portionen`.
+Markdown front-matter string values are quoted as YAML scalars,
+so punctuation and newlines in tags and URLs retain their string values.
 
 The Markdown export (`export-recipes-to-markdown`) writes one `.md` file per
 recipe into an `export_md` directory under the KptnCook home, with YAML front

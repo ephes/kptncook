@@ -222,6 +222,11 @@ class Recipe(BaseModel):
     ingredients: list[Ingredient]
     fixed_portion_count: int | None = None
 
+    @property
+    def servings(self) -> int:
+        """Portions for the unchanged ingredient totals; standard recipes serve two."""
+        return self.fixed_portion_count if self.fixed_portion_count is not None else 2
+
     @model_validator(mode="before")
     def normalize_titles(cls, values):
         if isinstance(values, dict):
