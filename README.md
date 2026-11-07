@@ -170,6 +170,22 @@ The summary means:
   error). Other recipes are still synced, and the command exits with status 1.
   Name-collision errors are failures, not successful identity matches.
 
+Cooperating sync processes on this machine hold one advisory lock across the
+complete inventory and create sequence. The lock covers all accounts on the same
+canonical Mealie API target (host casing, default ports and trailing slashes are
+normalized), including rotated tokens. Locks are per operating-system user,
+independent of `KPTNCOOK_HOME`, under `~/.cache/kptncook/sync-locks/`. Keep these
+stable files while syncs may be running. A competing sync waits for the current
+owner to finish. Filesystem/locking errors stop sync; exceptions and process exit
+release ownership. This does not coordinate different machines or
+manual Mealie clients and does not promise exactly-once delivery.
+
+An organizer POST that returns Mealie's explicit uniqueness response (`409` with
+`detail.message` equal to `This item already exists.`) triggers one inventory
+refresh. A single matching organizer ID is reused (casefolded for tags, exact
+names for foods/units). Ambiguous or absent matches, generic conflicts, legacy
+400 responses and transport failures remain failures; the POST is never retried.
+
 A timeout or malformed response may occur after Mealie committed the import.
 The client does not retry or delete the recipe after such an ambiguous result.
 Run the sync again: it first checks stored identity extras and skips any
