@@ -166,7 +166,9 @@ def get_mealie_client() -> MealieApiClient:
             client.login(settings.mealie_username, settings.mealie_password)
             return client
     except Exception as exc:
+        client.close()
         raise UserFacingError(f"Could not login to mealie: {exc}") from exc
+    client.close()
     raise UserFacingError(
         "Mealie authentication required. "
         "Set MEALIE_API_TOKEN or MEALIE_USERNAME/MEALIE_PASSWORD."
@@ -232,38 +234,43 @@ def _require_access_token() -> None:
 
 def sync_with_mealie_result() -> SyncWithMealieResult:
     client = get_mealie_client()
-    kptncook_recipes_from_mealie = get_kptncook_recipes_from_mealie(client)
-    repository_result = load_kptncook_recipes_from_repository()
-    ids_in_mealie = {r.extras.get("kptncook_id") for r in kptncook_recipes_from_mealie}
-    created_count = 0
-    failed_recipes: list[MealieSyncFailure] = []
-    for recipe in repository_result.recipes:
-        if recipe.id.oid in ids_in_mealie:
-            continue
-        recipe_name = localized_fallback(recipe.localized_title) or "Unknown title"
-        try:
-            client.create_recipe(kptncook_to_mealie(recipe))
-        except Exception as exc:
-            # Conversion, validation and serialization failures are local to this
-            # recipe; keep processing the rest of the batch. Name collisions are
-            # failures too, not evidence that this recipe's identity was imported.
-            reason = _describe_mealie_failure(exc)
-        else:
-            created_count += 1
-            continue
-        failure = MealieSyncFailure(recipe.id.oid, recipe_name, reason)
-        failed_recipes.append(failure)
-        logger.warning(
-            "Failed to sync recipe %s (%s) with Mealie: %s",
-            failure.recipe_name,
-            failure.recipe_id,
-            failure.reason,
+    try:
+        kptncook_recipes_from_mealie = get_kptncook_recipes_from_mealie(client)
+        repository_result = load_kptncook_recipes_from_repository()
+        ids_in_mealie = {
+            r.extras.get("kptncook_id") for r in kptncook_recipes_from_mealie
+        }
+        created_count = 0
+        failed_recipes: list[MealieSyncFailure] = []
+        for recipe in repository_result.recipes:
+            if recipe.id.oid in ids_in_mealie:
+                continue
+            recipe_name = localized_fallback(recipe.localized_title) or "Unknown title"
+            try:
+                client.create_recipe(kptncook_to_mealie(recipe))
+            except Exception as exc:
+                # Conversion, validation and serialization failures are local to this
+                # recipe; keep processing the rest of the batch. Name collisions are
+                # failures too, not evidence that this recipe's identity was imported.
+                reason = _describe_mealie_failure(exc)
+            else:
+                created_count += 1
+                continue
+            failure = MealieSyncFailure(recipe.id.oid, recipe_name, reason)
+            failed_recipes.append(failure)
+            logger.warning(
+                "Failed to sync recipe %s (%s) with Mealie: %s",
+                failure.recipe_name,
+                failure.recipe_id,
+                failure.reason,
+            )
+        return SyncWithMealieResult(
+            created_count=created_count,
+            invalid_repository_entries=repository_result.invalid_entries,
+            failed_recipes=failed_recipes,
         )
-    return SyncWithMealieResult(
-        created_count=created_count,
-        invalid_repository_entries=repository_result.invalid_entries,
-        failed_recipes=failed_recipes,
-    )
+    finally:
+        client.close()
 
 
 def _describe_mealie_error(exc: BaseException) -> str:
@@ -306,33 +313,38 @@ def backup_kptncook_favorites() -> FavoritesBackupResult:
     _require_access_token()
     client = KptnCookClient()
     try:
-        favorites = client.list_favorites()
-    except httpx.HTTPStatusError as exc:
-        raise UserFacingError(
-            format_http_status_error(
-                exc.response,
-                action="fetching favorites",
-                unavailable_on_redirect=True,
-            )
-        ) from exc
-    except httpx.HTTPError as exc:
-        raise UserFacingError(format_request_error(exc)) from exc
-    except ValueError as exc:
-        raise UserFacingError(str(exc)) from exc
+        try:
+            favorites = client.list_favorites()
+        except httpx.HTTPStatusError as exc:
+            raise UserFacingError(
+                format_http_status_error(
+                    exc.response,
+                    action="fetching favorites",
+                    unavailable_on_redirect=True,
+                )
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise UserFacingError(format_request_error(exc)) from exc
+        except ValueError as exc:
+            raise UserFacingError(str(exc)) from exc
 
-    identifiers = _collect_recipe_identifiers(favorites)
-    if not identifiers:
-        raise UserFacingError("Could not find any favorites")
+        identifiers = _collect_recipe_identifiers(favorites)
+        if not identifiers:
+            raise UserFacingError("Could not find any favorites")
 
-    recipes = _resolve_recipe_summaries(client, identifiers, action="resolving recipes")
-    if len(recipes) == 0:
-        raise UserFacingError("Could not find any favorites")
+        recipes = _resolve_recipe_summaries(
+            client, identifiers, action="resolving recipes"
+        )
+        if len(recipes) == 0:
+            raise UserFacingError("Could not find any favorites")
 
-    saved_count = _save_repository_entries(recipes)
-    return FavoritesBackupResult(
-        favorite_count=len(favorites),
-        saved_count=saved_count,
-    )
+        saved_count = _save_repository_entries(recipes)
+        return FavoritesBackupResult(
+            favorite_count=len(favorites),
+            saved_count=saved_count,
+        )
+    finally:
+        client.close()
 
 
 def get_kptncook_access_token() -> str:

@@ -187,6 +187,15 @@ Mealie organizer pages must contain a list of objects and a nonnegative integer
 listing before organizer creation. Successful password login requires a nonempty
 string token; malformed replies leave any existing authorization unchanged.
 
+Library callers own healthy clients returned by `get_mealie_client()` and should
+close them or use a context manager. Failed authentication closes the new client.
+Sync and favorites backup close their own clients on success and every failure;
+closing a wrapper around a borrowed HTTPX client keeps that shared client usable.
+Request headers with the same exact key override wrapper defaults, and explicit
+timeouts override the
+HTTPX client's timeout. `tests/client_ownership_test.py` checks these on real
+HTTPX requests with a synthetic transport, including exceptional context exits.
+
 ### Export metadata
 
 Exports to Mealie and Tandoor include KptnCook active tags as tags/keywords

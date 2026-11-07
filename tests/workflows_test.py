@@ -133,6 +133,9 @@ def test_sync_with_mealie_reports_name_collisions_and_other_failures(
     seen_ids: list[str] = []
 
     class FakeClient:
+        def close(self):
+            pass
+
         def create_recipe(self, recipe_to_create):
             recipe_id = recipe_to_create.extras["kptncook_id"]
             seen_ids.append(recipe_id)
@@ -215,6 +218,9 @@ def test_sync_with_mealie_continues_after_connection_and_unexpected_errors(
     seen_ids: list[str] = []
 
     class FakeClient:
+        def close(self):
+            pass
+
         def create_recipe(self, recipe_to_create):
             recipe_id = recipe_to_create.extras["kptncook_id"]
             seen_ids.append(recipe_id)
@@ -245,6 +251,9 @@ def test_sync_with_mealie_reports_name_clash_with_other_kptncook_recipe(
     # Same title is not the same identity. A server-side collision remains a
     # visible failure, including when the existing recipe is from KptnCook.
     class FakeClient:
+        def close(self):
+            pass
+
         def create_recipe(self, recipe_to_create):
             raise _status_error(400, detail_message="Recipe already exists")
 
@@ -285,6 +294,9 @@ def test_sync_with_mealie_prefilters_recipes_already_present_in_mealie(
     seen_ids: list[str] = []
 
     class FakeClient:
+        def close(self):
+            pass
+
         def create_recipe(self, recipe_to_create):
             recipe_id = recipe_to_create.extras["kptncook_id"]
             seen_ids.append(recipe_id)
@@ -355,6 +367,9 @@ def test_sync_with_mealie_continues_after_create_failure(
     created_ids = []
 
     class FakeClient:
+        def close(self):
+            pass
+
         def create_recipe(self, recipe):
             created_ids.append(recipe.extras["kptncook_id"])
             if len(created_ids) == 1:
@@ -394,6 +409,9 @@ def test_sync_with_mealie_continues_after_conversion_failure(monkeypatch, minima
         return real_convert(recipe)
 
     class FakeClient:
+        def close(self):
+            pass
+
         def create_recipe(self, recipe):
             return SimpleNamespace(slug="created-recipe-2")
 
@@ -438,6 +456,9 @@ def test_backup_kptncook_favorites_resolves_and_saves_recipes(monkeypatch, minim
     captured: dict[str, object] = {}
 
     class FakeClient:
+        def close(self):
+            pass
+
         def list_favorites(self):
             return favorites
 
@@ -484,6 +505,9 @@ def test_get_discovery_list_recipes_resolves_list_items(monkeypatch, minimal):
     captured: dict[str, object] = {}
 
     class FakeClient:
+        def close(self):
+            pass
+
         def get_discovery_list(self, *, list_type, list_id):
             captured["list_type"] = list_type
             captured["list_id"] = list_id
@@ -519,6 +543,9 @@ def test_get_recipes_with_ingredients_requires_access_token_and_resolves_items(
     captured: dict[str, object] = {}
 
     class FakeClient:
+        def close(self):
+            pass
+
         def get_recipes_with_ingredients(self, *, ingredient_ids):
             captured["ingredient_ids"] = ingredient_ids
             return [{"id": "ingredient-1"}]
@@ -556,6 +583,9 @@ def test_get_onboarding_recipes_resolves_items(monkeypatch, minimal):
     captured: dict[str, object] = {}
 
     class FakeClient:
+        def close(self):
+            pass
+
         def get_onboarding_recipes(self, *, tags):
             captured["tags"] = tags
             return [{"id": "onboarding-1"}]

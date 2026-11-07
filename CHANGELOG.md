@@ -15,6 +15,8 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Close factory-owned clients after failed Mealie authentication and on every
+  sync/favorites-backup exit; retain caller ownership of healthy factory clients.
 - Validate Mealie organizer page shapes and login tokens before consuming replies;
   preserve existing authorization after malformed login responses.
 - Use consistent dotenv parsing in setup/runtime and quote saved values, updating
