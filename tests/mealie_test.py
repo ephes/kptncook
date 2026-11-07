@@ -207,7 +207,7 @@ def test_get_mealie_client_uses_token(monkeypatch):
     called = {}
 
     class FakeClient:
-        def __init__(self, base_url):
+        def __init__(self, base_url, **kwargs):
             self.base_url = base_url
 
         def login_with_token(self, token):
@@ -231,7 +231,7 @@ def test_get_mealie_client_uses_username_password(monkeypatch):
     called = {}
 
     class FakeClient:
-        def __init__(self, base_url):
+        def __init__(self, base_url, **kwargs):
             self.base_url = base_url
 
         def login_with_token(self, token):

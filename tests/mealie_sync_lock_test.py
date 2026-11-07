@@ -23,6 +23,8 @@ def sync_process(
     settings.mealie_url = "https://MEALIE.example:443/api/"
 
     class Client:
+        inventory_timeout = 120.0
+
         def close(self):
             pass
 
@@ -35,7 +37,7 @@ def sync_process(
                 raise RuntimeError("synthetic inventory failure")
             return [SimpleNamespace(slug=row) for row in rows]
 
-        def get_via_slug(self, slug):
+        def get_via_slug(self, slug, **kwargs):
             return SimpleNamespace(extras={"source": "kptncook", "kptncook_id": slug})
 
         def create_recipe(self, recipe):
