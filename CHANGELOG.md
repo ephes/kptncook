@@ -15,6 +15,8 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Encode Mealie media URL path components and escape image attributes while
+  retaining instruction markup; omit signed image URLs from conversion logs.
 - Serialize same-user Mealie syncs per canonical target across inventory/create;
   release ownership on failure and fail closed when locking is unavailable.
 - Reconcile explicit organizer uniqueness conflicts with one read and an
