@@ -16,6 +16,7 @@ from pydantic.alias_generators import to_camel
 
 from .exporter_utils import get_step_text
 from .config import get_settings
+from .http_errors import extract_mealie_detail_message
 from .http_client import BaseHttpClient, DEFAULT_REQUEST_TIMEOUT
 from .image_download import download_image
 from .ingredient_groups import iter_ingredient_groups
@@ -383,7 +384,28 @@ class MealieApiClient(BaseHttpClient):
             if normalize_name(item.name) not in normalized_name_to_item
         }
         for item in items_to_create:
-            created_item = model_class(**self._create_item(endpoint_name, item))
+            if normalize_name(item.name) in normalized_name_to_item:
+                continue
+            try:
+                created_item = model_class(**self._create_item(endpoint_name, item))
+            except httpx.HTTPStatusError as exc:
+                if (
+                    exc.response.status_code != 409
+                    or extract_mealie_detail_message(exc.response)
+                    != "This item already exists."
+                ):
+                    raise
+                refreshed = TypeAdapter(list[model_class]).validate_python(
+                    self._get_all_items(endpoint_name)
+                )
+                matches = [
+                    candidate
+                    for candidate in refreshed
+                    if normalize_name(candidate.name) == normalize_name(item.name)
+                ]
+                if len(matches) != 1 or matches[0].id is None:
+                    raise
+                created_item = matches[0]
             normalized_name_to_item[normalize_name(created_item.name)] = created_item
         return {
             item.name: normalized_name_to_item[normalize_name(item.name)]

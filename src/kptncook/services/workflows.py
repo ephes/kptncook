@@ -1,6 +1,13 @@
 from __future__ import annotations
 
 import logging
+import hashlib
+import os
+from pathlib import Path
+from contextlib import contextmanager
+from collections.abc import Iterator
+
+import portalocker
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
@@ -36,6 +43,7 @@ from kptncook.services.repository import (
 from kptncook.tandoor import TandoorExporter
 
 logger = logging.getLogger(__name__)
+SYNC_LOCK_DIR = Path.home() / ".cache" / "kptncook" / "sync-locks"
 SHARE_URL_TIMEOUT = httpx.Timeout(15.0, connect=5.0)
 
 
@@ -242,43 +250,70 @@ def _require_access_token() -> None:
         )
 
 
+@contextmanager
+def _mealie_sync_lock() -> Iterator[None]:
+    # Serialize all accounts at one target, including rotated-token logins.
+    url = httpx.URL(str(get_settings().mealie_url))
+    target = f"{url.scheme}://{url.host}:{url.port or (443 if url.scheme == 'https' else 80)}{url.path.rstrip('/')}"
+    lock_path = SYNC_LOCK_DIR / (hashlib.sha256(target.encode()).hexdigest() + ".lock")
+    try:
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    except OSError as exc:
+        raise UserFacingError("Could not open the local Mealie sync lock") from exc
+    with os.fdopen(fd, "a") as handle:
+        try:
+            portalocker.lock(handle, portalocker.LOCK_EX)
+        except portalocker.exceptions.LockException as exc:
+            raise UserFacingError(
+                "Could not acquire the local Mealie sync lock"
+            ) from exc
+        try:
+            yield
+        finally:
+            portalocker.unlock(handle)
+
+
 def sync_with_mealie_result() -> SyncWithMealieResult:
     client = get_mealie_client()
     try:
-        kptncook_recipes_from_mealie = get_kptncook_recipes_from_mealie(client)
-        repository_result = load_kptncook_recipes_from_repository()
-        ids_in_mealie = {
-            r.extras.get("kptncook_id") for r in kptncook_recipes_from_mealie
-        }
-        created_count = 0
-        failed_recipes: list[MealieSyncFailure] = []
-        for recipe in repository_result.recipes:
-            if recipe.id.oid in ids_in_mealie:
-                continue
-            recipe_name = localized_fallback(recipe.localized_title) or "Unknown title"
-            try:
-                client.create_recipe(kptncook_to_mealie(recipe))
-            except Exception as exc:
-                # Conversion, validation and serialization failures are local to this
-                # recipe; keep processing the rest of the batch. Name collisions are
-                # failures too, not evidence that this recipe's identity was imported.
-                reason = _describe_mealie_failure(exc)
-            else:
-                created_count += 1
-                continue
-            failure = MealieSyncFailure(recipe.id.oid, recipe_name, reason)
-            failed_recipes.append(failure)
-            logger.warning(
-                "Failed to sync recipe %s (%s) with Mealie: %s",
-                failure.recipe_name,
-                failure.recipe_id,
-                failure.reason,
+        with _mealie_sync_lock():
+            kptncook_recipes_from_mealie = get_kptncook_recipes_from_mealie(client)
+            repository_result = load_kptncook_recipes_from_repository()
+            ids_in_mealie = {
+                r.extras.get("kptncook_id") for r in kptncook_recipes_from_mealie
+            }
+            created_count = 0
+            failed_recipes: list[MealieSyncFailure] = []
+            for recipe in repository_result.recipes:
+                if recipe.id.oid in ids_in_mealie:
+                    continue
+                recipe_name = (
+                    localized_fallback(recipe.localized_title) or "Unknown title"
+                )
+                try:
+                    client.create_recipe(kptncook_to_mealie(recipe))
+                except Exception as exc:
+                    # Conversion, validation and serialization failures are local to this
+                    # recipe; keep processing the rest of the batch. Name collisions are
+                    # failures too, not evidence that this recipe's identity was imported.
+                    reason = _describe_mealie_failure(exc)
+                else:
+                    created_count += 1
+                    continue
+                failure = MealieSyncFailure(recipe.id.oid, recipe_name, reason)
+                failed_recipes.append(failure)
+                logger.warning(
+                    "Failed to sync recipe %s (%s) with Mealie: %s",
+                    failure.recipe_name,
+                    failure.recipe_id,
+                    failure.reason,
+                )
+            return SyncWithMealieResult(
+                created_count=created_count,
+                invalid_repository_entries=repository_result.invalid_entries,
+                failed_recipes=failed_recipes,
             )
-        return SyncWithMealieResult(
-            created_count=created_count,
-            invalid_repository_entries=repository_result.invalid_entries,
-            failed_recipes=failed_recipes,
-        )
     finally:
         client.close()
 

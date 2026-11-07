@@ -11,6 +11,9 @@ def reset_grouping_settings(monkeypatch, tmp_path):
     monkeypatch.setenv("KPTNCOOK_API_KEY", "test-key")
     monkeypatch.setenv("KPTNCOOK_HOME", str(tmp_path / "kptncook-home"))
     clear_settings_cache()
+    monkeypatch.setattr(
+        "kptncook.services.workflows.SYNC_LOCK_DIR", tmp_path / "sync-locks"
+    )
     monkeypatch.setattr(settings, "kptncook_group_ingredients_by_typ", False)
     monkeypatch.setattr(settings, "kptncook_ingredient_group_labels", None)
     yield
