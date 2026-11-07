@@ -17,7 +17,7 @@ from kptncook.http_errors import (
     format_request_error,
 )
 from kptncook.markdown_exporter import MarkdownExporter
-from kptncook.mealie import MealieApiClient, kptncook_to_mealie
+from kptncook.mealie import MealieApiClient, MealieInventoryError, kptncook_to_mealie
 from kptncook.models import Recipe, localized_fallback
 from kptncook.paprika import PaprikaExporter
 from kptncook.password_manager import get_credentials
@@ -176,9 +176,19 @@ def get_mealie_client() -> MealieApiClient:
 
 
 def get_kptncook_recipes_from_mealie(client: MealieApiClient) -> list[Any]:
-    recipes = client.get_all_recipes()
-    recipes_with_details = [client.get_via_slug(recipe.slug) for recipe in recipes]
-    return [r for r in recipes_with_details if r.extras.get("source") == "kptncook"]
+    try:
+        recipes = client.get_all_recipes()
+        recipes_with_details = []
+        for position, recipe in enumerate(recipes, start=1):
+            try:
+                recipes_with_details.append(client.get_via_slug(recipe.slug))
+            except MealieInventoryError:
+                raise MealieInventoryError(
+                    f"Incomplete Mealie inventory: invalid detail at inventory position {position}"
+                ) from None
+        return [r for r in recipes_with_details if r.extras.get("source") == "kptncook"]
+    except MealieInventoryError as exc:
+        raise UserFacingError(str(exc)) from exc
 
 
 def get_kptncook_recipes_from_repository():
