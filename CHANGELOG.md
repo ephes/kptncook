@@ -15,6 +15,10 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Bound Mealie inventory acquisition to a configurable elapsed budget (120 seconds
+  by default, up to 86400 for large libraries) across pages
+  and sync detail reads; cap request timeouts by the remaining budget and refuse
+  late inventories before remote creates.
 - Refuse duplicate stored/incoming OIDs, including identical duplicates, before
   ambiguous mutations; preserve main and backup bytes on refusal.
 - Use the established portable repository lock backend and refuse writes on

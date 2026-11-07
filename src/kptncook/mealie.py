@@ -2,8 +2,10 @@ import datetime
 import io
 import json
 import logging
+import math
 import re
 import uuid
+from time import monotonic
 from html import escape
 from urllib.parse import quote
 from collections.abc import Callable
@@ -34,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 MAX_INVENTORY_PAGES = 1000
 MAX_INVENTORY_ITEMS = 50_000
+DEFAULT_INVENTORY_TIMEOUT_SECONDS = 120.0
 
 
 class MealieInventoryError(ValueError):
@@ -192,7 +195,17 @@ class MealieApiClient(BaseHttpClient):
         base_url: str,
         *,
         client: httpx.Client | None = None,
+        inventory_timeout: float = DEFAULT_INVENTORY_TIMEOUT_SECONDS,
     ) -> None:
+        if (
+            isinstance(inventory_timeout, bool)
+            or not math.isfinite(inventory_timeout)
+            or not 0 < inventory_timeout <= 86_400
+        ):
+            raise ValueError(
+                "Mealie inventory timeout must be finite, positive and at most 86400 seconds"
+            )
+        self.inventory_timeout = float(inventory_timeout)
         super().__init__(
             str(base_url), headers={}, timeout=DEFAULT_REQUEST_TIMEOUT, client=client
         )
@@ -269,8 +282,12 @@ class MealieApiClient(BaseHttpClient):
         )
         r.raise_for_status()
 
-    def _get_page(self, endpoint_name, page_num, per_page=50):
-        r = self.get(f"/{endpoint_name}?page={page_num}&perPage={per_page}")
+    def _get_page(
+        self, endpoint_name, page_num, per_page=50, *, timeout=DEFAULT_REQUEST_TIMEOUT
+    ):
+        r = self.get(
+            f"/{endpoint_name}?page={page_num}&perPage={per_page}", timeout=timeout
+        )
         r.raise_for_status()
         try:
             return r.json()
@@ -309,8 +326,24 @@ class MealieApiClient(BaseHttpClient):
         total_pages = None
         total = None
         page_num = 1
+        deadline = monotonic() + self.inventory_timeout
         while total_pages is None or page_num <= total_pages:
-            payload = self._get_page(endpoint_name, page_num)
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise MealieInventoryError(
+                    "Incomplete Mealie inventory: acquisition deadline exceeded"
+                )
+            payload = self._get_page(
+                endpoint_name,
+                page_num,
+                timeout=httpx.Timeout(
+                    min(30.0, remaining), connect=min(10.0, remaining)
+                ),
+            )
+            if monotonic() >= deadline:
+                raise MealieInventoryError(
+                    "Incomplete Mealie inventory: acquisition deadline exceeded"
+                )
             items, pages = self._validate_page(payload)
             if total_pages is None:
                 total_pages = pages
@@ -358,6 +391,10 @@ class MealieApiClient(BaseHttpClient):
         if total is not None and len(all_items) != total:
             raise MealieInventoryError(
                 "Incomplete Mealie inventory: item total does not match"
+            )
+        if monotonic() >= deadline:
+            raise MealieInventoryError(
+                "Incomplete Mealie inventory: acquisition deadline exceeded"
             )
         return all_items
 
@@ -609,8 +646,8 @@ class MealieApiClient(BaseHttpClient):
         r.raise_for_status()
         return r.json() if r.content else None
 
-    def get_via_slug(self, slug):
-        r = self.get(f"/recipes/{slug}")
+    def get_via_slug(self, slug, *, timeout=httpx.USE_CLIENT_DEFAULT):
+        r = self.get(f"/recipes/{slug}", timeout=timeout)
         r.raise_for_status()
         try:
             payload = r.json()

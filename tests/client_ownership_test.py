@@ -85,7 +85,7 @@ class OwnedClient:
 @pytest.mark.parametrize("mode", ["missing", "failed", "healthy"])
 def test_factory_ownership(monkeypatch, mode):
     client = OwnedClient()
-    monkeypatch.setattr(workflows, "MealieApiClient", lambda *a: client)
+    monkeypatch.setattr(workflows, "MealieApiClient", lambda *a, **kw: client)
     monkeypatch.setattr(
         settings, "mealie_api_token", "synthetic" if mode == "healthy" else None
     )

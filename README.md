@@ -208,6 +208,16 @@ recipe detail. An invalid recipe or unreadable imported identity stops the run
 before any organizer or archive creates, with a bounded positional diagnostic.
 Check the indicated upstream record and rerun; invalid records are never silently skipped.
 Recipe and organizer inventories allow at most 1,000 pages and 50,000 items.
+An acquisition defaults to a 120-second elapsed budget, checked before and after each
+response and before returning an inventory. Sync shares that budget across the
+recipe listing and its detail reads. Request socket timeouts are capped by the
+remaining budget; in-flight requests follow HTTPX's per-operation timeout rules.
+A successful reply observed after the deadline is discarded before any creates.
+Large libraries with sequential detail reads may need a larger budget: set
+`MEALIE_INVENTORY_TIMEOUT_SECONDS=7200`, for example. This setting must be finite,
+positive and at most 86,400 seconds. Rerunning a library that consistently exceeds
+its budget needs a larger setting. Library users can pass `inventory_timeout=`
+to `MealieApiClient` without loading KptnCook settings.
 Changing totals, mismatched reported counts/page numbers, repeated identities and
 empty pages in a multi-page inventory abort the acquisition before writes.
 
@@ -466,6 +476,9 @@ MEALIE_API_TOKEN=mealie-api-token
 # or:
 MEALIE_USERNAME=jochen
 MEALIE_PASSWORD=password  # replace with correct password
+
+# Optional: Mealie inventory budget (positive, finite, at most 86400 seconds)
+MEALIE_INVENTORY_TIMEOUT_SECONDS=120
 
 # Optional: API defaults
 KPTNCOOK_LANG=de

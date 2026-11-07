@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-import logging
 import hashlib
+import logging
 import os
-from pathlib import Path
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from collections.abc import Iterator
-
-import portalocker
-from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
+from pathlib import Path
+from time import monotonic
 from typing import Any, Literal
 
 import httpx
+import portalocker
 
 from kptncook.api import KptnCookClient, _collect_recipe_identifiers, parse_id
 from kptncook.config import get_settings
@@ -24,7 +23,11 @@ from kptncook.http_errors import (
     format_request_error,
 )
 from kptncook.markdown_exporter import MarkdownExporter
-from kptncook.mealie import MealieApiClient, MealieInventoryError, kptncook_to_mealie
+from kptncook.mealie import (
+    MealieApiClient,
+    MealieInventoryError,
+    kptncook_to_mealie,
+)
 from kptncook.models import Recipe, localized_fallback
 from kptncook.paprika import PaprikaExporter
 from kptncook.password_manager import get_credentials
@@ -165,7 +168,10 @@ def save_todays_recipes() -> int:
 
 def get_mealie_client() -> MealieApiClient:
     settings = get_settings()
-    client = MealieApiClient(str(settings.mealie_url))
+    client = MealieApiClient(
+        str(settings.mealie_url),
+        inventory_timeout=settings.mealie_inventory_timeout_seconds,
+    )
     try:
         if settings.mealie_api_token:
             client.login_with_token(settings.mealie_api_token)
@@ -185,15 +191,35 @@ def get_mealie_client() -> MealieApiClient:
 
 def get_kptncook_recipes_from_mealie(client: MealieApiClient) -> list[Any]:
     try:
+        deadline = monotonic() + client.inventory_timeout
         recipes = client.get_all_recipes()
+        if monotonic() >= deadline:
+            raise MealieInventoryError(
+                "Incomplete Mealie inventory: acquisition deadline exceeded"
+            )
         recipes_with_details = []
         for position, recipe in enumerate(recipes, start=1):
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise MealieInventoryError(
+                    "Incomplete Mealie inventory: acquisition deadline exceeded"
+                )
             try:
-                recipes_with_details.append(client.get_via_slug(recipe.slug))
+                detail = client.get_via_slug(
+                    recipe.slug,
+                    timeout=httpx.Timeout(
+                        min(30.0, remaining), connect=min(10.0, remaining)
+                    ),
+                )
             except MealieInventoryError:
                 raise MealieInventoryError(
                     f"Incomplete Mealie inventory: invalid detail at inventory position {position}"
                 ) from None
+            if monotonic() >= deadline:
+                raise MealieInventoryError(
+                    "Incomplete Mealie inventory: acquisition deadline exceeded"
+                )
+            recipes_with_details.append(detail)
         return [r for r in recipes_with_details if r.extras.get("source") == "kptncook"]
     except MealieInventoryError as exc:
         raise UserFacingError(str(exc)) from exc
