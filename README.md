@@ -182,6 +182,11 @@ redirects). Failed, oversized, or slow images are skipped; recipe text is
 still exported or imported. Downloads request uncompressed responses; servers
 that send compressed images despite that request are skipped to bound memory.
 
+Mealie organizer pages must contain a list of objects and a nonnegative integer
+`total_pages` (zero is allowed only for an empty inventory). Invalid pages abort
+listing before organizer creation. Successful password login requires a nonempty
+string token; malformed replies leave any existing authorization unchanged.
+
 ### Export metadata
 
 Exports to Mealie and Tandoor include KptnCook active tags as tags/keywords

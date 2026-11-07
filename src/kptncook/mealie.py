@@ -196,7 +196,14 @@ class MealieApiClient(BaseHttpClient):
         login_data = {"username": username, "password": password}
         r = self.post("/auth/token", data=login_data, timeout=60)
         r.raise_for_status()
-        return r.json()["access_token"]
+        try:
+            payload = r.json()
+        except ValueError:
+            raise ValueError("Invalid Mealie login response") from None
+        token = payload.get("access_token") if isinstance(payload, dict) else None
+        if not isinstance(token, str) or not token.strip():
+            raise ValueError("Invalid Mealie login response: expected a nonempty token")
+        return token
 
     def login(self, username: str = "admin", password: str = ""):
         if password == "":
@@ -246,19 +253,35 @@ class MealieApiClient(BaseHttpClient):
     def _get_page(self, endpoint_name, page_num, per_page=50):
         r = self.get(f"/{endpoint_name}?page={page_num}&perPage={per_page}")
         r.raise_for_status()
-        return r.json()
+        try:
+            return r.json()
+        except ValueError:
+            raise ValueError("Invalid Mealie inventory: expected JSON") from None
+
+    @staticmethod
+    def _validate_page(payload):
+        if not isinstance(payload, dict):
+            raise ValueError("Invalid Mealie inventory: expected a page object")
+        items = payload.get("items")
+        total_pages = payload.get("total_pages")
+        if not isinstance(items, list) or any(
+            not isinstance(item, dict) for item in items
+        ):
+            raise ValueError("Invalid Mealie inventory: expected a list of objects")
+        if type(total_pages) is not int or total_pages < 0:
+            raise ValueError(
+                "Invalid Mealie inventory: expected a nonnegative page count"
+            )
+        if total_pages == 0 and items:
+            raise ValueError("Invalid Mealie inventory: items with zero pages")
+        return items, total_pages
 
     def _get_all_items(self, endpoint_name):
-        all_items = []
-        response_data = self._get_page(endpoint_name, 1)
-        all_items.extend(response_data["items"])
-
-        # 1 was already fetched, start page_num at 2 and add 1 to the
-        # number of total pages, because we start counting at 1 instead of 0
-        for page_num in range(2, response_data["total_pages"] + 1):
-            response_data = self._get_page(endpoint_name, page_num)
-            all_items.extend(response_data["items"])
-
+        items, total_pages = self._validate_page(self._get_page(endpoint_name, 1))
+        all_items = list(items)
+        for page_num in range(2, total_pages + 1):
+            items, _ = self._validate_page(self._get_page(endpoint_name, page_num))
+            all_items.extend(items)
         return all_items
 
     def _create_item(self, endpoint_name, item):
