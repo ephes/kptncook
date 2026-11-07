@@ -171,26 +171,27 @@ def test_backup_contains_previous_repository_state(tmpdir):
     assert [entry["data"]["_id"]["$oid"] for entry in backup_data] == ["1"]
 
 
-@pytest.mark.skipif(
-    repositories_module.fcntl is None,
-    reason="fcntl locking is only available on POSIX platforms",
-)
 def test_add_recipe_uses_advisory_lock(tmpdir, monkeypatch):
     repo = RecipeRepository(tmpdir)
     recipe = RecipeInDb(date=date.today(), data={"_id": {"$oid": "1"}})
-    calls: list[int] = []
-    original_flock = repositories_module.fcntl.flock
+    calls: list[object] = []
+    original_lock = repositories_module.portalocker.lock
+    original_unlock = repositories_module.portalocker.unlock
 
-    def tracking_flock(fd, operation):
+    def tracking_lock(handle, operation):
         calls.append(operation)
-        return original_flock(fd, operation)
+        return original_lock(handle, operation)
 
-    monkeypatch.setattr(repositories_module.fcntl, "flock", tracking_flock)
+    def tracking_unlock(handle):
+        calls.append("unlock")
+        return original_unlock(handle)
+
+    monkeypatch.setattr(repositories_module.portalocker, "lock", tracking_lock)
+    monkeypatch.setattr(repositories_module.portalocker, "unlock", tracking_unlock)
 
     repo.add(recipe)
 
-    assert repositories_module.fcntl.LOCK_EX in calls
-    assert repositories_module.fcntl.LOCK_UN in calls
+    assert calls == [repositories_module.portalocker.LOCK_EX, "unlock"]
 
 
 @pytest.mark.parametrize("failure", ["copy", "fsync", "replace"])

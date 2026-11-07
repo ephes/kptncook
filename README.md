@@ -261,6 +261,21 @@ nonempty string. The error identifies the record position without exposing its
 payload; mutations leave the repository and recovery backup unchanged. Repair
 the malformed record manually before retrying.
 
+Repeated OIDs within a stored snapshot or an incoming batch are refused, even
+when their payloads are identical. The bounded error identifies both positions;
+mutations leave main and backup bytes unchanged. Errors distinguish incoming feed
+batches from stored snapshots; a repeated daily/today feed is refused in full,
+including exact copies. Check the feed and retry rather than editing the local
+repository for an incoming-batch error. A single incoming record may
+still replace its existing unique identity, as before.
+
+Repository mutations use the existing portable `portalocker` backend on supported
+POSIX and Windows systems. Every mutation must acquire the stable sibling
+`kptncook.json.lock` before rereading and replacing data; lock failures refuse the
+write with a repository error. Use a local filesystem with working advisory locks,
+and retain lock files while writers may run. Read-only recipe/export access
+remains available when locking fails.
+
 Repository-backed commands now warn if `kptncook.json` contains stored entries
 that can no longer be parsed into full recipes. The command continues with the
 valid recipes instead of silently dropping the bad entries. If you need to
