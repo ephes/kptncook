@@ -231,16 +231,19 @@ def test_export_preserves_previous_exports_and_manual_notes(exporter):
 def test_export_retries_when_another_writer_claims_name(exporter, monkeypatch):
     from pathlib import Path
 
-    original_open = Path.open
+    import os
+
+    original_link = os.link
     claimed = []
 
-    def racing_open(path, mode="r", *args, **kwargs):
-        if mode == "x" and not claimed:
+    def racing_link(source, target):
+        path = Path(target)
+        if path.suffix == ".md" and not claimed:
             claimed.append(path)
             path.write_text("Other writer", encoding="utf-8")
-        return original_open(path, mode, *args, **kwargs)
+        return original_link(source, target)
 
-    monkeypatch.setattr(Path, "open", racing_open)
+    monkeypatch.setattr(os, "link", racing_link)
     [written] = exporter.export([build_recipe()])
     assert claimed[0].read_text(encoding="utf-8") == "Other writer"
     assert written.name == "Test Rezept-1.md"

@@ -15,6 +15,11 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Publish complete export archives and Markdown notes atomically without
+  overwriting existing files; finish Markdown assets before publishing notes.
+  Fail safely if the destination filesystem does not support hard links.
+- Serialize and compress Paprika exports one recipe at a time instead of
+  retaining all cover images and recipe JSON in memory.
 - Refuse repository writes exceeding the shared 64 MiB UTF-8 read limit before
   updating the primary or backup; retain both snapshots and explain recovery.
 - Validate whole-recipe durations as strict nonnegative integer minutes, capped

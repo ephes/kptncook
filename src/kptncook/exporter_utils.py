@@ -1,4 +1,7 @@
 import itertools
+import logging
+import os
+import tempfile
 import re
 import shutil
 import zipfile
@@ -10,6 +13,8 @@ from pathvalidate import validate_filename, ValidationError as FilenameValidatio
 
 from kptncook.http_errors import UserFacingError
 from kptncook.models import Image, RecipeStep, StepTimer, localized_fallback
+
+logger = logging.getLogger(__name__)
 
 TIMER_PLACEHOLDER = "<timer>"
 TIMER_PLACEHOLDER_PATTERN = re.compile(
@@ -123,8 +128,9 @@ def move_to_free_target(
     ``disambiguator`` (for example a recipe id) is appended, then a counter:
     ``<stem>-<disambiguator><extension>``, ``<stem>-<disambiguator>-2<extension>``
     and so on (``<stem>-2<extension>`` ... without a disambiguator). The target
-    name is claimed with an exclusive create, so an existing file is never
-    replaced, even if it appears between the check and the write.
+    name is published by linking a flushed sibling staging file. Hard-link
+    support is required: publication fails safely when unavailable. Existing
+    files are never replaced and final names always contain complete data.
     """
     directory = Path(directory)
     base = f"{stem}-{disambiguator}" if disambiguator else stem
@@ -133,22 +139,37 @@ def move_to_free_target(
         [base] if disambiguator else [],
         (f"{base}-{counter}" for counter in itertools.count(2)),
     )
-    for candidate in candidates:
-        target = directory / f"{candidate}{extension}"
+    # Copy first: the source may be on a different filesystem. Only the sibling
+    # staging inode is linked, so publication itself is atomic and no-clobber.
+    staging_path: Path | None = None
+    try:
         with open(source, "rb") as src:
+            with tempfile.NamedTemporaryFile(
+                dir=directory, prefix=".kptncook-", suffix=".tmp", delete=False
+            ) as staged:
+                staging_path = Path(staged.name)
+                shutil.copyfileobj(src, staged)
+                staged.flush()
+                os.fsync(staged.fileno())
+        for candidate in candidates:
+            target = directory / f"{candidate}{extension}"
             try:
-                dst = open(target, "xb")
+                os.link(staging_path, target)
             except FileExistsError:
                 continue
-            # from here on the target is ours, so it may be cleaned up on failure
+            # Publication succeeded. Cleanup errors must not make callers undo
+            # assets referenced by an already published Markdown note.
             try:
-                with dst:
-                    shutil.copyfileobj(src, dst)
-            except BaseException:
-                target.unlink(missing_ok=True)
-                raise
-        Path(source).unlink()
-        return target
+                Path(source).unlink()
+            except OSError:
+                logger.warning("Export published; could not remove staging source")
+            return target
+    finally:
+        if staging_path is not None:
+            try:
+                staging_path.unlink(missing_ok=True)
+            except OSError:
+                logger.warning("Could not remove export staging file")
     raise AssertionError("unreachable")  # pragma: no cover
 
 

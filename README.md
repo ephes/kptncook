@@ -301,8 +301,8 @@ were scaled to.
 Existing Markdown files, including manual notes, are never overwritten:
 repeated exports create new files. If a title is taken,
 the recipe id and then a counter are appended (`Title-<recipe id>.md`,
-`Title-<recipe id>-2.md`). Files are created exclusively to prevent concurrent
-exports from overwriting each other. Command output lists the actual paths.
+`Title-<recipe id>-2.md`). Complete notes are published without replacing files, so concurrent exports
+retain distinct names. Command output lists the actual paths.
 
 The Paprika and Tandoor exports write their files into the current directory
 and never overwrite an existing file. If the preferred name (the asciified
@@ -311,6 +311,18 @@ recipes) is taken, for example by an earlier export or by a second recipe with
 the same title, the recipe id and then a counter are appended
 (`Title-<recipe id>.zip`, `Title-<recipe id>-2.zip`, `allrecipes-2.paprikarecipes`).
 The command output lists the names that were actually written.
+Archives and Markdown notes are fully written and flushed in sibling staging
+before atomic no-clobber publication. Markdown assets are published completely
+before the note that references them. The destination filesystem must support
+hard links; otherwise export fails without publishing a partial final file.
+Normal failures remove attempt-owned staging and assets. Forced termination may
+leave hidden `.kptncook-*` staging or complete unreferenced Markdown assets;
+final export names always contain complete files. This is atomic visibility,
+not a guarantee of survival after a power loss.
+Paprika serializes and compresses one recipe at a time, so cover/JSON memory
+does not grow with the number of exported recipes. Its small single-recipe and
+bulk serialization helpers remain available to library callers; the bulk helper
+still materializes its results when called directly.
 Paprika preserves quotes, backslashes, whitespace and Unicode in recipe text.
 All three local exporters preflight every recipe ID before writing any output:
 IDs must be portable single filename components of at most 128 bytes (no slash,
