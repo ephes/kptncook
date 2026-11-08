@@ -5,8 +5,10 @@ Atm only uses json. But this could also be a sqlite or a
 remote api, maybe mealie... hmm.
 """
 
+import errno
 import os
 import shutil
+import stat
 import tempfile
 from contextlib import contextmanager
 from datetime import date
@@ -17,6 +19,9 @@ from collections.abc import Iterator
 import portalocker
 
 from pydantic import BaseModel, RootModel, ValidationError
+
+
+MAX_STORE_BYTES = 64 * 1024 * 1024
 
 
 class RepositoryError(Exception):
@@ -193,15 +198,38 @@ class RecipeRepository:
         Fetch dict of pydantic models from json in self.path
         """
         try:
-            if not self.path.exists():
-                return []
-            with self.path.open("r", encoding="utf-8") as f:
-                raw_data = f.read()
+            if self.path.is_symlink():
+                raise RepositoryError(
+                    "Repository must be a regular file, not a symlink."
+                )
+            flags = (
+                os.O_RDONLY
+                | getattr(os, "O_NONBLOCK", 0)
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_BINARY", 0)
+            )
+            fd = os.open(self.path, flags)
+            try:
+                info = os.fstat(fd)
+                if not stat.S_ISREG(info.st_mode):
+                    raise RepositoryError("Repository must be a regular file.")
+                if info.st_size > MAX_STORE_BYTES:
+                    raise RepositoryError("Repository exceeds the 64 MiB size limit.")
+                with os.fdopen(fd, "rb", closefd=False) as source:
+                    raw_bytes = source.read(MAX_STORE_BYTES + 1)
+                if len(raw_bytes) > MAX_STORE_BYTES:
+                    raise RepositoryError("Repository exceeds the 64 MiB size limit.")
+            finally:
+                os.close(fd)
+            raw_data = raw_bytes.decode("utf-8")
         except FileNotFoundError:
             return []
+        except UnicodeDecodeError as exc:
+            raise RepositoryError("Repository contains invalid UTF-8 data.") from exc
         except OSError as exc:
+            category = errno.errorcode.get(exc.errno or 0, "IO_ERROR")
             raise RepositoryError(
-                f"Could not read repository file {self.path}: {exc}"
+                f"Could not read repository file ({category})."
             ) from exc
         try:
             return RecipeListInDb.model_validate_json(raw_data)
@@ -240,7 +268,7 @@ class RecipeRepository:
             key_map = {str(key): key for key in locked.keys()}
             deleted: list[str] = []
             missing: list[str] = []
-            for oid in ids:
+            for oid in dict.fromkeys(str(value) for value in ids):
                 key = key_map.get(str(oid))
                 if key is None:
                     missing.append(str(oid))
