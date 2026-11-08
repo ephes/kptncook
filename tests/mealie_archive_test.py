@@ -214,7 +214,11 @@ def test_media_failures_leave_core_import_successful(failed_operation):
             result = client.create_recipe(recipe)
     assert result.slug == "test-1"
     assert result.extras["kptncook_id"] == "id"
-    assert not any(method in {"DELETE", "PUT"} for method, _ in calls)
+    assert not any(method == "DELETE" for method, _ in calls)
+    # The only PUT is the cover upload; the recipe itself is never replaced.
+    assert [path for method, path in calls if method == "PUT"] == [
+        "/api/recipes/test-1/image"
+    ]
     if failed_operation in {"asset", "malformed-asset"}:
         assert not any(method == "PATCH" for method, _ in calls)
 

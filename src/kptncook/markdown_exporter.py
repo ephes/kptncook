@@ -29,6 +29,7 @@ from .exporter_utils import (
     validate_export_id,
 )
 from .image_download import download_image
+from .image_origin import ImageOriginError
 from .ingredient_groups import iter_ingredient_groups
 from .models import (
     DEFAULT_SERVINGS,
@@ -178,9 +179,12 @@ class MarkdownExporter:
         if image is None:
             return None
         try:
-            return download_image(
-                image.get_image_with_api_key_url(get_settings().kptncook_api_key).url
-            )
+            image = image.get_image_with_api_key_url(get_settings().kptncook_api_key)
+        except ImageOriginError:
+            logger.warning("Skipping Markdown image: not on an allowed image host")
+            return None
+        try:
+            return download_image(image.url)
         except httpx.HTTPError:
             logger.warning(
                 "Skipping Markdown image: download failed or exceeded limits"

@@ -126,28 +126,35 @@ def test_login_with_token_preserves_existing_headers():
     assert client.headers["authorization"] == "Bearer token-123"
 
 
-def test_scrape_image_for_recipe_uses_json_content_type():
+def test_cover_image_is_downloaded_and_uploaded(monkeypatch):
     client = MealieApiClient("http://mealie.local/api")
     recipe = RecipeWithImage(
         name="Test recipe",
-        image_url="https://images.example/test.jpg",
+        image_url="https://images.example/test.png?kptnkey=KEY",
+    )
+    downloads = []
+    monkeypatch.setattr(
+        "kptncook.mealie.download_image",
+        lambda url, **kw: downloads.append((url, kw)) or b"png-bytes",
     )
     seen = {}
 
-    def fake_post(path, **kwargs):
+    def fake_put(path, **kwargs):
         seen["path"] = path
         seen["kwargs"] = kwargs
-        request = httpx.Request("POST", f"http://mealie.local/api{path}")
+        request = httpx.Request("PUT", f"http://mealie.local/api{path}")
         return httpx.Response(200, request=request, json={})
 
-    client.post = fake_post
+    client.put = fake_put
+    client.post = lambda *a, **kw: pytest.fail("Mealie must not scrape the URL")
 
     client._scrape_image_for_recipe(recipe, "recipe-slug")
 
+    assert downloads == [(recipe.image_url, {"follow_redirects": True})]
     assert seen["path"] == "/recipes/recipe-slug/image"
-    assert seen["kwargs"]["content"] == json.dumps({"url": recipe.image_url})
-    assert seen["kwargs"]["headers"]["Content-Type"] == "application/json"
-    assert "data" not in seen["kwargs"]
+    assert seen["kwargs"]["files"] == {"image": ("cover.png", b"png-bytes")}
+    assert seen["kwargs"]["data"] == {"extension": "png"}
+    assert "KEY" not in json.dumps(seen["kwargs"]["data"])
 
 
 def test_create_item_uses_json_content_type():

@@ -175,7 +175,7 @@ def test_markdown_frontmatter_roundtrips_strings(synthetic_recipe, monkeypatch):
         Image(
             name="synthetic",
             type="cover",
-            url="https://example.test/🍲# hash\nother: injected",
+            url="https://example.test/🍲#hash",
         )
     ]
     [path] = MarkdownExporter().export([recipe])

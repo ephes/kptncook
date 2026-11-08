@@ -8,6 +8,11 @@ Unreleased
   Keep output assertions independent of terminal width and error coloring.
 
 ### Security
+- Attach the KptnCook API key only to HTTPS image URLs on KptnCook's image CDN
+  or a host listed in the new `KPTNCOOK_IMAGE_HOSTS` setting, and check every
+  redirect target before requesting it. Images from other recipe URLs are
+  skipped without logging the URL or key. Mealie covers are now downloaded by
+  kptncook and uploaded, instead of asking Mealie to fetch the keyed URL.
 - Audit the frozen runtime and development graph in CI with pinned pip-audit;
   document the identical local command and coverage.
 - Refresh notebook/build tooling to setuptools 84.2.1 and Tornado 6.6.
@@ -15,6 +20,10 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Require every Mealie recipe detail read during sync to match its inventory
+  row's server ID and requested slug. A mismatched or concurrently renamed
+  recipe stops the sync before any write instead of silently replacing an
+  imported identity and creating a duplicate.
 - Publish complete export archives and Markdown notes atomically without
   overwriting existing files; finish Markdown assets before publishing notes.
   Fail safely if the destination filesystem does not support hard links.

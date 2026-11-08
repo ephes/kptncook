@@ -92,12 +92,22 @@ class Settings(BaseSettings):
     kptncook_password_command: str | None = None
     kptncook_group_ingredients_by_typ: bool = False
     kptncook_ingredient_group_labels: str | None = None
+    # Extra image hosts (comma-separated) allowed to receive the API key, in
+    # addition to KptnCook's own image CDN.
+    kptncook_image_hosts: str | None = None
 
     @field_validator("root", mode="before")
     def root_must_exist(cls, path: str | Path | os.PathLike[str]) -> Path:
         path = Path(os.path.expandvars(os.fspath(path))).expanduser()
         path.mkdir(parents=True, exist_ok=True)
         return path
+
+    @field_validator("kptncook_image_hosts")
+    def image_hosts_must_be_host_names(cls, value: str | None) -> str | None:
+        from .image_origin import parse_image_hosts
+
+        parse_image_hosts(value)
+        return value
 
     @field_validator("kptncook_api_key")
     def api_key_must_be_set(cls, value: str) -> str:

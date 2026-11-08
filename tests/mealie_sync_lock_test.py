@@ -38,7 +38,9 @@ def sync_process(
             return [SimpleNamespace(slug=row) for row in rows]
 
         def get_via_slug(self, slug, **kwargs):
-            return SimpleNamespace(extras={"source": "kptncook", "kptncook_id": slug})
+            return SimpleNamespace(
+                slug=slug, extras={"source": "kptncook", "kptncook_id": slug}
+            )
 
         def create_recipe(self, recipe):
             with Path(remote).open("a") as output:

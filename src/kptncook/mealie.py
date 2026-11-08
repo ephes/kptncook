@@ -7,7 +7,7 @@ import re
 import uuid
 from time import monotonic
 from html import escape
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from collections.abc import Callable
 from getpass import getpass
 from pathlib import Path
@@ -23,6 +23,7 @@ from .config import get_settings
 from .http_errors import extract_mealie_detail_message
 from .http_client import BaseHttpClient, DEFAULT_REQUEST_TIMEOUT
 from .image_download import download_image
+from .image_origin import ImageOriginError, is_allowed_image_url
 from .ingredient_groups import iter_ingredient_groups
 from .models import (
     Image,
@@ -36,6 +37,7 @@ from .models import Recipe as KptnCookRecipe
 logger = logging.getLogger(__name__)
 
 MAX_INVENTORY_PAGES = 1000
+COVER_IMAGE_EXTENSIONS = frozenset({"jpg", "jpeg", "png", "webp"})
 MAX_INVENTORY_ITEMS = 50_000
 DEFAULT_INVENTORY_TIMEOUT_SECONDS = 120.0
 
@@ -49,6 +51,13 @@ def _recipe_path(slug: str) -> str:
     ):
         raise ValueError("Invalid Mealie recipe slug")
     return f"/recipes/{quote(slug, safe='-_')}"
+
+
+def _media_failure_reason(exc: BaseException) -> str:
+    """A log-safe reason for an optional media failure (never the URL)."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f"HTTP {exc.response.status_code}"
+    return type(exc).__name__
 
 
 class MealieInventoryError(ValueError):
@@ -282,14 +291,27 @@ class MealieApiClient(BaseHttpClient):
         return f'{text} <img src="{media_url}" height="100%" width="100%"/>'
 
     def _scrape_image_for_recipe(self, recipe, slug):
+        """Set the recipe cover from ``recipe.image_url``.
+
+        The image is downloaded here, through the origin-checked downloader that
+        also checks every redirect, and uploaded as bytes. Mealie is never asked
+        to fetch the keyed URL itself, because its scraper follows redirects
+        without that check.
+        """
         if not recipe.image_url:
             return
-        json_image_url = json.dumps({"url": recipe.image_url})
-        scrape_image_path = _recipe_path(slug) + "/image"
-        r = self.post(
-            scrape_image_path,
-            content=json_image_url,
-            headers={"Content-Type": "application/json"},
+        image_path = _recipe_path(slug) + "/image"
+        if not is_allowed_image_url(recipe.image_url):
+            logger.warning("Skipping cover image: not on an allowed image host")
+            return
+        image_bytes = download_image(recipe.image_url, follow_redirects=True)
+        extension = Path(urlsplit(recipe.image_url).path).suffix.lstrip(".").lower()
+        if extension not in COVER_IMAGE_EXTENSIONS:
+            extension = "jpg"
+        r = self.put(
+            image_path,
+            files={"image": (f"cover.{extension}", image_bytes)},
+            data={"extension": extension},
         )
         r.raise_for_status()
 
@@ -595,13 +617,10 @@ class MealieApiClient(BaseHttpClient):
                 )
                 changed = True
             except Exception as exc:
-                reason = (
-                    f"HTTP {exc.response.status_code}"
-                    if isinstance(exc, httpx.HTTPStatusError)
-                    else type(exc).__name__
-                )
                 logger.warning(
-                    "Skipping step image for recipe %s (%s)", recipe.slug, reason
+                    "Skipping step image for recipe %s (%s)",
+                    recipe.slug,
+                    _media_failure_reason(exc),
                 )
         if changed:
             response = self.request(
@@ -631,9 +650,13 @@ class MealieApiClient(BaseHttpClient):
                 )
         try:
             self._scrape_image_for_recipe(recipe, created.slug)
-        except Exception:
+        except Exception as exc:
+            # The download error carries the keyed image URL: log no traceback,
+            # message or URL, only the status or error type.
             logger.warning(
-                "Skipping cover image for recipe %s", created.slug, exc_info=True
+                "Skipping cover image for recipe %s (%s)",
+                created.slug,
+                _media_failure_reason(exc),
             )
         try:
             created = self._attach_step_images(created, stored, recipe)
@@ -743,7 +766,11 @@ def kptncook_to_mealie_steps(
 ):
     mealie_instructions = []
     for step in steps:
-        image = step.image.get_image_with_api_key_url(api_key)
+        try:
+            image: Image | None = step.image.get_image_with_api_key_url(api_key)
+        except ImageOriginError:
+            logger.warning("Skipping step image: not on an allowed image host")
+            image = None
         reference_ids: list[UUID4] = []
         if step.ingredients:
             for ingredient in step.ingredients:
