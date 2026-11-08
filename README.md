@@ -290,6 +290,15 @@ the same title, the recipe id and then a counter are appended
 (`Title-<recipe id>.zip`, `Title-<recipe id>-2.zip`, `allrecipes-2.paprikarecipes`).
 The command output lists the names that were actually written.
 Paprika preserves quotes, backslashes, whitespace and Unicode in recipe text.
+All three local exporters preflight every recipe ID before writing any output:
+IDs must be portable single filename components of at most 128 bytes (no slash,
+backslash, NUL, dot segments, reserved names or overlong components). Valid opaque
+IDs remain unchanged in recipe content; IDs do not need to be 24-digit OIDs.
+An unsafe ID refuses the batch before downloads or file creation. This check
+covers ID components; title-derived filename lengths and other filesystem
+failures remain subject to the existing export error behavior.
+Absent or ambiguous Paprika covers are optional, like failed downloads: every
+recipe's text remains in the archive with empty photo fields.
 Its temporary archive files are removed on success and failure; only the final
 export persists. Export errors are reported instead of silently omitting recipes.
 

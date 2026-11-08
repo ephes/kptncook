@@ -21,7 +21,7 @@ from pathlib import Path
 from pathvalidate import sanitize_filename
 
 from .config import get_settings
-from .exporter_utils import get_cover, replace_timers_in_step
+from .exporter_utils import get_cover, replace_timers_in_step, validate_export_id
 from .image_download import download_image
 from .ingredient_groups import iter_ingredient_groups
 from .models import (
@@ -105,6 +105,9 @@ def _yaml_string(value: str) -> str:
 
 class MarkdownExporter:
     def export(self, recipes: Iterable[Recipe]) -> list[Path]:
+        recipes = list(recipes)
+        for recipe in recipes:
+            validate_export_id(recipe.id.oid)
         written: list[Path] = []
 
         out_dir = get_settings().root / "export_md"

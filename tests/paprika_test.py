@@ -30,8 +30,7 @@ def test_get_cover_img_as_base64_string(full_recipe, mocker):
 
     # no images available for some reason
     recipe.image_list = list()
-    with pytest.raises(ValueError):
-        p.get_cover_img_as_base64_string(recipe=recipe)
+    assert p.get_cover_img_as_base64_string(recipe=recipe) == (None, None)
 
 
 def test_get_cover_img_as_base64_string_can_handle_404(full_recipe, mocker):
