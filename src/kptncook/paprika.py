@@ -55,14 +55,23 @@ class GeneratedData:
 
 class PaprikaExporter:
     def export(self, recipes: list[Recipe]) -> str:
-        export_data = self.get_export_data(recipes=recipes)
-        filename = self.get_export_filename(export_data=export_data, recipes=recipes)
+        for recipe in recipes:
+            validate_export_id(recipe.id.oid)
+        # Retain only recipe references, with the same last-identity-wins policy
+        # as get_export_data; serialized covers/JSON live for one recipe only.
+        unique = {recipe.id.oid: recipe for recipe in recipes}
+        filename = self.get_export_filename(export_data=unique, recipes=recipes)
         with tempfile.TemporaryDirectory() as tmp_dir:
-            filename_full_path = self.save_recipes(
-                export_data=export_data, directory=tmp_dir, filename=filename
-            )
+            entries = []
+            for identifier, recipe in unique.items():
+                path = Path(tmp_dir) / f"recipe_{identifier}.paprikarecipe"
+                with gzip.open(path, "wb") as output:
+                    output.write(self.get_recipe_as_json_string(recipe).encode("utf-8"))
+                entries.append((path.name, path))
+            filename_full_path = Path(tmp_dir) / filename
+            write_zip(filename_full_path, entries)
             # never overwrite an existing export; pick a free name instead
-            disambiguator = recipes[0].id.oid if len(export_data) == 1 else None
+            disambiguator = recipes[0].id.oid if len(unique) == 1 else None
             target = move_to_free_target(
                 source=filename_full_path,
                 directory=Path.cwd(),
@@ -73,7 +82,7 @@ class PaprikaExporter:
             return target.name
 
     def get_export_filename(
-        self, export_data: dict[str, str], recipes: list[Recipe]
+        self, export_data: dict[str, Any], recipes: list[Recipe]
     ) -> str:
         if len(export_data) == 1:
             return (

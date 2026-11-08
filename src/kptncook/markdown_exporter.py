@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+import tempfile
 
 import httpx
 from collections.abc import Iterable
@@ -21,7 +22,12 @@ from pathlib import Path
 from pathvalidate import sanitize_filename
 
 from .config import get_settings
-from .exporter_utils import get_cover, replace_timers_in_step, validate_export_id
+from .exporter_utils import (
+    get_cover,
+    move_to_free_target,
+    replace_timers_in_step,
+    validate_export_id,
+)
 from .image_download import download_image
 from .ingredient_groups import iter_ingredient_groups
 from .models import (
@@ -136,39 +142,34 @@ class MarkdownExporter:
             )
             base = sanitize_filename(title)
             image_bytes = self._download_recipe_image(recipe)
-            image_path = (
-                f"assets/{uuid.uuid4().hex}.jpg" if image_bytes is not None else None
-            )
-            content = self.render_recipe(recipe, image_path=image_path)
-            stem = base
-            counter = 1
-            while True:
-                out_path = out_dir / f"{stem}.md"
+            asset_path: Path | None = None
+            with tempfile.TemporaryDirectory(dir=out_dir, prefix=".kptncook-") as temp:
+                staging = Path(temp)
                 try:
-                    output = out_path.open("x", encoding="utf-8")
-                except FileExistsError:
-                    suffix = (
-                        recipe.id.oid if counter == 1 else f"{recipe.id.oid}-{counter}"
+                    if image_bytes is not None:
+                        staged_asset = staging / "image.jpg"
+                        with staged_asset.open("xb") as asset:
+                            asset.write(image_bytes)
+                        assets = out_dir / "assets"
+                        assets.mkdir(exist_ok=True)
+                        asset_path = move_to_free_target(
+                            staged_asset, assets, uuid.uuid4().hex, ".jpg"
+                        )
+                    image_path = (
+                        asset_path.relative_to(out_dir).as_posix()
+                        if asset_path
+                        else None
                     )
-                    stem = f"{base}-{suffix}"
-                    counter += 1
-                    continue
-                asset_owned = False
-                asset_path = out_dir / image_path if image_path else None
-                try:
-                    with output:
-                        if asset_path is not None and image_bytes is not None:
-                            asset_path.parent.mkdir(exist_ok=True)
-                            with asset_path.open("xb") as asset:
-                                asset_owned = True
-                                asset.write(image_bytes)
-                        output.write(content)
+                    content = self.render_recipe(recipe, image_path=image_path)
+                    staged_note = staging / "note.md"
+                    staged_note.write_text(content, encoding="utf-8")
+                    out_path = move_to_free_target(
+                        staged_note, out_dir, base, ".md", recipe.id.oid
+                    )
                 except BaseException:
-                    out_path.unlink(missing_ok=True)
-                    if asset_owned and asset_path is not None:
+                    if asset_path is not None:
                         asset_path.unlink(missing_ok=True)
                     raise
-                break
             written.append(out_path)
         return written
 
