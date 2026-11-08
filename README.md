@@ -169,6 +169,15 @@ escaped, so server-returned filenames remain data. Existing instruction markup
 is preserved. Conversion DEBUG logs contain only recipe identity and counts;
 cover and nested step image URLs (including API keys) are never logged there.
 
+Mealie recipe slugs are admitted as single route components: nonempty Unicode
+letters/numbers, hyphens and underscores only, percent-encoded when building
+requests. Slash, backslash, dot segments, percent escapes, query/fragment
+separators and controls are refused before authenticated follow-up requests.
+Step photos are uploaded only when the imported instructions have exactly the
+same unique texts in the same order as the source. Missing, inserted, reordered
+or repeated texts omit all step photos with a bounded warning, retaining the
+imported text recipe and server-assigned instruction fields.
+
 Cover and step images are best-effort follow-ups. A media failure does not
 undo the core import, and step-image updates patch only the instructions.
 The summary means:
