@@ -15,6 +15,9 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Reject non-finite ingredient quantities, invalid timer bounds/ranges and
+  nonpositive or coerced serving counts at model admission; retain max-only
+  and ranged timers in Markdown.
 - Bound regular-file store reads to 64 MiB, refuse corrupt UTF-8 through the
   repository/service error boundary, and deduplicate library deletion requests.
 - Resolve local single-recipe Paprika, Tandoor and Markdown exports by stored

@@ -247,7 +247,14 @@ Exports to Mealie and Tandoor include KptnCook active tags as tags/keywords
 
 All exporters preserve the recipe's explicit `fixedPortionCount`, falling back
 to the standard two portions when it is absent. Ingredient quantities are recipe
-totals and are exported unchanged. Tandoor and Markdown use numeric `servings`,
+totals and are exported unchanged. Explicit portion counts must be positive
+integers (no booleans or coercion). Ingredient and step-ingredient quantities
+must be finite; zero, fractions and missing quantities remain supported. Timer
+bounds must be nonnegative integers, with maximum at least minimum when both
+are present. Exact/zero, max-only and ranged timers are retained without
+mutating source lists. Invalid numeric recipes are reported through the existing
+invalid-stored-entry warnings and excluded from export/import.
+Tandoor and Markdown use numeric `servings`,
 Paprika uses a decimal string, and Mealie uses the string `<count> Portionen`.
 Markdown front-matter string values are quoted as YAML scalars,
 so punctuation and newlines in tags and URLs retain their string values.

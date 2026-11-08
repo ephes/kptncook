@@ -4,7 +4,7 @@ All the domain models for kptncook live here.
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
 
 def to_camel(string: str) -> str:
@@ -125,7 +125,7 @@ class StepIngredientUnit(BaseModel):
 
 
 class Ingredient(BaseModel):
-    quantity: float | None = None
+    quantity: FiniteFloat | None = None
     measure: str | None = None
     ingredient: IngredientDetails
 
@@ -161,7 +161,7 @@ class StepIngredientDetails(BaseModel):
 class StepIngredient(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel)
 
-    quantity: float | None = None
+    quantity: FiniteFloat | None = None
     unit: StepIngredientUnit | None = None
     ingredient: StepIngredientDetails | None = None
     ingredient_id: str | None = Field(None, alias="ingredientId")
@@ -194,8 +194,18 @@ class StepTimer(BaseModel):
         alias_generator=to_camel, extra="ignore", populate_by_name=True
     )
 
-    min_or_exact: int | None = None
-    max: int | None = None
+    min_or_exact: int | None = Field(None, strict=True, ge=0)
+    max: int | None = Field(None, strict=True, ge=0)
+
+    @model_validator(mode="after")
+    def ordered_range(self) -> "StepTimer":
+        if (
+            self.min_or_exact is not None
+            and self.max is not None
+            and self.max < self.min_or_exact
+        ):
+            raise ValueError("Timer maximum must be at least its minimum")
+        return self
 
 
 class RecipeStep(BaseModel):
@@ -220,7 +230,7 @@ class Recipe(BaseModel):
     steps: list[RecipeStep] = Field(..., alias="steps")
     image_list: list[Image]
     ingredients: list[Ingredient]
-    fixed_portion_count: int | None = None
+    fixed_portion_count: int | None = Field(None, strict=True, gt=0)
 
     @property
     def servings(self) -> int:

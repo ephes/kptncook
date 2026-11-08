@@ -76,7 +76,7 @@ def get_cover(image_list: list[Image] | None) -> Image | None:
 def replace_timers_in_step(step, text: str) -> str:
     """Replace ``<timer>`` placeholders in ``text`` with the step's timers.
 
-    Timers are consumed in order using ``timer.min_or_exact`` (minutes). A
+    Timers are consumed in order, retaining exact, max-only and ranged minutes. A
     placeholder with no remaining timer is left untouched. The original
     ``step.timers`` list is not mutated.
     """
@@ -84,9 +84,15 @@ def replace_timers_in_step(step, text: str) -> str:
 
     def repl(match: re.Match[str]) -> str:
         timer = next(timer_iter, None)
-        if timer is None or timer.min_or_exact is None:
+        if timer is None:
             return match.group(0)
-        return f"{timer.min_or_exact}m"
+        if timer.min_or_exact is not None and timer.max is not None:
+            return f"{timer.min_or_exact}–{timer.max}m"
+        if timer.min_or_exact is not None:
+            return f"{timer.min_or_exact}m"
+        if timer.max is not None:
+            return f"≤{timer.max}m"
+        return match.group(0)
 
     return re.sub(r"<timer>", repl, text)
 
