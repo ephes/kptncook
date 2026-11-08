@@ -24,6 +24,12 @@ Unreleased
   row's server ID and requested slug. A mismatched or concurrently renamed
   recipe stops the sync before any write instead of silently replacing an
   imported identity and creating a duplicate.
+- Refuse a recipe whose unit, food or tag name matches several existing Mealie
+  organizers with different IDs (for example tags `Vegan` and `vegan`) before
+  any write, instead of silently picking one by server order.
+- Read Mealie's unit, food and tag inventories once per sync and reuse them,
+  updated with this sync's own creates, instead of rereading every inventory
+  for every created recipe.
 - Publish complete export archives and Markdown notes atomically without
   overwriting existing files; finish Markdown assets before publishing notes.
   Fail safely if the destination filesystem does not support hard links.

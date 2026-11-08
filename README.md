@@ -204,6 +204,15 @@ refresh. A single matching organizer ID is reused (casefolded for tags, exact
 names for foods/units). Ambiguous or absent matches, generic conflicts, legacy
 400 responses and transport failures remain failures; the POST is never retried.
 
+Units, foods and tags are listed once per sync, not once per recipe. The lookup
+is built only from a complete inventory and then updated with organizers this
+sync created (or found through the conflict refresh above); each new sync,
+login or token change reads Mealie again. If several existing organizers with
+different IDs match one requested name (for example tags `Vegan` and `vegan`),
+that recipe fails before any unit, food, tag or recipe is created, naming the
+ambiguous organizer. Merge or rename the duplicates in Mealie, then sync again;
+kptncook never deletes or merges remote organizers.
+
 A timeout or malformed response may occur after Mealie committed the import.
 The client does not retry or delete the recipe after such an ambiguous result.
 Run the sync again: it first checks stored identity extras and skips any
