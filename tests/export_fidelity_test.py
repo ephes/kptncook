@@ -149,7 +149,10 @@ def test_exported_portions_preserve_ingredient_totals(
         assert payload["ingredients"][0]["amount"] == 40
 
 
-def test_markdown_frontmatter_roundtrips_strings(synthetic_recipe):
+def test_markdown_frontmatter_roundtrips_strings(synthetic_recipe, monkeypatch):
+    monkeypatch.setattr(
+        "kptncook.markdown_exporter.download_image", lambda *a, **kw: b"synthetic"
+    )
     recipe = synthetic_recipe
     tags = [
         "contains: colon",
@@ -179,7 +182,9 @@ def test_markdown_frontmatter_roundtrips_strings(synthetic_recipe):
     assert (
         payload["link"] == f"https://mobile.kptncook.com/recipe/pinterest/{recipe.uid}"
     )
-    assert payload["image"] == f"{recipe.image_list[0].url}?kptnkey=test-key"
+    assert payload["image"].startswith("assets/")
+    assert (path.parent / payload["image"]).read_bytes() == b"synthetic"
+    assert "test-key" not in frontmatter + body
     assert isinstance(payload["date"], date)
     assert payload["prepTime"] == "5m"
     assert payload["author"] == "KptnCook"

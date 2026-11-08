@@ -214,3 +214,13 @@ def test_export_retries_when_another_writer_claims_name(exporter, monkeypatch):
     [written] = exporter.export([build_recipe()])
     assert claimed[0].read_text(encoding="utf-8") == "Other writer"
     assert written.name == "Test Rezept-1.md"
+
+
+@pytest.fixture(autouse=True)
+def offline_images(monkeypatch):
+    import httpx
+
+    def unavailable(*args, **kwargs):
+        raise httpx.ConnectError("Synthetic unavailable image")
+
+    monkeypatch.setattr("kptncook.markdown_exporter.download_image", unavailable)
