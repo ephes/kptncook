@@ -39,6 +39,17 @@ MAX_INVENTORY_ITEMS = 50_000
 DEFAULT_INVENTORY_TIMEOUT_SECONDS = 120.0
 
 
+def _recipe_path(slug: str) -> str:
+    """Build one authenticated route from a supported, unambiguous slug."""
+    if (
+        not isinstance(slug, str)
+        or not slug
+        or not all(char.isalnum() or char in "-_" for char in slug)
+    ):
+        raise ValueError("Invalid Mealie recipe slug")
+    return f"/recipes/{quote(slug, safe='-_')}"
+
+
 class MealieInventoryError(ValueError):
     """An incomplete inventory must not be used to decide remote writes."""
 
@@ -238,6 +249,7 @@ class MealieApiClient(BaseHttpClient):
         self.headers["authorization"] = f"Bearer {token}"
 
     def upload_asset(self, recipe_slug, image: Image):
+        asset_path = _recipe_path(recipe_slug) + "/assets"
         # download image
         download = io.BytesIO(download_image(image.url, follow_redirects=True))
 
@@ -250,9 +262,7 @@ class MealieApiClient(BaseHttpClient):
             "icon": "mdi-file-image",
             "extension": extension,
         }
-        r = self.post(
-            f"/recipes/{recipe_slug}/assets", data=data, files={"file": download}
-        )
+        r = self.post(asset_path, data=data, files={"file": download})
         r.raise_for_status()
 
         return r.json()
@@ -274,7 +284,7 @@ class MealieApiClient(BaseHttpClient):
         if not recipe.image_url:
             return
         json_image_url = json.dumps({"url": recipe.image_url})
-        scrape_image_path = f"/recipes/{slug}/image"
+        scrape_image_path = _recipe_path(slug) + "/image"
         r = self.post(
             scrape_image_path,
             content=json_image_url,
@@ -543,8 +553,8 @@ class MealieApiClient(BaseHttpClient):
         # Never retry or roll back an ambiguous import. Identity was present at
         # commit, so the next inventory pass can discover a completed recipe.
         response.raise_for_status()
-        slug = TypeAdapter(str).validate_python(response.json())
-        response = self.get(f"/recipes/{slug}")
+        slug = response.json()
+        response = self.get(_recipe_path(slug))
         response.raise_for_status()
         return response.json()
 
@@ -554,10 +564,26 @@ class MealieApiClient(BaseHttpClient):
         instructions = stored.get(
             "recipeInstructions", stored.get("recipe_instructions", [])
         )
-        changed = False
-        for instruction, source_step in zip(
-            instructions, source.recipe_instructions or []
+        source_steps = source.recipe_instructions or []
+        if not any(step.image is not None for step in source_steps):
+            return recipe
+        source_texts = [step.text for step in source_steps]
+        if (
+            not isinstance(instructions, list)
+            or len(instructions) != len(source_steps)
+            or not all(
+                isinstance(step, dict) and isinstance(step.get("text"), str)
+                for step in instructions
+            )
+            or [step["text"] for step in instructions] != source_texts
+            or len(set(source_texts)) != len(source_texts)
         ):
+            logger.warning(
+                "Skipping step images: imported instructions do not match source unambiguously"
+            )
+            return recipe
+        changed = False
+        for instruction, source_step in zip(instructions, source_steps):
             if source_step.image is None:
                 continue
             try:
@@ -579,7 +605,7 @@ class MealieApiClient(BaseHttpClient):
         if changed:
             response = self.request(
                 "PATCH",
-                f"/recipes/{recipe.slug}",
+                _recipe_path(recipe.slug),
                 json={"recipeInstructions": instructions},
             )
             response.raise_for_status()
@@ -594,6 +620,7 @@ class MealieApiClient(BaseHttpClient):
         recipe = self._update_tag_ids(recipe)
         stored = self._import_recipe_archive(recipe)
         created = Recipe.model_validate(stored)
+        _recipe_path(created.slug)
         for key in ("source", "kptncook_id"):
             if key in recipe.extras and created.extras.get(key) != recipe.extras[key]:
                 raise ValueError(
@@ -625,12 +652,15 @@ class MealieApiClient(BaseHttpClient):
                 raise MealieInventoryError(
                     f"Incomplete Mealie inventory: invalid recipe at position {position}"
                 ) from None
-            if not validated.slug.strip() or (
-                validated.extras.get("source") == "kptncook"
-                and (
-                    not isinstance(validated.extras.get("kptncook_id"), str)
-                    or not validated.extras["kptncook_id"].strip()
-                )
+            try:
+                _recipe_path(validated.slug)
+            except ValueError:
+                raise MealieInventoryError(
+                    f"Incomplete Mealie inventory: unreadable identity at position {position}"
+                ) from None
+            if validated.extras.get("source") == "kptncook" and (
+                not isinstance(validated.extras.get("kptncook_id"), str)
+                or not validated.extras["kptncook_id"].strip()
             ):
                 raise MealieInventoryError(
                     f"Incomplete Mealie inventory: unreadable identity at position {position}"
@@ -642,12 +672,12 @@ class MealieApiClient(BaseHttpClient):
         return self.validate_recipes(self._get_all_items("recipes"))
 
     def delete_via_slug(self, slug):
-        r = self.delete(f"/recipes/{slug}")
+        r = self.delete(_recipe_path(slug))
         r.raise_for_status()
         return r.json() if r.content else None
 
     def get_via_slug(self, slug, *, timeout=httpx.USE_CLIENT_DEFAULT):
-        r = self.get(f"/recipes/{slug}", timeout=timeout)
+        r = self.get(_recipe_path(slug), timeout=timeout)
         r.raise_for_status()
         try:
             payload = r.json()

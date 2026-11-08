@@ -15,6 +15,9 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Validate Mealie slugs before authenticated recipe routes and require unique,
+  exact instruction correspondence before attaching step images; retain imported
+  text and omit ambiguous optional media with a bounded warning.
 - Limit shared HTTP diagnostics to status/action, static transport categories
   and allowlisted bounded JSON details; omit credential-bearing exceptions and
   arbitrary bodies, and escape error markup at CLI/setup boundaries.
