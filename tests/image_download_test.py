@@ -9,6 +9,7 @@ import httpx
 import pytest
 
 from kptncook import image_download
+from kptncook.markdown_exporter import MarkdownExporter
 from kptncook.mealie import MealieApiClient, RecipeStep, RecipeWithImage
 from kptncook.models import Image, Recipe
 from kptncook.paprika import PaprikaExporter
@@ -43,7 +44,7 @@ class ImageStream(httpx.AsyncByteStream):
         self.closed = True
 
 
-@pytest.mark.parametrize("caller", ["paprika", "tandoor", "mealie"])
+@pytest.mark.parametrize("caller", ["paprika", "tandoor", "mealie", "markdown"])
 @pytest.mark.parametrize(
     "failure",
     ["oversize", "misleading-length", "slow", "stalled", "ok", "status", "compressed"],
@@ -105,6 +106,12 @@ def test_bounded_image_preserves_recipe(
             payload = json.loads(archive.read("recipe.json"))
             assert ("image.jpg" in archive.namelist()) == (failure == "ok")
         assert payload["steps"][0]["instruction"] == "Mix synthetic ingredients"
+    elif caller == "markdown":
+        [path] = MarkdownExporter().export([recipe])
+        text = path.read_text(encoding="utf-8")
+        assert "Mix synthetic ingredients" in text
+        assert bool(list((path.parent / "assets").glob("*.jpg"))) == (failure == "ok")
+        assert "kptnkey" not in text
     else:
         stored = {}
         writes = []

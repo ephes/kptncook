@@ -3,6 +3,7 @@ All the domain models for kptncook live here.
 """
 
 from typing import Any
+from urllib.parse import unquote_plus, urlencode, urlsplit, urlunsplit
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
@@ -82,7 +83,18 @@ class Image(BaseModel):
     url: str
 
     def get_image_with_api_key_url(self, api_key: str) -> "Image":
-        url_with_key = f"{self.url}?kptnkey={api_key}"
+        parts = urlsplit(self.url)
+        query = (
+            [
+                segment
+                for segment in parts.query.split("&")
+                if unquote_plus(segment.partition("=")[0]) != "kptnkey"
+            ]
+            if parts.query
+            else []
+        )
+        query.append(urlencode({"kptnkey": api_key}))
+        url_with_key = urlunsplit(parts._replace(query="&".join(query)))
         kwargs = self.model_dump() | {"url": url_with_key}
         return Image(**kwargs)
 
@@ -264,5 +276,4 @@ class Recipe(BaseModel):
             [image] = [i for i in self.image_list if i.type == "cover"]
         except ValueError:
             return None
-        image_url = f"{image.url}?kptnkey={api_key}"
-        return image_url
+        return image.get_image_with_api_key_url(api_key).url

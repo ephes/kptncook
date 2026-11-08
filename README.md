@@ -201,7 +201,7 @@ Run the sync again: it first checks stored identity extras and skips any
 recipe already imported. Do not delete a recipe merely because its import
 response was lost.
 
-Image downloads for Paprika and Tandoor covers and Mealie step assets are
+Image downloads for Paprika and Tandoor covers, Markdown images and Mealie step assets are
 limited to 10 MiB per image and 60 seconds for the entire transfer (including
 redirects). Failed, oversized, or slow images are skipped; recipe text is
 still exported or imported. Downloads request uncompressed responses; servers
@@ -262,7 +262,15 @@ so punctuation and newlines in tags and URLs retain their string values.
 The Markdown export (`export-recipes-to-markdown`) writes one `.md` file per
 recipe into an `export_md` directory under the KptnCook home, with YAML front
 matter (servings, prep/cook time, link, image, tags) followed by ingredients
-and instructions. Section headings and image alt text follow `KPTNCOOK_LANG`
+and instructions. Images are downloaded into its sibling `assets/` directory
+with random filenames and relative references; copy that directory along with
+the notes. Authentication keys and signed image URLs appear only in download
+requests, never in the generated Markdown or asset filenames. Failed image
+downloads omit image metadata/body markup while retaining the recipe text.
+Library `render_recipe()` performs no image I/O and omits images unless passed
+an explicit local `image_path`. Image authentication preserves existing query
+pairs/fragments and replaces any old `kptnkey` value.
+Section headings and image alt text follow `KPTNCOOK_LANG`
 (German, English, Spanish, French, and Portuguese are recognized; other
 languages fall back to English). Recipe titles, comments, steps and ingredient
 labels across all exporters prefer that same configured language. Missing or

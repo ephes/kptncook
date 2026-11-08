@@ -15,6 +15,9 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Compose authenticated image queries correctly and export Markdown images as
+  bounded local relative assets, omitting unavailable images without exposing
+  API keys or signed URLs in notes or asset filenames.
 - Normalize recipe aliases on copied mappings, leaving caller-owned payloads
   unchanged even after failed validation; prefer the configured language across
   recipe text in all exporters with a consistent fallback order.

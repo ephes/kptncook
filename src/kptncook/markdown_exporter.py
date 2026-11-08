@@ -10,6 +10,10 @@ Recipe content (titles, steps, ingredient names) follows the project-wide
 from __future__ import annotations
 
 import json
+import logging
+import uuid
+
+import httpx
 from collections.abc import Iterable
 from datetime import date
 from pathlib import Path
@@ -18,6 +22,7 @@ from pathvalidate import sanitize_filename
 
 from .config import get_settings
 from .exporter_utils import get_cover, replace_timers_in_step
+from .image_download import download_image
 from .ingredient_groups import iter_ingredient_groups
 from .models import (
     Ingredient,
@@ -27,6 +32,8 @@ from .models import (
     localized_fallback,
     normalize_language,
 )
+
+logger = logging.getLogger(__name__)
 
 # Localized structural labels. Recipe content language is governed by
 # ``localized_fallback``; headings and text both prefer the configured language.
@@ -111,7 +118,11 @@ class MarkdownExporter:
                 or "recipe"
             )
             base = sanitize_filename(title)
-            content = self.render_recipe(recipe)
+            image_bytes = self._download_recipe_image(recipe)
+            image_path = (
+                f"assets/{uuid.uuid4().hex}.jpg" if image_bytes is not None else None
+            )
+            content = self.render_recipe(recipe, image_path=image_path)
             stem = base
             counter = 1
             while True:
@@ -125,17 +136,40 @@ class MarkdownExporter:
                     stem = f"{base}-{suffix}"
                     counter += 1
                     continue
+                asset_owned = False
+                asset_path = out_dir / image_path if image_path else None
                 try:
                     with output:
+                        if asset_path is not None and image_bytes is not None:
+                            asset_path.parent.mkdir(exist_ok=True)
+                            with asset_path.open("xb") as asset:
+                                asset_owned = True
+                                asset.write(image_bytes)
                         output.write(content)
                 except BaseException:
                     out_path.unlink(missing_ok=True)
+                    if asset_owned and asset_path is not None:
+                        asset_path.unlink(missing_ok=True)
                     raise
                 break
             written.append(out_path)
         return written
 
-    def render_recipe(self, recipe: Recipe) -> str:
+    def _download_recipe_image(self, recipe: Recipe) -> bytes | None:
+        image = recipe.steps[-1].image if recipe.steps else get_cover(recipe.image_list)
+        if image is None:
+            return None
+        try:
+            return download_image(
+                image.get_image_with_api_key_url(get_settings().kptncook_api_key).url
+            )
+        except httpx.HTTPError:
+            logger.warning(
+                "Skipping Markdown image: download failed or exceeded limits"
+            )
+            return None
+
+    def render_recipe(self, recipe: Recipe, image_path: str | None = None) -> str:
         labels = _section_labels()
         comment = (
             localized_fallback(
@@ -159,15 +193,8 @@ class MarkdownExporter:
             f"link: {_yaml_string(f'https://mobile.kptncook.com/recipe/pinterest/{recipe_ref}')}"
         )
 
-        # cover image (prefer the last step image, else the cover image)
-        last_step_image = recipe.steps[-1].image if recipe.steps else None
-        image = last_step_image or get_cover(recipe.image_list)
-        image_url = (
-            f"{image.url}?kptnkey={get_settings().kptncook_api_key}" if image else None
-        )
-
-        if image_url:
-            lines.append(f"image: {_yaml_string(image_url)}")
+        if image_path:
+            lines.append(f"image: {_yaml_string(image_path)}")
 
         lines.append("tags:")
 
@@ -191,8 +218,8 @@ class MarkdownExporter:
             lines.append(comment)
             lines.append("")
 
-        if image_url is not None:
-            lines.append(f"![{labels['image_alt']}]({image_url})")
+        if image_path is not None:
+            lines.append(f"![{labels['image_alt']}]({image_path})")
             lines.append("")
 
         # Ingredients
