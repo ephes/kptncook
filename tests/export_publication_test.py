@@ -255,7 +255,8 @@ def test_markdown_refuses_unsupported_hard_links_through_cli(minimal, monkeypatc
     result = CliRunner().invoke(cli.app, ["export-recipes-to-markdown"])
 
     assert result.exit_code == 1
-    assert "must support hard links" in result.output
+    # Rich wraps CLI errors at the terminal width; compare word by word.
+    assert "must support hard links" in " ".join(result.output.split())
     assert not isinstance(result.exception, PermissionError)
     out_dir = get_settings().root / "export_md"
     assert not list(out_dir.glob("*.md"))
