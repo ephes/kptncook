@@ -15,6 +15,8 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Bound regular-file store reads to 64 MiB, refuse corrupt UTF-8 through the
+  repository/service error boundary, and deduplicate library deletion requests.
 - Resolve local single-recipe Paprika, Tandoor and Markdown exports by stored
   short UID as well as OID, preserving missing/ambiguous selection errors.
 - Preserve explicit portion counts across all exporters, with a two-portion

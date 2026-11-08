@@ -278,6 +278,12 @@ export persists. Export errors are reported instead of silently omitting recipes
 ### Repository warnings
 
 Incoming recipes are validated before any repository write.
+Store reads accept regular files only (symlinks are refused) and are limited to
+64 MiB of UTF-8 JSON, including files that grow while being read. Invalid encoding,
+nonregular files and oversized stores stop reads and mutations without replacing
+the primary or recovery snapshot. A missing store remains an empty repository.
+Library deletion calls deduplicate requested IDs in encounter order, reporting
+each deleted or missing ID once and committing at most once.
 Identifier-based reads and mutations reject records whose `_id.$oid` is not a
 nonempty string. The error identifies the record position without exposing its
 payload; mutations leave the repository and recovery backup unchanged. Repair
