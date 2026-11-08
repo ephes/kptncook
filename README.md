@@ -302,6 +302,18 @@ recipe's text remains in the archive with empty photo fields.
 Its temporary archive files are removed on success and failure; only the final
 export persists. Export errors are reported instead of silently omitting recipes.
 
+### HTTP diagnostics
+
+HTTP failures display the status and caller-supplied action, or a fixed transport
+category (timeout, connection, network, protocol or HTTP error). Raw exceptions,
+request URLs and arbitrary response messages are omitted, so echoed API keys,
+bearer tokens and signed URLs cannot enter diagnostics. Only a small allowlist
+of known protocol details is displayed as plain text (for example
+`missing_kptnkey` and recipe uniqueness messages). JSON details must fit in
+16 KiB and use `application/json` or an `application/*+json` media type,
+case-insensitively. Malformed, unexpected and oversized bodies are ignored.
+CLI error boundaries escape Rich markup before rendering.
+
 ### Repository warnings
 
 Incoming recipes are validated before any repository write.

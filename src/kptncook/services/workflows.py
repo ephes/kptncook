@@ -188,7 +188,15 @@ def get_mealie_client() -> MealieApiClient:
             return client
     except Exception as exc:
         client.close()
-        raise UserFacingError(f"Could not login to mealie: {exc}") from exc
+        if isinstance(exc, httpx.HTTPStatusError):
+            reason = format_http_status_error(
+                exc.response, action="logging in to Mealie"
+            )
+        elif isinstance(exc, httpx.HTTPError):
+            reason = format_request_error(exc)
+        else:
+            reason = str(exc)
+        raise UserFacingError(f"Could not login to mealie: {reason}") from exc
     client.close()
     raise UserFacingError(
         "Mealie authentication required. "
@@ -576,7 +584,7 @@ def search_recipe_by_id(id_: str) -> SearchResult:
             response = httpx.get(resolved_id, timeout=SHARE_URL_TIMEOUT)
         except httpx.HTTPError as exc:
             raise UserFacingError(
-                f"Request failed while resolving share URL: {exc}"
+                f"{format_request_error(exc)} while resolving share URL"
             ) from exc
         if response.status_code not in (301, 302):
             raise UserFacingError(

@@ -15,6 +15,7 @@ from pathlib import Path
 import httpx
 import typer
 from rich import print as rprint
+from rich.markup import escape
 
 from kptncook.api import KptnCookClient
 from kptncook.env import (
@@ -121,8 +122,8 @@ def setup(
             message = f"HTTP {exc.response.status_code} while getting access token"
             if detail:
                 message = f"{message}: {detail}"
-        rprint(f"[red]{message}[/red]")
+        rprint(f"[red]{escape(message)}[/red]")
         sys.exit(1)
     except httpx.HTTPError as exc:
-        rprint(f"[red]{format_request_error(exc)}[/red]")
+        rprint(f"[red]{escape(format_request_error(exc))}[/red]")
         sys.exit(1)
