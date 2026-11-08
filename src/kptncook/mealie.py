@@ -60,6 +60,17 @@ def _media_failure_reason(exc: BaseException) -> str:
     return type(exc).__name__
 
 
+def _same_name(name: str) -> str:
+    return name
+
+
+ORGANIZER_LABELS = {"units": "unit", "foods": "food", "organizers/tags": "tag"}
+
+
+class MealieOrganizerAmbiguityError(ValueError):
+    """Several existing organizers with different IDs match one name."""
+
+
 class MealieInventoryError(ValueError):
     """An incomplete inventory must not be used to decide remote writes."""
 
@@ -231,6 +242,11 @@ class MealieApiClient(BaseHttpClient):
             str(base_url), headers={}, timeout=DEFAULT_REQUEST_TIMEOUT, client=client
         )
         self._archive_endpoint: str | None = None
+        # Organizer (units/foods/tags) lookup state for one sync on this client:
+        # endpoint -> normalized name -> distinct existing items. Filled from a
+        # complete inventory, then updated only by validated creates and
+        # explicit 409 refreshes. Cleared on login, token change and close.
+        self._organizer_index: dict[str, dict[str, list[Any]]] = {}
 
     @property
     def logged_in(self):
@@ -254,9 +270,19 @@ class MealieApiClient(BaseHttpClient):
             password = getpass()
         access_token = self.fetch_api_token(username, password)
         self.headers["authorization"] = f"Bearer {access_token}"
+        self.clear_organizer_cache()
 
     def login_with_token(self, token: str):
         self.headers["authorization"] = f"Bearer {token}"
+        self.clear_organizer_cache()
+
+    def clear_organizer_cache(self) -> None:
+        """Forget cached units/foods/tags so the next lookup rereads Mealie."""
+        self._organizer_index = {}
+
+    def close(self) -> None:
+        self.clear_organizer_cache()
+        super().close()
 
     def upload_asset(self, recipe_slug, image: Image):
         asset_path = _recipe_path(recipe_slug) + "/assets"
@@ -440,6 +466,60 @@ class MealieApiClient(BaseHttpClient):
         r.raise_for_status()
         return r.json()
 
+    def _load_organizer_index(
+        self, endpoint_name, model_class, normalize_name: Callable[[str], str]
+    ) -> dict[str, list[Any]]:
+        existing_items = TypeAdapter(list[model_class]).validate_python(
+            self._get_all_items(endpoint_name)
+        )
+        index: dict[str, list[Any]] = {}
+        for item in existing_items:
+            matches = index.setdefault(normalize_name(item.name), [])
+            # The same proven identity may appear once per key; distinct IDs
+            # for one key are kept so lookups can refuse to guess.
+            if item.id is None or all(match.id != item.id for match in matches):
+                matches.append(item)
+        return index
+
+    def _organizer_lookup_state(
+        self, endpoint_name, model_class, normalize_name: Callable[[str], str]
+    ) -> dict[str, list[Any]]:
+        index = self._organizer_index.get(endpoint_name)
+        if index is None:
+            # Only a complete, validated inventory is cached.
+            index = self._load_organizer_index(
+                endpoint_name, model_class, normalize_name
+            )
+            self._organizer_index[endpoint_name] = index
+        return index
+
+    @staticmethod
+    def _existing_organizer(index, endpoint_name, key: str, name: str):
+        matches = index.get(key, [])
+        if len(matches) > 1:
+            label = ORGANIZER_LABELS.get(endpoint_name, endpoint_name)
+            shown = name if len(name) <= 80 else name[:77] + "..."
+            raise MealieOrganizerAmbiguityError(
+                f"Ambiguous existing Mealie {label} {shown!r}: {len(matches)} "
+                "entries with different IDs match. Merge or rename them in "
+                "Mealie, then sync again."
+            )
+        return matches[0] if matches else None
+
+    def _check_organizer_ambiguity(
+        self,
+        endpoint_name,
+        model_class,
+        items,
+        normalize_name: Callable[[str], str] | None = None,
+    ) -> None:
+        normalize_name = normalize_name or _same_name
+        index = self._organizer_lookup_state(endpoint_name, model_class, normalize_name)
+        for item in items:
+            self._existing_organizer(
+                index, endpoint_name, normalize_name(item.name), item.name
+            )
+
     def _create_item_name_to_item_lookup(
         self,
         endpoint_name,
@@ -447,25 +527,19 @@ class MealieApiClient(BaseHttpClient):
         items,
         normalize_name: Callable[[str], str] | None = None,
     ):
-        def identity(name: str) -> str:
-            return name
-
-        if normalize_name is None:
-            normalize_name = identity
-
-        existing_items = TypeAdapter(list[model_class]).validate_python(
-            self._get_all_items(endpoint_name)
-        )
-        normalized_name_to_item = {
-            normalize_name(item.name): item for item in existing_items
-        }
-        items_to_create = {
-            item
-            for item in items
-            if normalize_name(item.name) not in normalized_name_to_item
-        }
-        for item in items_to_create:
-            if normalize_name(item.name) in normalized_name_to_item:
+        normalize_name = normalize_name or _same_name
+        index = self._organizer_lookup_state(endpoint_name, model_class, normalize_name)
+        resolved: dict[str, Any] = {}
+        # Refuse ambiguity for every requested name before any create.
+        for item in items:
+            existing = self._existing_organizer(
+                index, endpoint_name, normalize_name(item.name), item.name
+            )
+            if existing is not None:
+                resolved[normalize_name(item.name)] = existing
+        for item in items:
+            key = normalize_name(item.name)
+            if key in resolved:
                 continue
             try:
                 created_item = model_class(**self._create_item(endpoint_name, item))
@@ -476,22 +550,34 @@ class MealieApiClient(BaseHttpClient):
                     != "This item already exists."
                 ):
                     raise
-                refreshed = TypeAdapter(list[model_class]).validate_python(
-                    self._get_all_items(endpoint_name)
+                refreshed = self._load_organizer_index(
+                    endpoint_name, model_class, normalize_name
                 )
-                matches = [
-                    candidate
-                    for candidate in refreshed
-                    if normalize_name(candidate.name) == normalize_name(item.name)
-                ]
+                # The refresh is a complete inventory: it replaces the cache
+                # even when this reconciliation fails, so later lookups see
+                # any newly revealed ambiguity.
+                index = refreshed
+                self._organizer_index[endpoint_name] = index
+                matches = refreshed.get(key, [])
                 if len(matches) != 1 or matches[0].id is None:
                     raise
                 created_item = matches[0]
-            normalized_name_to_item[normalize_name(created_item.name)] = created_item
-        return {
-            item.name: normalized_name_to_item[normalize_name(item.name)]
-            for item in items
-        }
+            else:
+                if normalize_name(created_item.name) != key:
+                    # Never substitute a different organizer for the request.
+                    self._organizer_index.pop(endpoint_name, None)
+                    label = ORGANIZER_LABELS.get(endpoint_name, endpoint_name)
+                    raise ValueError(
+                        f"Mealie created a {label} with a different name than "
+                        "requested; the recipe was not imported"
+                    )
+                if created_item.id is None:
+                    # Do not cache an unproven identity; the next lookup rereads.
+                    self._organizer_index.pop(endpoint_name, None)
+                else:
+                    index[key] = [created_item]
+            resolved[key] = created_item
+        return {item.name: resolved[normalize_name(item.name)] for item in items}
 
     def _update_item_ids(self, recipe, endpoint_name, model_class, attr_name):
         items = {
@@ -514,6 +600,24 @@ class MealieApiClient(BaseHttpClient):
                     name_to_item_with_id[getattr(ingredient, attr_name).name],
                 )
         return recipe
+
+    def _check_recipe_organizers(self, recipe) -> None:
+        """Refuse ambiguous existing units, foods or tags before any write."""
+        for endpoint_name, model_class, attr_name in (
+            ("units", RecipeUnit, "unit"),
+            ("foods", RecipeFood, "food"),
+        ):
+            items = {
+                getattr(ingredient, attr_name)
+                for ingredient in recipe.recipe_ingredient
+                if getattr(ingredient, attr_name) is not None
+            }
+            if items:
+                self._check_organizer_ambiguity(endpoint_name, model_class, items)
+        if recipe.tags:
+            self._check_organizer_ambiguity(
+                "organizers/tags", RecipeTag, set(recipe.tags), str.casefold
+            )
 
     def _update_tag_ids(self, recipe):
         recipe_tags = {tag for tag in recipe.tags}
@@ -635,6 +739,7 @@ class MealieApiClient(BaseHttpClient):
     def create_recipe(self, recipe: RecipeWithImage) -> Recipe:
         self._get_archive_endpoint()
         recipe = recipe.model_copy(deep=True)
+        self._check_recipe_organizers(recipe)
         recipe = self._update_item_ids(recipe, "units", RecipeUnit, "unit")
         recipe = self._update_item_ids(recipe, "foods", RecipeFood, "food")
         recipe = self._update_tag_ids(recipe)
