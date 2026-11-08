@@ -163,23 +163,29 @@ class RecipeRepository:
                 portalocker.unlock(lock_file)
 
     def _write_models(self, locked):
-        self.create_backup()
         self._ensure_parent_dir()
         models = RecipeListInDb.model_validate(locked.values())
+        payload = models.model_dump_json().encode("utf-8")
+        if len(payload) > MAX_STORE_BYTES:
+            raise RepositoryError(
+                "Repository capacity exceeded (64 MiB UTF-8 size limit). "
+                "Export and remove unneeded recipes before retrying; "
+                "the repository and recovery backup are unchanged."
+            )
         temp_path: Path | None = None
         try:
             with tempfile.NamedTemporaryFile(
-                "w",
-                encoding="utf-8",
+                "wb",
                 dir=self.path.parent,
                 prefix=f".{self.path.name}.",
                 suffix=".tmp",
                 delete=False,
             ) as f:
                 temp_path = Path(f.name)
-                f.write(models.model_dump_json())
+                f.write(payload)
                 f.flush()
                 os.fsync(f.fileno())
+            self.create_backup()
             os.replace(temp_path, self.path)
             self._fsync_directory()
         except OSError as exc:

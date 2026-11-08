@@ -91,7 +91,9 @@ def test_valid_numeric_models_roundtrip(minimal, quantity, portions):
     assert Recipe.model_validate_json(recipe.model_dump_json(by_alias=True)) == recipe
 
 
-@pytest.mark.parametrize("invalid", ["quantity", "timer", "servings"])
+@pytest.mark.parametrize(
+    "invalid", ["quantity", "timer", "servings", "preparation", "cooking"]
+)
 @pytest.mark.parametrize("format", ["paprika", "tandoor", "markdown", "mealie"])
 def test_invalid_stored_numeric_recipe_never_reaches_export(
     minimal, tmp_path, monkeypatch, invalid, format
@@ -101,8 +103,12 @@ def test_invalid_stored_numeric_recipe_never_reaches_export(
         minimal["ingredients"] = [ingredient(float("nan"))]
     elif invalid == "timer":
         minimal["steps"][0]["timers"] = [{"minOrExact": -5}]
-    else:
+    elif invalid == "servings":
         minimal["fixedPortionCount"] = 0
+    elif invalid == "preparation":
+        minimal["preparationTime"] = -2
+    else:
+        minimal["cookingTime"] = True
     repo = RecipeRepository(tmp_path)
     repo.path.write_text(
         json.dumps([{"date": "2026-01-01", "data": minimal}]), encoding="utf-8"
@@ -131,3 +137,52 @@ def test_invalid_stored_numeric_recipe_never_reaches_export(
     assert len(result.invalid_repository_entries) == 1
     assert "synthetic-private-value" not in result.invalid_repository_entries[0].reason
     assert service.load_repository_recipes().recipes == []
+
+
+@pytest.mark.parametrize("field", ["preparationTime", "cookingTime"])
+@pytest.mark.parametrize("value", [-2, True, False, 1.5, 1.0, "5", 525601, 10**30])
+@pytest.mark.parametrize("json_input", [False, True])
+def test_whole_recipe_duration_domain(minimal, field, value, json_input):
+    minimal[field] = value
+    validate = Recipe.model_validate_json if json_input else Recipe.model_validate
+    with pytest.raises(ValidationError):
+        validate(json.dumps(minimal) if json_input else minimal)
+
+
+def test_preparation_duration_is_required_and_not_null(minimal):
+    minimal.pop("preparationTime")
+    with pytest.raises(ValidationError):
+        Recipe.model_validate(minimal)
+    minimal["preparationTime"] = None
+    with pytest.raises(ValidationError):
+        Recipe.model_validate(minimal)
+
+
+@pytest.mark.parametrize("prep,cook", [(0, 0), (5, None), (525600, 525600)])
+def test_valid_whole_recipe_durations_across_adapters(minimal, prep, cook):
+    from kptncook.markdown_exporter import MarkdownExporter
+    from kptncook.mealie import kptncook_to_mealie
+    from kptncook.paprika import PaprikaExporter
+    from kptncook.tandoor import TandoorExporter
+    import yaml
+
+    minimal.update(preparationTime=prep, cookingTime=cook, imageList=[], steps=[])
+    recipe = Recipe.model_validate_json(json.dumps(minimal))
+    assert Recipe.model_validate_json(recipe.model_dump_json(by_alias=True)) == recipe
+    tandoor = TandoorExporter().get_recipe_payload(recipe)
+    assert tandoor["working_time"] == prep
+    assert tandoor["waiting_time"] == cook
+    mealie = kptncook_to_mealie(recipe, api_key="synthetic")
+    assert mealie.prep_time == prep
+    assert mealie.cook_time == cook
+    paprika = json.loads(PaprikaExporter().get_recipe_as_json_string(recipe))
+    assert paprika["prep_time"] == str(prep)
+    assert paprika["cook_time"] == ("" if cook is None else str(cook))
+    markdown = yaml.safe_load(
+        MarkdownExporter().render_recipe(recipe).split("---", 2)[1]
+    )
+    assert markdown["prepTime"] == f"{prep}m"
+    if cook is None:
+        assert "cookTime" not in markdown
+    else:
+        assert markdown["cookTime"] == f"{cook}m"
