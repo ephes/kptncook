@@ -110,8 +110,10 @@ class PaprikaExporter:
             "notes": "",
             "created": generated.dtnow,
             "image_url": None,
-            "cook_time": str(recipe.cooking_time or ""),
-            "prep_time": str(recipe.preparation_time or ""),
+            "cook_time": ""
+            if recipe.cooking_time is None
+            else str(recipe.cooking_time),
+            "prep_time": str(recipe.preparation_time),
             "source": "Kptncook",
             "source_url": "",
             "hash": generated.hash,

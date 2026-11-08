@@ -207,8 +207,15 @@ def test_backup_failure_preserves_both_files(tmp_path, monkeypatch, failure):
         target.write(b"partial")
         raise OSError("copy failed")
 
+    original_fsync = repositories_module.os.fsync
+    synced_files = 0
+
     def failing_fsync(fd):
-        raise OSError("fsync failed")
+        nonlocal synced_files
+        synced_files += 1
+        if synced_files == 2:  # Complete staging is synced before the backup.
+            raise OSError("fsync failed")
+        return original_fsync(fd)
 
     original_replace = repositories_module.os.replace
 
@@ -254,7 +261,8 @@ def test_backup_is_synced_and_replaced_before_main(tmp_path, monkeypatch):
     monkeypatch.setattr(repositories_module.os, "replace", tracking_replace)
     repo.add(recipe)
     assert events[0] == "fsync"
-    assert events[1] == repo.backup_path
+    assert events[1] == "fsync"  # Backup is synced after complete staging.
+    assert events[2] == repo.backup_path
     assert events.index(repo.backup_path) < events.index(repo.path)
 
 

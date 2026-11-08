@@ -258,7 +258,10 @@ All exporters preserve the recipe's explicit `fixedPortionCount`, falling back
 to the standard two portions when it is absent. Ingredient quantities are recipe
 totals and are exported unchanged. Explicit portion counts must be positive
 integers (no booleans or coercion). Ingredient and step-ingredient quantities
-must be finite; zero, fractions and missing quantities remain supported. Timer
+must be finite; zero, fractions and missing quantities remain supported. Whole-recipe preparation and cooking times are strict integer minutes from 0 to
+525600 (365 days); booleans, strings and fractional values are refused. Preparation
+time is required. Missing/null cooking time stays unknown; explicit zero stays
+zero in every exporter. Timer
 bounds must be nonnegative integers, with maximum at least minimum when both
 are present. Exact/zero, max-only and ranged timers are retained without
 mutating source lists. Invalid numeric recipes are reported through the existing
@@ -357,6 +360,11 @@ that can no longer be parsed into full recipes. The command continues with the
 valid recipes instead of silently dropping the bad entries. If you need to
 recover, inspect `~/.kptncook/kptncook.json` and the previous snapshot in
 `~/.kptncook/kptncook.json.backup`.
+
+Writes serialize complete UTF-8 staging within the same 64 MiB limit as reads
+before touching the primary or recovery backup. Over-capacity additions fail
+without changing either snapshot; export and remove unneeded recipes, then retry
+the smaller batch. Every successful write remains reloadable.
 
 Before replacing the repository, its previous contents are copied to a sibling
 temporary backup, flushed and fsynced, then atomically moved over `.backup`.

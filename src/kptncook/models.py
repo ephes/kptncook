@@ -247,8 +247,9 @@ class Recipe(BaseModel):
     rtype: str | None = None
     localized_title: LocalizedString
     author_comment: LocalizedString | None = None
-    preparation_time: int
-    cooking_time: int | None = None
+    # Whole-recipe durations are integer minutes, capped at one year.
+    preparation_time: int = Field(..., strict=True, ge=0, le=525600)
+    cooking_time: int | None = Field(None, strict=True, ge=0, le=525600)
     recipe_nutrition: Nutrition
     active_tags: list[str] | None = None
     steps: list[RecipeStep] = Field(..., alias="steps")

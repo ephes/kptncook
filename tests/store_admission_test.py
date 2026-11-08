@@ -138,3 +138,71 @@ def test_repeated_delete_ids_commit_once(tmp_path, monkeypatch, through_service)
     write.assert_called_once()
     assert repo.list() == [entry("keep")]
     assert repo.backup_path.read_bytes() == original
+
+
+@pytest.mark.parametrize("operation", ["add", "add_list", "service"])
+@pytest.mark.parametrize("overflow", [0, 1])
+def test_writer_utf8_budget_preserves_reload_and_recovery(
+    tmp_path, monkeypatch, operation, overflow
+):
+    repo = RecipeRepository(tmp_path)
+    old = entry("old")
+    repo.add(old)
+    primary = repo.path.read_bytes()
+    repo.backup_path.write_bytes(b"older recovery snapshot")
+    recovery = repo.backup_path.read_bytes()
+    new = entry("new")
+    new.data["title"] = "Soup 🍲 é" * 10
+    expected = storage.RecipeListInDb(root=[old, new]).model_dump_json().encode("utf-8")
+    monkeypatch.setattr(storage, "MAX_STORE_BYTES", len(expected) - overflow)
+    monkeypatch.setattr(service, "get_repository", lambda: repo)
+
+    def write():
+        if operation == "add":
+            repo.add(new)
+        elif operation == "add_list":
+            repo.add_list([new])
+        else:
+            service.save_recipe_entries([new])
+
+    if overflow:
+        with pytest.raises(
+            (RepositoryError, service.RepositoryServiceError), match="capacity.*64 MiB"
+        ):
+            write()
+        assert repo.path.read_bytes() == primary
+        assert repo.backup_path.read_bytes() == recovery
+        assert repo.list() == [old]
+    else:
+        write()
+        assert repo.path.read_bytes() == expected
+        assert repo.list() == [old, new]
+        assert repo.backup_path.read_bytes() == primary
+    assert list(tmp_path.glob(".*.tmp")) == []
+
+
+def test_growing_batch_refused_before_backup_or_publication(tmp_path, monkeypatch):
+    repo = RecipeRepository(tmp_path)
+    repo.add(entry("old"))
+    original = repo.path.read_bytes()
+    repo.backup_path.write_bytes(b"recovery")
+    monkeypatch.setattr(storage, "MAX_STORE_BYTES", len(original) * 2)
+    backup = Mock(wraps=repo.create_backup)
+    monkeypatch.setattr(repo, "create_backup", backup)
+    with pytest.raises(RepositoryError, match="capacity"):
+        repo.add_list([entry(f"new-{i}") for i in range(10)])
+    backup.assert_not_called()
+    assert repo.path.read_bytes() == original
+    assert repo.backup_path.read_bytes() == b"recovery"
+    assert repo.list() == [entry("old")]
+    assert list(tmp_path.glob(".*.tmp")) == []
+
+
+def test_first_overflow_does_not_create_store(tmp_path, monkeypatch):
+    repo = RecipeRepository(tmp_path)
+    monkeypatch.setattr(storage, "MAX_STORE_BYTES", 2)
+    with pytest.raises(RepositoryError, match="capacity"):
+        repo.add(entry("new"))
+    assert not repo.path.exists()
+    assert not repo.backup_path.exists()
+    assert list(tmp_path.glob(".*.tmp")) == []

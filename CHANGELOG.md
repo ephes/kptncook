@@ -15,6 +15,11 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Refuse repository writes exceeding the shared 64 MiB UTF-8 read limit before
+  updating the primary or backup; retain both snapshots and explain recovery.
+- Validate whole-recipe durations as strict nonnegative integer minutes, capped
+  at 365 days; preserve unknown cooking time and explicit zero across exporters,
+  including Paprika.
 - Validate Mealie slugs before authenticated recipe routes and require unique,
   exact instruction correspondence before attaching step images; retain imported
   text and omit ambiguous optional media with a bounded warning.
