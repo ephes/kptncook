@@ -13,6 +13,7 @@ from typer.main import get_command
 
 from kptncook.config import SettingsError, get_settings, render_settings_error
 from kptncook.env import ENV_PATH, upsert_env_value
+from kptncook.markdown_exporter import DEFAULT_SERVINGS as DEFAULT_MARKDOWN_SERVINGS
 from kptncook.models import localized_fallback
 from kptncook.services.repository import InvalidStoredRecipe
 from kptncook.services.discovery import (
@@ -538,11 +539,23 @@ def export_recipes_to_tandoor(_id: OptionalId = typer.Argument(None)):
 
 
 @app.command(name="export-recipes-to-markdown")
-def export_recipes_to_markdown(_id: OptionalId = typer.Argument(None)):
+def export_recipes_to_markdown(
+    _id: OptionalId = typer.Argument(None),
+    servings: int = typer.Option(
+        DEFAULT_MARKDOWN_SERVINGS,
+        "--servings",
+        "-s",
+        min=1,
+        help=(
+            "Scale ingredient quantities to this many servings. Recipes with a "
+            "fixed portion count (e.g. a batch of cookies) always use that count."
+        ),
+    ),
+):
     """
     Export one recipe or all recipes to Markdown files.
     """
-    result = _run_or_exit(export_recipes_to_markdown_workflow, _id)
+    result = _run_or_exit(export_recipes_to_markdown_workflow, _id, servings)
     _print_repository_warnings(result.invalid_repository_entries)
     rprint(
         "\n %d recipe(s) were exported as Markdown to:\n %s\n"

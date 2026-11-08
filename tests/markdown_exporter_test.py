@@ -78,15 +78,45 @@ def test_prep_step_is_skipped(exporter):
     assert "- Mehl abwiegen." in md
 
 
-def test_quantity_is_not_scaled_by_servings(exporter):
+def test_quantities_are_scaled_to_default_servings(exporter):
     recipe = build_recipe(
-        fixedPortionCount=4,
-        ingredients=[ingredient(40.0, "g", "Mehl")],
+        ingredients=[
+            ingredient(40.0, "g", "Mehl"),
+            ingredient(0.06, None, "Rotkohl"),
+            ingredient(None, None, "Salz"),
+        ],
     )
     md = exporter.render_recipe(recipe)
-    # quantity is emitted as-is (40), not multiplied by the 4 servings
-    assert "- 40 g Mehl" in md
-    assert "160" not in md
+    # KptnCook quantities are per serving; the default is 2 servings
+    assert "servings: 2" in md
+    assert "- 80 g Mehl" in md
+    assert "- 0.12 Rotkohl" in md
+    assert "- Salz" in md
+
+
+def test_quantities_are_scaled_to_requested_servings():
+    get_settings()
+    recipe = build_recipe(ingredients=[ingredient(40.0, "g", "Mehl")])
+    md = MarkdownExporter(servings=4).render_recipe(recipe)
+    assert "servings: 4" in md
+    assert "- 160 g Mehl" in md
+
+
+def test_fixed_portion_count_overrides_requested_servings():
+    get_settings()
+    recipe = build_recipe(
+        fixedPortionCount=12,
+        ingredients=[ingredient(0.25, None, "Ei")],
+    )
+    md = MarkdownExporter(servings=4).render_recipe(recipe)
+    # batch recipes are scaled to their fixed portion count, not --servings
+    assert "servings: 12" in md
+    assert "- 3 Ei" in md
+
+
+def test_servings_must_be_positive():
+    with pytest.raises(ValueError):
+        MarkdownExporter(servings=0)
 
 
 def test_cooktime_omitted_when_missing(exporter):

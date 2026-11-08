@@ -31,6 +31,7 @@ from kptncook.models import (
     RecipeStep,
     StepIngredient,
     StepIngredientUnit,
+    scale_quantity,
 )
 
 logger = logging.getLogger(__name__)
@@ -159,21 +160,27 @@ class TandoorExporter:
                     "instruction": get_step_text(
                         step, language=get_settings().kptncook_lang
                     ),
-                    "ingredients": self.get_step_ingredients(step=step),
+                    "ingredients": self.get_step_ingredients(
+                        step=step, servings=recipe.servings
+                    ),
                 }
             )
         return steps
 
-    def get_step_ingredients(self, step: RecipeStep) -> list[dict[str, Any]]:
+    def get_step_ingredients(
+        self, step: RecipeStep, servings: int = 1
+    ) -> list[dict[str, Any]]:
         ingredients = []
         for ingredient in step.ingredients or []:
-            payload = self.get_step_ingredient_payload(ingredient=ingredient)
+            payload = self.get_step_ingredient_payload(
+                ingredient=ingredient, servings=servings
+            )
             if payload is not None:
                 ingredients.append(payload)
         return ingredients
 
     def get_step_ingredient_payload(
-        self, ingredient: StepIngredient | None
+        self, ingredient: StepIngredient | None, servings: int = 1
     ) -> dict[str, Any] | None:
         if ingredient is None:
             return None
@@ -184,7 +191,7 @@ class TandoorExporter:
             )
             return None
         payload = {
-            "amount": ingredient.quantity,
+            "amount": scale_quantity(ingredient.quantity, servings),
             "unit": self.get_step_unit_payload(unit=ingredient.unit),
             "food": {"name": ingredient_name},
         }
@@ -238,16 +245,22 @@ class TandoorExporter:
             if group_label:
                 ingredients.append(self.get_group_header_payload(label=group_label))
             for ingredient in group_ingredients:
-                ingredients.append(self.get_ingredient_payload(ingredient=ingredient))
+                ingredients.append(
+                    self.get_ingredient_payload(
+                        ingredient=ingredient, servings=recipe.servings
+                    )
+                )
         return ingredients
 
     def get_group_header_payload(self, label: str) -> dict[str, Any]:
         return {"note": label, "is_header": True, "no_amount": True, "amount": 0}
 
-    def get_ingredient_payload(self, ingredient: Ingredient) -> dict[str, Any]:
+    def get_ingredient_payload(
+        self, ingredient: Ingredient, servings: int = 1
+    ) -> dict[str, Any]:
         ingredient_name = self.get_ingredient_name(ingredient=ingredient) or ""
         payload = {
-            "amount": ingredient.quantity,
+            "amount": scale_quantity(ingredient.quantity, servings),
             "unit": self.get_unit_payload(measure=ingredient.measure),
             "food": {"name": ingredient_name},
         }

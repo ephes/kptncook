@@ -29,6 +29,7 @@ from .models import (
     Ingredient,
     RecipeStep as KptnCookRecipeStep,
     localized_fallback,
+    scale_quantity,
 )
 from .models import Recipe as KptnCookRecipe
 
@@ -690,6 +691,7 @@ class MealieApiClient(BaseHttpClient):
 
 def kptncook_to_mealie_ingredients(
     kptncook_ingredients: list[Ingredient] | None,
+    servings: int = 1,
 ) -> tuple[list[RecipeIngredient], dict[str, list[UUID4]]]:
     mealie_ingredients = []
     ingredient_id_to_reference_ids: dict[str, list[UUID4]] = {}
@@ -709,7 +711,7 @@ def kptncook_to_mealie_ingredients(
                     p.strip() for p in ingredient_title.split(",")
                 )
             food = RecipeFood(name=ingredient_title)
-            quantity = ingredient.quantity
+            quantity = scale_quantity(ingredient.quantity, servings)
             measure = None
             if hasattr(ingredient, "measure"):
                 if ingredient.measure is not None:
@@ -798,7 +800,7 @@ def kptncook_to_mealie(
     if api_key is None:
         api_key = get_settings().kptncook_api_key
     ingredients, ingredient_id_to_reference_ids = kptncook_to_mealie_ingredients(
-        kcin.ingredients
+        kcin.ingredients, servings=kcin.servings
     )
     author_comment = localized_fallback(
         kcin.author_comment, language=get_settings().kptncook_lang

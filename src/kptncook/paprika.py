@@ -32,7 +32,13 @@ from kptncook.exporter_utils import (
 )
 from kptncook.image_download import download_image
 from kptncook.ingredient_groups import iter_ingredient_groups
-from kptncook.models import Image, Ingredient, Recipe, localized_fallback
+from kptncook.models import (
+    Image,
+    Ingredient,
+    Recipe,
+    localized_fallback,
+    scale_quantity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +112,9 @@ class PaprikaExporter:
             "servings": str(recipe.servings),
             "rating": 0,
             "difficulty": "",
-            "ingredients": self.get_ingredients_text(recipe.ingredients),
+            "ingredients": self.get_ingredients_text(
+                recipe.ingredients, servings=recipe.servings
+            ),
             "notes": "",
             "created": generated.dtnow,
             "image_url": None,
@@ -130,23 +138,26 @@ class PaprikaExporter:
         }
         return json.dumps(document, ensure_ascii=False)
 
-    def get_ingredients_text(self, ingredients: list[Ingredient]) -> str:
+    def get_ingredients_text(
+        self, ingredients: list[Ingredient], servings: int = 1
+    ) -> str:
         lines = []
         for group_label, group_ingredients in iter_ingredient_groups(ingredients):
             if group_label:
                 lines.append(f"{group_label}:")
             for ingredient in group_ingredients:
-                line = self.format_ingredient_line(ingredient)
+                line = self.format_ingredient_line(ingredient, servings)
                 if line:
                     lines.append(line)
         if not lines:
             return ""
         return "\n".join(lines) + "\n"
 
-    def format_ingredient_line(self, ingredient: Ingredient) -> str:
+    def format_ingredient_line(self, ingredient: Ingredient, servings: int = 1) -> str:
         parts: list[str] = []
-        if ingredient.quantity:
-            parts.append(f"{ingredient.quantity:g}")
+        quantity = scale_quantity(ingredient.quantity, servings)
+        if quantity:
+            parts.append(f"{quantity:g}")
         if ingredient.measure:
             parts.append(ingredient.measure)
         ingredient_name = (

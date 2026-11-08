@@ -22,6 +22,7 @@ from kptncook.http_errors import (
     format_http_status_error,
     format_request_error,
 )
+from kptncook.markdown_exporter import DEFAULT_SERVINGS as DEFAULT_MARKDOWN_SERVINGS
 from kptncook.markdown_exporter import MarkdownExporter
 from kptncook.mealie import (
     MealieApiClient,
@@ -671,7 +672,9 @@ def export_recipes_to_tandoor(recipe_id: str | None) -> list[str]:
     return export_recipes_to_tandoor_result(recipe_id).filenames
 
 
-def export_recipes_to_markdown_result(recipe_id: str | None) -> MarkdownExportResult:
+def export_recipes_to_markdown_result(
+    recipe_id: str | None, servings: int = DEFAULT_MARKDOWN_SERVINGS
+) -> MarkdownExportResult:
     repository_result = (
         load_recipe_from_repository_by_id(recipe_id)
         if recipe_id
@@ -684,10 +687,15 @@ def export_recipes_to_markdown_result(recipe_id: str | None) -> MarkdownExportRe
         if len(recipes) > 1:
             raise UserFacingError("More than one recipe found with that ID.")
     return MarkdownExportResult(
-        filenames=[str(path) for path in MarkdownExporter().export(recipes=recipes)],
+        filenames=[
+            str(path)
+            for path in MarkdownExporter(servings=servings).export(recipes=recipes)
+        ],
         invalid_repository_entries=repository_result.invalid_entries,
     )
 
 
-def export_recipes_to_markdown(recipe_id: str | None) -> list[str]:
-    return export_recipes_to_markdown_result(recipe_id).filenames
+def export_recipes_to_markdown(
+    recipe_id: str | None, servings: int = DEFAULT_MARKDOWN_SERVINGS
+) -> list[str]:
+    return export_recipes_to_markdown_result(recipe_id, servings).filenames

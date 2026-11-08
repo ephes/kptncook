@@ -42,11 +42,17 @@ Unreleased
 - Resolve local single-recipe Paprika, Tandoor and Markdown exports by stored
   short UID as well as OID, preserving missing/ambiguous selection errors.
 - Preserve explicit portion counts across all exporters, with a two-portion
-  fallback and unchanged ingredient totals.
+  fallback.
 - Quote Markdown front-matter strings so tags and URLs retain punctuation and
   newlines without changing YAML structure.
 - Close workflow-owned KptnCook clients after login, today/dailies, discovery,
   onboarding, ingredient queries and recipe search, including processing failures.
+- Scale ingredient quantities in every exporter to the serving count it writes.
+  KptnCook stores quantities per serving, so Paprika, Tandoor, Mealie and
+  Markdown exports listed single-serving amounts under two (or the fixed)
+  portions. Batch recipes such as cookies now list the whole batch, and
+  `export-recipes-to-markdown --servings N` picks the Markdown serving count
+  for standard recipes (thanks @lursyy).
 - Bound Mealie inventory acquisition to a configurable elapsed budget (120 seconds
   by default, up to 86400 for large libraries) across pages
   and sync detail reads; cap request timeouts by the remaining budget and refuse
