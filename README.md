@@ -255,9 +255,10 @@ Exports to Mealie and Tandoor include KptnCook active tags as tags/keywords
 (verbatim).
 
 All exporters preserve the recipe's explicit `fixedPortionCount`, falling back
-to the standard two portions when it is absent. Ingredient quantities are recipe
-totals and are exported unchanged. Explicit portion counts must be positive
-integers (no booleans or coercion). Ingredient and step-ingredient quantities
+to the standard two portions when it is absent. KptnCook stores ingredient
+quantities for a single serving, also for fixed-portion recipes such as a batch
+of cookies, so exporters scale them to the portion count they write. Explicit
+portion counts must be positive integers (no booleans or coercion). Ingredient and step-ingredient quantities
 must be finite; zero, fractions and missing quantities remain supported.
 Whole-recipe preparation and cooking times are strict integer minutes from 0 to
 525600 (365 days); booleans, strings and fractional values are refused.
@@ -289,8 +290,16 @@ languages fall back to English). Recipe titles, comments, steps and ingredient
 labels across all exporters prefer that same configured language. Missing or
 empty translations fall back in order to German, English, Spanish, French, then
 Portuguese, without changing the original recipe payload. `<timer>` placeholders in steps are
-replaced with their durations. Existing Markdown files, including manual notes,
-are never overwritten: repeated exports create new files. If a title is taken,
+replaced with their durations.
+
+Markdown is final cookbook text, so its serving count is configurable:
+`kptncook export-recipes-to-markdown --servings 4` (or `-s 4`) scales standard
+recipes to four servings instead of two. Recipes with a fixed portion count
+keep that count. The `servings` front matter shows the count the quantities
+were scaled to.
+
+Existing Markdown files, including manual notes, are never overwritten:
+repeated exports create new files. If a title is taken,
 the recipe id and then a counter are appended (`Title-<recipe id>.md`,
 `Title-<recipe id>-2.md`). Files are created exclusively to prevent concurrent
 exports from overwriting each other. Command output lists the actual paths.

@@ -25,12 +25,14 @@ from .exporter_utils import get_cover, replace_timers_in_step, validate_export_i
 from .image_download import download_image
 from .ingredient_groups import iter_ingredient_groups
 from .models import (
+    DEFAULT_SERVINGS,
     Ingredient,
     LocalizedString,
     Recipe,
     RecipeStep,
     localized_fallback,
     normalize_language,
+    scale_quantity,
 )
 
 logger = logging.getLogger(__name__)
@@ -104,6 +106,18 @@ def _yaml_string(value: str) -> str:
 
 
 class MarkdownExporter:
+    def __init__(self, servings: int = DEFAULT_SERVINGS) -> None:
+        # Markdown is final cookbook text that no other app rescales, so the
+        # standard serving count is configurable here (``--servings``).
+        if isinstance(servings, bool) or not isinstance(servings, int) or servings < 1:
+            raise ValueError("servings must be a positive integer")
+        self.servings = servings
+
+    def servings_for(self, recipe: Recipe) -> int:
+        # Batch recipes (cookies, cakes) are balanced for their fixed portion
+        # count, which therefore wins over the requested servings.
+        return recipe.servings_or(self.servings)
+
     def export(self, recipes: Iterable[Recipe]) -> list[Path]:
         recipes = list(recipes)
         for recipe in recipes:
@@ -184,7 +198,7 @@ class MarkdownExporter:
         lines: list[str] = ["---"]
         lines.append(f"date: {date.today().isoformat()}")
 
-        servings = recipe.servings
+        servings = self.servings_for(recipe)
         lines.append(f"servings: {servings}")
 
         lines.append(f"prepTime: {_yaml_string(f'{recipe.preparation_time}m')}")
@@ -228,7 +242,7 @@ class MarkdownExporter:
         # Ingredients
         lines.append(f"### {labels['ingredients']}")
         lines.append("")
-        ing_lines = self.get_ingredients_lines(recipe.ingredients)
+        ing_lines = self.get_ingredients_lines(recipe.ingredients, servings)
         if ing_lines:
             lines.extend(ing_lines)
         else:
@@ -287,22 +301,25 @@ class MarkdownExporter:
             transformed.append(tag)
         return transformed
 
-    def get_ingredients_lines(self, ingredients: list[Ingredient]) -> list[str]:
+    def get_ingredients_lines(
+        self, ingredients: list[Ingredient], servings: int = 1
+    ) -> list[str]:
         lines: list[str] = []
         for group_label, group_ingredients in iter_ingredient_groups(ingredients):
             if group_label:
                 lines.append(f"{group_label}:")
             for ingredient in group_ingredients:
-                text = self.format_ingredient_line(ingredient)
+                text = self.format_ingredient_line(ingredient, servings)
                 if text:
                     lines.append(f"- {text}")
             lines.append("")
         return lines
 
-    def format_ingredient_line(self, ingredient: Ingredient) -> str:
+    def format_ingredient_line(self, ingredient: Ingredient, servings: int = 1) -> str:
         parts: list[str] = []
-        if ingredient.quantity:
-            parts.append("{0:g}".format(round(ingredient.quantity, 2)))
+        quantity = scale_quantity(ingredient.quantity, servings)
+        if quantity:
+            parts.append("{0:g}".format(round(quantity, 2)))
         if ingredient.measure:
             parts.append(ingredient.measure)
         ingredient_name = (

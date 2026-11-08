@@ -118,35 +118,38 @@ def test_local_uid_export_keeps_selection_errors(
 
 @pytest.mark.parametrize("kind", ["paprika", "tandoor", "markdown", "mealie"])
 @pytest.mark.parametrize("portions", [7, None])
-def test_exported_portions_preserve_ingredient_totals(
+def test_exported_portions_scale_single_serving_quantities(
     offline_exports, synthetic_recipe, kind, portions
 ):
+    # KptnCook quantities are per serving (40 g here); exports scale them to the
+    # portion count they write: the fixed count, otherwise two.
     recipe = synthetic_recipe
     recipe.fixed_portion_count = portions
     expected = portions if portions is not None else 2
+    amount = 40 * expected
     if kind == "mealie":
         payload = json.loads(
             kptncook_to_mealie(recipe, api_key="synthetic").model_dump_json()
         )
         assert payload["recipe_yield"] == f"{expected} Portionen"
-        assert payload["recipe_ingredient"][0]["quantity"] == 40
+        assert payload["recipe_ingredient"][0]["quantity"] == amount
     elif kind == "markdown":
         [path] = MarkdownExporter().export([recipe])
         text = path.read_text(encoding="utf-8")
         assert yaml.safe_load(text.split("---", 2)[1])["servings"] == expected
-        assert "- 40 g Flour" in text
+        assert f"- {amount} g Flour" in text
     elif kind == "paprika":
         filename = PaprikaExporter().export([recipe])
         with ZipFile(filename) as archive:
             payload = json.loads(gzip.decompress(archive.read(archive.namelist()[0])))
         assert payload["servings"] == str(expected)
-        assert payload["ingredients"] == "40 g Flour\n"
+        assert payload["ingredients"] == f"{amount} g Flour\n"
     else:
         [filename] = TandoorExporter().export([recipe])
         with ZipFile(filename) as archive:
             payload = json.loads(archive.read("recipe.json"))
         assert payload["servings"] == expected
-        assert payload["ingredients"][0]["amount"] == 40
+        assert payload["ingredients"][0]["amount"] == amount
 
 
 def test_markdown_frontmatter_roundtrips_strings(synthetic_recipe, monkeypatch):
@@ -197,4 +200,4 @@ def test_markdown_frontmatter_roundtrips_strings(synthetic_recipe, monkeypatch):
         "image",
         "tags",
     }
-    assert "- 40 g Flour" in body
+    assert "- 80 g Flour" in body  # 40 g per serving, two servings

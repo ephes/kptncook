@@ -146,6 +146,20 @@ class StepIngredientUnit(BaseModel):
         return value
 
 
+# KptnCook stores ingredient quantities for a single serving, including recipes
+# with a ``fixedPortionCount`` (cookies, cakes, ...). Exporters scale them to the
+# serving count they write: the fixed portion count when present (those recipes
+# are balanced for one batch), otherwise this standard count.
+DEFAULT_SERVINGS = 2
+
+
+def scale_quantity(quantity: float | None, servings: int) -> float | None:
+    """Scale a single-serving quantity, dropping binary float noise."""
+    if quantity is None:
+        return None
+    return round(quantity * servings, 6)
+
+
 class Ingredient(BaseModel):
     quantity: FiniteFloat | None = None
     measure: str | None = None
@@ -259,8 +273,16 @@ class Recipe(BaseModel):
 
     @property
     def servings(self) -> int:
-        """Portions for the unchanged ingredient totals; standard recipes serve two."""
-        return self.fixed_portion_count if self.fixed_portion_count is not None else 2
+        """Portions every exporter writes and scales ingredient quantities to."""
+        return self.servings_or(DEFAULT_SERVINGS)
+
+    def servings_or(self, default: int) -> int:
+        """The fixed portion count of a batch recipe, otherwise ``default``."""
+        return (
+            self.fixed_portion_count
+            if self.fixed_portion_count is not None
+            else default
+        )
 
     @model_validator(mode="before")
     def normalize_titles(cls, values):

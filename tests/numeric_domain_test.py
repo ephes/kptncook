@@ -186,3 +186,11 @@ def test_valid_whole_recipe_durations_across_adapters(minimal, prep, cook):
         assert "cookTime" not in markdown
     else:
         assert markdown["cookTime"] == f"{cook}m"
+
+
+def test_scale_quantity_drops_float_noise_and_keeps_missing():
+    from kptncook.models import scale_quantity
+
+    assert scale_quantity(0.1, 3) == 0.3
+    assert scale_quantity(None, 4) is None
+    assert scale_quantity(0, 4) == 0

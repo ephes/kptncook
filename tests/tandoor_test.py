@@ -255,3 +255,29 @@ def test_export_does_not_clobber_existing_file(minimal, tmp_path, monkeypatch):
     assert second == "Synthetic_Soup-cccccccccccccccccccccccc-2.zip"
     assert zipfile.is_zipfile(tmp_path / first)
     assert zipfile.is_zipfile(tmp_path / second)
+
+
+def test_step_ingredient_amounts_scale_to_recipe_servings(minimal):
+    exporter = TandoorExporter()
+    recipe_data = {
+        **minimal,
+        "fixedPortionCount": 3,
+        "steps": [
+            {
+                "title": {"de": "Mehl abwiegen."},
+                "ingredients": [
+                    {
+                        "quantity": 40,
+                        "unit": "g",
+                        "ingredient": {"uncountableTitle": {"de": "Mehl"}},
+                    }
+                ],
+                "image": minimal["steps"][0]["image"],
+            }
+        ],
+    }
+    recipe = Recipe.model_validate(recipe_data)
+
+    [step] = exporter.get_recipe_payload(recipe)["steps"]
+
+    assert step["ingredients"][0]["amount"] == 120

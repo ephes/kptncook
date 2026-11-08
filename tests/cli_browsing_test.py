@@ -237,7 +237,9 @@ def test_export_dispatch_and_output(mocker, format_name, recipe_id):
 
     assert result.exit_code == 0, result.output
     for name, workflow in workflows.items():
-        if name == format_name:
+        if name == "markdown" and name == format_name:
+            workflow.assert_called_once_with(recipe_id, 2)
+        elif name == format_name:
             workflow.assert_called_once_with(recipe_id)
         else:
             workflow.assert_not_called()
@@ -254,6 +256,29 @@ def test_export_dispatch_and_output(mocker, format_name, recipe_id):
         assert "2 recipe(s) were exported as Markdown" in result.output
         assert "export_md/soup.md" in result.output
         assert "export_md/salad.md" in result.output
+
+
+@pytest.mark.parametrize("servings_args", [["--servings", "4"], ["-s", "4"]])
+def test_markdown_export_passes_servings(mocker, servings_args):
+    workflow = mocker.patch.object(
+        cli,
+        "export_recipes_to_markdown_workflow",
+        return_value=MarkdownExportResult(["export_md/soup.md"], []),
+    )
+
+    result = runner.invoke(cli.app, ["export-recipes-to-markdown", *servings_args])
+
+    assert result.exit_code == 0, result.output
+    workflow.assert_called_once_with(None, 4)
+
+
+def test_markdown_export_rejects_non_positive_servings(mocker):
+    workflow = mocker.patch.object(cli, "export_recipes_to_markdown_workflow")
+
+    result = runner.invoke(cli.app, ["export-recipes-to-markdown", "--servings", "0"])
+
+    assert result.exit_code == 2
+    workflow.assert_not_called()
 
 
 @pytest.mark.parametrize(
