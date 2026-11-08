@@ -15,6 +15,8 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Preflight portable recipe-ID filename components before any local export
+  write; retain Paprika text recipes when covers are missing or ambiguous.
 - Compose authenticated image queries correctly and export Markdown images as
   bounded local relative assets, omitting unavailable images without exposing
   API keys or signed URLs in notes or asset filenames.

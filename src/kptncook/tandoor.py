@@ -19,6 +19,7 @@ from kptncook.exporter_utils import (
     get_step_text,
     move_to_free_target,
     write_zip,
+    validate_export_id,
     ZipContent,
 )
 from kptncook.image_download import download_image
@@ -37,12 +38,15 @@ logger = logging.getLogger(__name__)
 
 class TandoorExporter:
     def export(self, recipes: list[Recipe]) -> list[str]:
+        for recipe in recipes:
+            validate_export_id(recipe.id.oid)
         filenames = []
         for recipe in recipes:
             filenames.append(self.export_recipe(recipe=recipe))
         return filenames
 
     def export_recipe(self, recipe: Recipe) -> str:
+        validate_export_id(recipe.id.oid)
         filename = self.get_export_filename(recipe=recipe)
         payload = self.get_recipe_payload(recipe=recipe)
         image_bytes = self.get_cover_image_bytes(recipe=recipe)

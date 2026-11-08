@@ -6,7 +6,9 @@ from pathlib import Path
 from collections.abc import Iterable
 
 from unidecode import unidecode
+from pathvalidate import validate_filename, ValidationError as FilenameValidationError
 
+from kptncook.http_errors import UserFacingError
 from kptncook.models import Image, RecipeStep, StepTimer, localized_fallback
 
 TIMER_PLACEHOLDER = "<timer>"
@@ -95,6 +97,17 @@ def replace_timers_in_step(step, text: str) -> str:
         return match.group(0)
 
     return re.sub(r"<timer>", repl, text)
+
+
+def validate_export_id(identifier: str) -> None:
+    """Admit opaque IDs as portable single components before export writes."""
+    error = "Recipe identifier is not a safe export filename component"
+    if identifier in {".", ".."}:
+        raise UserFacingError(error)
+    try:
+        validate_filename(identifier, platform="universal", max_len=128)
+    except FilenameValidationError:
+        raise UserFacingError(error) from None
 
 
 def move_to_free_target(

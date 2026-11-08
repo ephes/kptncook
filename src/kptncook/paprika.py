@@ -28,6 +28,7 @@ from kptncook.exporter_utils import (
     get_step_text,
     move_to_free_target,
     write_zip,
+    validate_export_id,
 )
 from kptncook.image_download import download_image
 from kptncook.ingredient_groups import iter_ingredient_groups
@@ -158,6 +159,8 @@ class PaprikaExporter:
         return " ".join(part for part in parts if part).strip()
 
     def get_export_data(self, recipes: list[Recipe]) -> dict[str, str]:
+        for recipe in recipes:
+            validate_export_id(recipe.id.oid)
         return {
             str(recipe.id.oid): self.get_recipe_as_json_string(recipe)
             for recipe in recipes
@@ -166,6 +169,8 @@ class PaprikaExporter:
     def save_recipes(
         self, export_data: dict[str, Any], filename: str, directory: str
     ) -> str:
+        for identifier in export_data:
+            validate_export_id(identifier)
         for id, recipe_as_json in export_data.items():
             recipe_as_gz = os.path.join(directory, "recipe_" + id + ".paprikarecipe")
             with gzip.open(recipe_as_gz, "wb") as f:
@@ -182,10 +187,10 @@ class PaprikaExporter:
     ) -> tuple[str | None, str | None]:
         cover = get_cover(image_list=recipe.image_list)
         if cover is None:
-            raise ValueError("No cover image found")
+            return None, None
         cover_url = recipe.get_image_url(api_key=get_settings().kptncook_api_key)
         if not isinstance(cover_url, str):
-            raise ValueError("Cover URL must be a string")
+            return None, None
         try:
             image_bytes = download_image(cover_url)
         except httpx.HTTPStatusError as exc:
