@@ -10,6 +10,11 @@ from kptncook.config import clear_settings_cache, settings
 def reset_grouping_settings(monkeypatch, tmp_path):
     monkeypatch.setenv("KPTNCOOK_API_KEY", "test-key")
     monkeypatch.setenv("KPTNCOOK_HOME", str(tmp_path / "kptncook-home"))
+    # Synthetic image hosts used across the suite; origin refusals are tested
+    # explicitly in image_origin_test.py.
+    monkeypatch.setenv(
+        "KPTNCOOK_IMAGE_HOSTS", "example.test,example.com,images.example"
+    )
     clear_settings_cache()
     monkeypatch.setattr(
         "kptncook.services.workflows.SYNC_LOCK_DIR", tmp_path / "sync-locks"

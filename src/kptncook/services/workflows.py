@@ -205,6 +205,24 @@ def get_mealie_client() -> MealieApiClient:
     )
 
 
+def _require_detail_matches_row(row: Any, detail: Any, position: int) -> None:
+    """A detail must describe the inventory row it was requested for.
+
+    The server ID is authoritative when the row carries one, and the slug must
+    be the one requested. A recipe renamed or replaced while the inventory is
+    read therefore stops the sync before any write; running it again reads a
+    consistent inventory.
+    """
+    row_id = getattr(row, "id", None)
+    if (row_id is not None and getattr(detail, "id", None) != row_id) or getattr(
+        detail, "slug", None
+    ) != getattr(row, "slug", None):
+        raise MealieInventoryError(
+            "Incomplete Mealie inventory: recipe detail does not match the "
+            f"requested recipe at inventory position {position}; run the sync again"
+        )
+
+
 def get_kptncook_recipes_from_mealie(client: MealieApiClient) -> list[Any]:
     try:
         deadline = monotonic() + client.inventory_timeout
@@ -235,6 +253,7 @@ def get_kptncook_recipes_from_mealie(client: MealieApiClient) -> list[Any]:
                 raise MealieInventoryError(
                     "Incomplete Mealie inventory: acquisition deadline exceeded"
                 )
+            _require_detail_matches_row(recipe, detail, position)
             recipes_with_details.append(detail)
         return [r for r in recipes_with_details if r.extras.get("source") == "kptncook"]
     except MealieInventoryError as exc:

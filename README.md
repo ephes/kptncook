@@ -216,10 +216,25 @@ redirects). Failed, oversized, or slow images are skipped; recipe text is
 still exported or imported. Downloads request uncompressed responses; servers
 that send compressed images despite that request are skipped to bound memory.
 
+The API key is attached only to image URLs on an allowed image host: HTTPS,
+the default port, no user name or password in the URL, and a host name that
+exactly matches KptnCook's image CDN (`d2am1qai33sroc.cloudfront.net`) or an
+entry in `KPTNCOOK_IMAGE_HOSTS`. Every redirect target is checked the same
+way before it is requested. Images from any other URL in recipe data are
+skipped with a warning that names neither the URL nor the key; recipe text is
+still exported or imported. Mealie covers are downloaded through the same
+checked downloader and uploaded as image bytes; Mealie is never asked to fetch
+a keyed URL itself, since its scraper would follow redirects unchecked.
+Configured hosts must be names, not IP addresses in any spelling.
+
 Sync requires a complete, validated remote recipe inventory, including every
 recipe detail. An invalid recipe or unreadable imported identity stops the run
 before any organizer or archive creates, with a bounded positional diagnostic.
 Check the indicated upstream record and rerun; invalid records are never silently skipped.
+Each recipe detail must describe the inventory row it was requested for: the
+same server ID (when the row carries one) and the requested slug. A detail for a
+different recipe, or a recipe renamed while the inventory is read, stops the run
+before any write; run the sync again to read a consistent inventory.
 Recipe and organizer inventories allow at most 1,000 pages and 50,000 items.
 An acquisition defaults to a 120-second elapsed budget, checked before and after each
 response and before returning an inventory. Sync shares that budget across the
@@ -530,6 +545,13 @@ Optional API defaults for discovery/dailies/onboarding requests:
 - `KPTNCOOK_LANG` (default `de`)
 - `KPTNCOOK_STORE` (default `de`)
 - `KPTNCOOK_PREFERENCES` (for example `rt:diet_vegetarian,`)
+
+Optional image hosts:
+
+- `KPTNCOOK_IMAGE_HOSTS`: comma-separated extra host names allowed to receive
+  the API key with image downloads (for example `images.example.org`), in
+  addition to KptnCook's image CDN. Entries are bare host names: no scheme,
+  port, path, user name or IP address.
 
 ### Password Manager Integration
 

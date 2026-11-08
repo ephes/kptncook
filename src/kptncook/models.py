@@ -2,10 +2,13 @@
 All the domain models for kptncook live here.
 """
 
+import logging
 from typing import Any
 from urllib.parse import unquote_plus, urlencode, urlsplit, urlunsplit
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
+
+logger = logging.getLogger(__name__)
 
 
 def to_camel(string: str) -> str:
@@ -83,6 +86,10 @@ class Image(BaseModel):
     url: str
 
     def get_image_with_api_key_url(self, api_key: str) -> "Image":
+        """Attach the API key; raise ImageOriginError for a disallowed host."""
+        from .image_origin import check_image_url
+
+        check_image_url(self.url)
         parts = urlsplit(self.url)
         query = (
             [
@@ -295,8 +302,14 @@ class Recipe(BaseModel):
         return values
 
     def get_image_url(self, api_key: str) -> str | None:
+        from .image_origin import ImageOriginError
+
         try:
             [image] = [i for i in self.image_list if i.type == "cover"]
         except ValueError:
             return None
-        return image.get_image_with_api_key_url(api_key).url
+        try:
+            return image.get_image_with_api_key_url(api_key).url
+        except ImageOriginError:
+            logger.warning("Skipping cover image: not on an allowed image host")
+            return None
