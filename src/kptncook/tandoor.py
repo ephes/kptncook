@@ -72,7 +72,12 @@ class TandoorExporter:
         The actual name may get the recipe id appended if a file with this
         name already exists (for example a second recipe with the same title).
         """
-        title = localized_fallback(recipe.localized_title) or "kptncook-recipe"
+        title = (
+            localized_fallback(
+                recipe.localized_title, language=get_settings().kptncook_lang
+            )
+            or "kptncook-recipe"
+        )
         return f"{asciify_string(title)}.zip"
 
     def get_cover_image_bytes(self, recipe: Recipe) -> bytes | None:
@@ -88,7 +93,10 @@ class TandoorExporter:
             if exc.response.status_code == 404:
                 logger.info(
                     'Cover image for "%s" not found online any more.',
-                    localized_fallback(recipe.localized_title) or "kptncook-recipe",
+                    localized_fallback(
+                        recipe.localized_title, language=get_settings().kptncook_lang
+                    )
+                    or "kptncook-recipe",
                 )
             else:
                 logger.warning(
@@ -104,8 +112,14 @@ class TandoorExporter:
 
     def get_recipe_payload(self, recipe: Recipe) -> dict[str, Any]:
         return {
-            "name": localized_fallback(recipe.localized_title) or "",
-            "description": localized_fallback(recipe.author_comment) or "",
+            "name": localized_fallback(
+                recipe.localized_title, language=get_settings().kptncook_lang
+            )
+            or "",
+            "description": localized_fallback(
+                recipe.author_comment, language=get_settings().kptncook_lang
+            )
+            or "",
             "servings": recipe.servings,
             "source_url": self.get_source_url(recipe=recipe),
             "working_time": recipe.preparation_time,
@@ -138,7 +152,9 @@ class TandoorExporter:
         for step in recipe.steps:
             steps.append(
                 {
-                    "instruction": get_step_text(step),
+                    "instruction": get_step_text(
+                        step, language=get_settings().kptncook_lang
+                    ),
                     "ingredients": self.get_step_ingredients(step=step),
                 }
             )
@@ -175,15 +191,21 @@ class TandoorExporter:
         if details is None:
             return None
         if details.uncountable_title:
-            title = localized_fallback(details.uncountable_title)
+            title = localized_fallback(
+                details.uncountable_title, language=get_settings().kptncook_lang
+            )
             if title:
                 return title
         if details.localized_title:
-            title = localized_fallback(details.localized_title)
+            title = localized_fallback(
+                details.localized_title, language=get_settings().kptncook_lang
+            )
             if title:
                 return title
         if details.number_title:
-            title = localized_fallback(details.number_title)
+            title = localized_fallback(
+                details.number_title, language=get_settings().kptncook_lang
+            )
             if title:
                 return title
         return None
@@ -195,8 +217,10 @@ class TandoorExporter:
             return None
         for candidate in (
             unit.name,
-            localized_fallback(unit.localized_title),
-            localized_fallback(unit.short_title),
+            localized_fallback(
+                unit.localized_title, language=get_settings().kptncook_lang
+            ),
+            localized_fallback(unit.short_title, language=get_settings().kptncook_lang),
         ):
             if candidate:
                 return {"name": candidate}
@@ -228,10 +252,14 @@ class TandoorExporter:
     def get_ingredient_name(self, ingredient: Ingredient) -> str | None:
         details = ingredient.ingredient
         if details.uncountable_title is not None:
-            title = localized_fallback(details.uncountable_title)
+            title = localized_fallback(
+                details.uncountable_title, language=get_settings().kptncook_lang
+            )
             if title:
                 return title
-        return localized_fallback(details.localized_title)
+        return localized_fallback(
+            details.localized_title, language=get_settings().kptncook_lang
+        )
 
     def get_unit_payload(self, measure: str | None) -> dict[str, str] | None:
         if measure is None:

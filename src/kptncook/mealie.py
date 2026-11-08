@@ -667,7 +667,11 @@ def kptncook_to_mealie_ingredients(
     for group_label, ingredients in groups:
         for idx, ingredient in enumerate(ingredients):
             ingredient_title = (
-                localized_fallback(ingredient.ingredient.localized_title) or ""
+                localized_fallback(
+                    ingredient.ingredient.localized_title,
+                    language=get_settings().kptncook_lang,
+                )
+                or ""
             )
             note = None
             if "," in ingredient_title:
@@ -735,7 +739,7 @@ def kptncook_to_mealie_steps(
         mealie_instructions.append(
             RecipeStep(
                 title=None,
-                text=get_step_text(step),
+                text=get_step_text(step, language=get_settings().kptncook_lang),
                 image=image,
                 ingredientReferences=ingredient_references,
             )
@@ -766,9 +770,13 @@ def kptncook_to_mealie(
     ingredients, ingredient_id_to_reference_ids = kptncook_to_mealie_ingredients(
         kcin.ingredients
     )
-    author_comment = localized_fallback(kcin.author_comment)
+    author_comment = localized_fallback(
+        kcin.author_comment, language=get_settings().kptncook_lang
+    )
     kwargs = {
-        "name": localized_fallback(kcin.localized_title),
+        "name": localized_fallback(
+            kcin.localized_title, language=get_settings().kptncook_lang
+        ),
         "notes": (
             [RecipeNote(title="author comment", text=author_comment)]
             if author_comment

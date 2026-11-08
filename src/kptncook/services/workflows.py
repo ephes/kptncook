@@ -323,7 +323,10 @@ def sync_with_mealie_result() -> SyncWithMealieResult:
                 if recipe.id.oid in ids_in_mealie:
                     continue
                 recipe_name = (
-                    localized_fallback(recipe.localized_title) or "Unknown title"
+                    localized_fallback(
+                        recipe.localized_title, language=get_settings().kptncook_lang
+                    )
+                    or "Unknown title"
                 )
                 try:
                     client.create_recipe(kptncook_to_mealie(recipe))

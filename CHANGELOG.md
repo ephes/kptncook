@@ -15,6 +15,9 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Normalize recipe aliases on copied mappings, leaving caller-owned payloads
+  unchanged even after failed validation; prefer the configured language across
+  recipe text in all exporters with a consistent fallback order.
 - Reject non-finite ingredient quantities, invalid timer bounds/ranges and
   nonpositive or coerced serving counts at model admission; retain max-only
   and ranged timers in Markdown.

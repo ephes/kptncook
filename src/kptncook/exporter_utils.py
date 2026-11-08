@@ -48,9 +48,9 @@ def expand_timer_placeholders(text: str, timers: list[StepTimer] | None) -> str:
     return TIMER_PLACEHOLDER_PATTERN.sub(replacer, text)
 
 
-def get_step_text(step: RecipeStep) -> str:
+def get_step_text(step: RecipeStep, language: str = "de") -> str:
     """Get localized step text with timer placeholders expanded."""
-    raw = localized_fallback(step.title) or ""
+    raw = localized_fallback(step.title, language) or ""
     return expand_timer_placeholders(raw, step.timers or [])
 
 
