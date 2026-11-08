@@ -11,7 +11,7 @@ from rich.markup import escape
 from rich.pretty import pprint
 from typer.main import get_command
 
-from kptncook.config import SettingsError, render_settings_error
+from kptncook.config import SettingsError, get_settings, render_settings_error
 from kptncook.env import ENV_PATH, upsert_env_value
 from kptncook.models import localized_fallback
 from kptncook.services.repository import InvalidStoredRecipe
@@ -248,7 +248,12 @@ def list_recipes():
     result = _run_or_exit(load_kptncook_recipes_from_repository)
     _print_repository_warnings(result.invalid_entries)
     for num, recipe in enumerate(result.recipes):
-        title = localized_fallback(recipe.localized_title) or "Unknown title"
+        title = (
+            localized_fallback(
+                recipe.localized_title, language=get_settings().kptncook_lang
+            )
+            or "Unknown title"
+        )
         rprint(num, title, recipe.id.oid)
 
 
@@ -476,7 +481,12 @@ def delete_recipes(
         if recipe is None:
             rprint(f"- {oid}")
             continue
-        title = localized_fallback(recipe.localized_title) or "Unknown title"
+        title = (
+            localized_fallback(
+                recipe.localized_title, language=get_settings().kptncook_lang
+            )
+            or "Unknown title"
+        )
         rprint(f"- {title} ({oid})")
 
     if not force and not typer.confirm("Delete these recipes from local storage?"):

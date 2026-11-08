@@ -17,6 +17,11 @@ def to_camel(string: str) -> str:
     return "".join(words)
 
 
+def normalize_language(language: str) -> str:
+    language = language.strip().lower()
+    return language if language in {"de", "en", "es", "fr", "pt"} else "en"
+
+
 class LocalizedString(BaseModel):
     en: str | None = None
     de: str | None = None
@@ -24,8 +29,10 @@ class LocalizedString(BaseModel):
     fr: str | None = None
     pt: str | None = None
 
-    def fallback(self) -> str | None:
-        for candidate in (self.de, self.en, self.es, self.fr, self.pt):
+    def fallback(self, language: str = "de") -> str | None:
+        language = normalize_language(language)
+        for lang in dict.fromkeys((language, "de", "en", "es", "fr", "pt")):
+            candidate = getattr(self, lang)
             if candidate:
                 return candidate
         return None
@@ -54,10 +61,12 @@ class LocalizedStepIngredientUnit(LocalizedString):
     """Localized unit labels for step ingredients."""
 
 
-def localized_fallback(value: LocalizedString | None) -> str | None:
+def localized_fallback(
+    value: LocalizedString | None, language: str = "de"
+) -> str | None:
     if value is None:
         return None
-    return value.fallback()
+    return value.fallback(language)
 
 
 class Nutrition(BaseModel):
@@ -95,6 +104,7 @@ class IngredientDetails(BaseModel):
     @model_validator(mode="before")
     def fix_json_errors(cls, values):
         if isinstance(values, dict):
+            values = dict(values)
             if values.get("localizedTitle") is None:
                 for key in ("uncountableTitle", "title", "numberTitle", "name"):
                     if values.get(key) is not None:
@@ -145,6 +155,7 @@ class StepIngredientDetails(BaseModel):
         if isinstance(values, str):
             return {"localizedTitle": values}
         if isinstance(values, dict):
+            values = dict(values)
             if values.get("localizedTitle") is None:
                 for key in ("uncountableTitle", "title", "name", "numberTitle"):
                     if values.get(key) is not None:
@@ -169,6 +180,7 @@ class StepIngredient(BaseModel):
     @model_validator(mode="before")
     def normalize_fields(cls, values):
         if isinstance(values, dict):
+            values = dict(values)
             if values.get("quantity") is None and values.get("amount") is not None:
                 values["quantity"] = values["amount"]
             if values.get("unit") is None and values.get("measure") is not None:
@@ -240,6 +252,7 @@ class Recipe(BaseModel):
     @model_validator(mode="before")
     def normalize_titles(cls, values):
         if isinstance(values, dict):
+            values = dict(values)
             if values.get("localizedTitle") is None:
                 title = values.get("title") or values.get("name")
                 if title is not None:

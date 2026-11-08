@@ -71,7 +71,11 @@ class PaprikaExporter:
         if len(export_data) == 1:
             return (
                 asciify_string(
-                    s=localized_fallback(recipes[0].localized_title) or "recipe"
+                    s=localized_fallback(
+                        recipes[0].localized_title,
+                        language=get_settings().kptncook_lang,
+                    )
+                    or "recipe"
                 )
                 + ".paprikarecipes"
             )
@@ -89,9 +93,14 @@ class PaprikaExporter:
         generated = self.get_generated_data(recipe=recipe)
         document = {
             "uid": str(recipe.id.oid),
-            "name": localized_fallback(recipe.localized_title) or "",
+            "name": localized_fallback(
+                recipe.localized_title, language=get_settings().kptncook_lang
+            )
+            or "",
             "directions": "".join(
-                (get_step_text(step) or "") + "\n" for step in recipe.steps
+                (get_step_text(step, language=get_settings().kptncook_lang) or "")
+                + "\n"
+                for step in recipe.steps
             ),
             "servings": str(recipe.servings),
             "rating": 0,
@@ -138,7 +147,11 @@ class PaprikaExporter:
         if ingredient.measure:
             parts.append(ingredient.measure)
         ingredient_name = (
-            localized_fallback(ingredient.ingredient.uncountable_title) or ""
+            localized_fallback(
+                ingredient.ingredient.uncountable_title,
+                language=get_settings().kptncook_lang,
+            )
+            or ""
         )
         if ingredient_name:
             parts.append(ingredient_name)
@@ -177,7 +190,12 @@ class PaprikaExporter:
             image_bytes = download_image(cover_url)
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
-                title = localized_fallback(recipe.localized_title) or "kptncook-recipe"
+                title = (
+                    localized_fallback(
+                        recipe.localized_title, language=get_settings().kptncook_lang
+                    )
+                    or "kptncook-recipe"
+                )
                 logger.warning('Cover image for "%s" not found online any more.', title)
             else:
                 logger.error(

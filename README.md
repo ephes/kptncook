@@ -264,7 +264,10 @@ recipe into an `export_md` directory under the KptnCook home, with YAML front
 matter (servings, prep/cook time, link, image, tags) followed by ingredients
 and instructions. Section headings and image alt text follow `KPTNCOOK_LANG`
 (German, English, Spanish, French, and Portuguese are recognized; other
-languages fall back to English), and `<timer>` placeholders in steps are
+languages fall back to English). Recipe titles, comments, steps and ingredient
+labels across all exporters prefer that same configured language. Missing or
+empty translations fall back in order to German, English, Spanish, French, then
+Portuguese, without changing the original recipe payload. `<timer>` placeholders in steps are
 replaced with their durations. Existing Markdown files, including manual notes,
 are never overwritten: repeated exports create new files. If a title is taken,
 the recipe id and then a counter are appended (`Title-<recipe id>.md`,

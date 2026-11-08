@@ -19,10 +19,17 @@ from pathvalidate import sanitize_filename
 from .config import get_settings
 from .exporter_utils import get_cover, replace_timers_in_step
 from .ingredient_groups import iter_ingredient_groups
-from .models import Ingredient, LocalizedString, Recipe, RecipeStep, localized_fallback
+from .models import (
+    Ingredient,
+    LocalizedString,
+    Recipe,
+    RecipeStep,
+    localized_fallback,
+    normalize_language,
+)
 
 # Localized structural labels. Recipe content language is governed by
-# ``localized_fallback``; only the headings/alt text below are language-aware.
+# ``localized_fallback``; headings and text both prefer the configured language.
 SECTION_LABELS: dict[str, dict[str, str]] = {
     "de": {
         "ingredients": "Zutaten",
@@ -68,7 +75,7 @@ PREP_STEP_TITLES = {
 
 
 def _section_labels() -> dict[str, str]:
-    lang = (get_settings().kptncook_lang or "en").lower()
+    lang = normalize_language(get_settings().kptncook_lang)
     return SECTION_LABELS.get(lang, SECTION_LABELS["en"])
 
 
@@ -97,7 +104,12 @@ class MarkdownExporter:
         out_dir.mkdir(parents=True, exist_ok=True)
 
         for recipe in recipes:
-            title = localized_fallback(recipe.localized_title) or "recipe"
+            title = (
+                localized_fallback(
+                    recipe.localized_title, language=get_settings().kptncook_lang
+                )
+                or "recipe"
+            )
             base = sanitize_filename(title)
             content = self.render_recipe(recipe)
             stem = base
@@ -125,7 +137,12 @@ class MarkdownExporter:
 
     def render_recipe(self, recipe: Recipe) -> str:
         labels = _section_labels()
-        comment = localized_fallback(recipe.author_comment) or ""
+        comment = (
+            localized_fallback(
+                recipe.author_comment, language=get_settings().kptncook_lang
+            )
+            or ""
+        )
 
         lines: list[str] = ["---"]
         lines.append(f"date: {date.today().isoformat()}")
@@ -194,7 +211,10 @@ class MarkdownExporter:
         for step in recipe.steps:
             if _is_prep_step(step):
                 continue
-            step_text = localized_fallback(step.title) or ""
+            step_text = (
+                localized_fallback(step.title, language=get_settings().kptncook_lang)
+                or ""
+            )
             # normalize internal newlines
             step_text = step_text.replace("\n", " ")
             # replace <timer> placeholders with the step's timers (in minutes)
@@ -256,7 +276,11 @@ class MarkdownExporter:
         if ingredient.measure:
             parts.append(ingredient.measure)
         ingredient_name = (
-            localized_fallback(ingredient.ingredient.uncountable_title) or ""
+            localized_fallback(
+                ingredient.ingredient.uncountable_title,
+                language=get_settings().kptncook_lang,
+            )
+            or ""
         )
         if ingredient_name:
             parts.append(ingredient_name)
