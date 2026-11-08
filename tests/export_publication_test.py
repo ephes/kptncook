@@ -1,8 +1,10 @@
 """Synthetic publication boundaries never expose incomplete final artifacts."""
 
+import errno
 import gc
 import gzip
 import json
+import os
 import shutil
 import weakref
 import zipfile
@@ -13,6 +15,7 @@ import pytest
 
 from kptncook.config import get_settings
 from kptncook.exporter_utils import move_to_free_target
+from kptncook.http_errors import UserFacingError
 from kptncook.markdown_exporter import MarkdownExporter
 from kptncook.models import Recipe
 from kptncook.paprika import GeneratedData, PaprikaExporter
@@ -184,9 +187,109 @@ def test_failed_note_publication_removes_only_owned_asset(minimal, monkeypatch):
     monkeypatch.setattr(
         "kptncook.markdown_exporter.download_image", lambda url: b"synthetic"
     )
-    with pytest.raises(OSError, match="synthetic publication failure"):
+    with pytest.raises(UserFacingError, match="synthetic publication failure"):
         MarkdownExporter().export([Recipe.model_validate(minimal)])
     assert attempted
     assert list(assets.iterdir()) == [sentinel]
     assert sentinel.read_bytes() == b"keep"
     assert list(out.iterdir()) == [assets]
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        PermissionError(errno.EPERM, "Operation not permitted"),
+        OSError(errno.ENOTSUP, "Operation not supported"),
+        OSError(errno.EXDEV, "Cross-device link"),
+        None,  # platform without os.link
+    ],
+)
+def test_unsupported_hard_links_refuse_without_publishing(
+    tmp_path, monkeypatch, failure
+):
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"complete synthetic archive")
+    out = tmp_path / "out"
+    out.mkdir()
+    if failure is None:
+        monkeypatch.delattr(os, "link")
+    else:
+
+        def refuse_link(src, dst):
+            raise failure
+
+        monkeypatch.setattr(os, "link", refuse_link)
+
+    with pytest.raises(UserFacingError, match="must support hard links"):
+        move_to_free_target(source, out, "name", ".zip")
+
+    assert list(out.iterdir()) == []  # no final file, no staging leftover
+    assert source.exists()  # caller-owned source is not consumed
+
+
+def test_markdown_refuses_unsupported_hard_links_through_cli(minimal, monkeypatch):
+    from importlib import import_module
+
+    from typer.testing import CliRunner
+
+    cli = import_module("kptncook.cli")
+
+    get_settings()
+    recipe = Recipe.model_validate(minimal)
+    monkeypatch.setattr(
+        "kptncook.markdown_exporter.download_image", lambda *a, **kw: b"synthetic"
+    )
+    monkeypatch.setattr(
+        cli,
+        "export_recipes_to_markdown_workflow",
+        lambda recipe_id, servings: MarkdownExporter(servings=servings).export(
+            [recipe]
+        ),
+    )
+
+    def refuse_link(src, dst):
+        raise PermissionError(errno.EPERM, "Operation not permitted")
+
+    monkeypatch.setattr(os, "link", refuse_link)
+
+    result = CliRunner().invoke(cli.app, ["export-recipes-to-markdown"])
+
+    assert result.exit_code == 1
+    assert "must support hard links" in result.output
+    assert not isinstance(result.exception, PermissionError)
+    out_dir = get_settings().root / "export_md"
+    assert not list(out_dir.glob("*.md"))
+    assets = out_dir / "assets"
+    assert not assets.exists() or not list(assets.iterdir())
+    assert not list(out_dir.glob(".kptncook-*"))
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        OSError(errno.ENAMETOOLONG, "File name too long"),
+        OSError(errno.ENOSPC, "No space left on device"),
+    ],
+)
+def test_other_link_failures_are_not_reported_as_missing_hard_links(
+    tmp_path, monkeypatch, failure
+):
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"complete synthetic archive")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    def fail_link(src, dst):
+        raise failure
+
+    monkeypatch.setattr(os, "link", fail_link)
+
+    with pytest.raises(UserFacingError) as excinfo:
+        move_to_free_target(source, out, "name", ".zip")
+
+    message = str(excinfo.value)
+    assert "hard links" not in message
+    assert failure.strerror in message
+    assert "name.zip" in message
+    assert list(out.iterdir()) == []
+    assert source.exists()

@@ -314,7 +314,8 @@ The command output lists the names that were actually written.
 Archives and Markdown notes are fully written and flushed in sibling staging
 before atomic no-clobber publication. Markdown assets are published completely
 before the note that references them. The destination filesystem must support
-hard links; otherwise export fails without publishing a partial final file.
+hard links (FAT/exFAT and some network mounts do not); otherwise export stops
+with an error naming the directory and publishes no partial final file.
 Normal failures remove attempt-owned staging and assets. Forced termination may
 leave hidden `.kptncook-*` staging or complete unreferenced Markdown assets;
 final export names always contain complete files. This is atomic visibility,

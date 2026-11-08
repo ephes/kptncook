@@ -1,3 +1,4 @@
+import errno
 import itertools
 import logging
 import os
@@ -115,6 +116,29 @@ def validate_export_id(identifier: str) -> None:
         raise UserFacingError(error) from None
 
 
+# errno values ``link()`` reports when the filesystem cannot hard-link at all
+# (FAT/exFAT, some SMB/FUSE mounts), as opposed to ordinary failures such as a
+# too-long name or a full disk.
+_LINK_UNSUPPORTED_ERRNOS = frozenset(
+    code
+    for code in (
+        errno.EPERM,
+        errno.EXDEV,
+        errno.ENOSYS,
+        getattr(errno, "ENOTSUP", None),
+        getattr(errno, "EOPNOTSUPP", None),
+    )
+    if code is not None
+)
+
+
+def _hard_links_unsupported(directory: Path, reason: str) -> UserFacingError:
+    return UserFacingError(
+        f"Could not publish the export in {directory}: the destination must "
+        f"support hard links ({reason}). Choose a different export location."
+    )
+
+
 def move_to_free_target(
     source: str | Path,
     directory: str | Path,
@@ -154,9 +178,22 @@ def move_to_free_target(
         for candidate in candidates:
             target = directory / f"{candidate}{extension}"
             try:
-                os.link(staging_path, target)
+                link = getattr(os, "link", None)
+                if link is None:
+                    raise NotImplementedError("os.link is unavailable")
+                link(staging_path, target)
             except FileExistsError:
                 continue
+            except NotImplementedError as exc:
+                raise _hard_links_unsupported(directory, str(exc)) from exc
+            except OSError as exc:
+                if exc.errno in _LINK_UNSUPPORTED_ERRNOS:
+                    raise _hard_links_unsupported(
+                        directory, exc.strerror or str(exc)
+                    ) from exc
+                raise UserFacingError(
+                    f"Could not publish the export as {target}: {exc.strerror or exc}."
+                ) from exc
             # Publication succeeded. Cleanup errors must not make callers undo
             # assets referenced by an already published Markdown note.
             try:
