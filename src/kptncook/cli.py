@@ -59,7 +59,7 @@ T = TypeVar("T")
 
 
 def _exit_with_error(message: str) -> NoReturn:
-    rprint(f"[red]{message}[/red]")
+    rprint(f"[red]{escape(message)}[/red]")
     sys.exit(1)
 
 

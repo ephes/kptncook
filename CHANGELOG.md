@@ -15,6 +15,9 @@ Unreleased
   the recipe client and other development tools retain Python 3.10 support.
 
 ### Fixes
+- Limit shared HTTP diagnostics to status/action, static transport categories
+  and allowlisted bounded JSON details; omit credential-bearing exceptions and
+  arbitrary bodies, and escape error markup at CLI/setup boundaries.
 - Preflight portable recipe-ID filename components before any local export
   write; retain Paprika text recipes when covers are missing or ambiguous.
 - Compose authenticated image queries correctly and export Markdown images as

@@ -174,7 +174,7 @@ def test_sync_with_mealie_reports_name_collisions_and_other_failures(
     assert result.invalid_repository_entries == [warning]
     assert seen_ids == ["recipe-1", "recipe-2", "recipe-3"]
     assert "Minimal Recipe" in caplog.text
-    assert "upstream exploded" in caplog.text
+    assert "upstream exploded" not in caplog.text
     assert "Recipe already exists" in caplog.text
     assert len(result.failed_recipes) == 2
     assert result.failed_recipes[0].recipe_id == "recipe-1"
@@ -182,7 +182,7 @@ def test_sync_with_mealie_reports_name_collisions_and_other_failures(
     assert "HTTP 409" in result.failed_recipes[0].reason
     assert "Recipe already exists" in result.failed_recipes[0].reason
     assert "HTTP 500" in result.failed_recipes[1].reason
-    assert "upstream exploded" in result.failed_recipes[1].reason
+    assert "upstream exploded" not in result.failed_recipes[1].reason
 
 
 def _patch_sync_sources(monkeypatch, minimal, fake_client, count: int) -> None:
@@ -238,7 +238,7 @@ def test_sync_with_mealie_continues_after_connection_and_unexpected_errors(
     assert result.created_count == 1
     assert len(result.failed_recipes) == 2
     assert result.failed_recipes[0].recipe_name == "Minimal Recipe"
-    assert "Request failed: connection refused" in result.failed_recipes[0].reason
+    assert "Request failed: connection error" in result.failed_recipes[0].reason
     assert "outcome is unknown" in result.failed_recipes[0].reason
     assert result.failed_recipes[1] == workflows.MealieSyncFailure(
         "recipe-2", "Minimal Recipe", "ValueError: unexpected payload"
@@ -344,8 +344,8 @@ def test_sync_result_defaults_do_not_share_failure_lists():
     "error, expected_reason",
     [
         (httpx.ReadTimeout("response timed out"), "ReadTimeout"),
-        (httpx.ConnectError("connection refused"), "connection refused"),
-        (httpx.HTTPError("transport failed"), "transport failed"),
+        (httpx.ConnectError("connection refused"), "connection error"),
+        (httpx.HTTPError("transport failed"), "HTTP error"),
         (ValueError("invalid recipe payload"), "invalid recipe payload"),
         (TypeError("not JSON serializable"), "not JSON serializable"),
         (
