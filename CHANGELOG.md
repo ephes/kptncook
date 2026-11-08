@@ -1,6 +1,9 @@
 Unreleased
 ==========
 
+0.0.38 - 2026-11-08
+===================
+
 ### Tests
 - Cover discovery and popular-ingredient CLI output, ingredient/onboarding
   selection and explicit saves, and Paprika/Tandoor/Markdown command dispatch,
