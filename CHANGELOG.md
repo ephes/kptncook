@@ -1,6 +1,12 @@
 Unreleased
 ==========
 
+### Fixes
+- Allow recipe images on `images.kptncook.com` by default again. Since 0.0.38
+  they were skipped as "not on an allowed image host", so Mealie imports and
+  exports lost their images unless the host was added to
+  `KPTNCOOK_IMAGE_HOSTS` (#91).
+
 0.0.38 - 2026-11-08
 ===================
 

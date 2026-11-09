@@ -67,6 +67,7 @@ def no_network(monkeypatch):
         f"https://{CDN}/cover.jpg",
         f"https://{CDN}:443/cover.jpg?sig=1",
         f"https://{CDN.upper()}/cover.jpg",
+        "https://images.kptncook.com/cover.jpg",
     ],
 )
 def test_default_cdn_is_allowed(default_hosts_only, url):

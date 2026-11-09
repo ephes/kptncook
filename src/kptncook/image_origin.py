@@ -14,8 +14,12 @@ import re
 import socket
 from urllib.parse import urlsplit
 
-# KptnCook serves recipe images from this CloudFront distribution.
-DEFAULT_IMAGE_HOSTS: tuple[str, ...] = ("d2am1qai33sroc.cloudfront.net",)
+# KptnCook serves recipe images from its CloudFront distribution and from
+# images.kptncook.com.
+DEFAULT_IMAGE_HOSTS: tuple[str, ...] = (
+    "d2am1qai33sroc.cloudfront.net",
+    "images.kptncook.com",
+)
 
 _HOST_LABEL = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)$")
 _UNSAFE_URL_CHARS = re.compile(r"[\x00-\x20\x7f\\]")

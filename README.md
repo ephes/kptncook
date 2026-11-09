@@ -227,11 +227,11 @@ that send compressed images despite that request are skipped to bound memory.
 
 The API key is attached only to image URLs on an allowed image host: HTTPS,
 the default port, no user name or password in the URL, and a host name that
-exactly matches KptnCook's image CDN (`d2am1qai33sroc.cloudfront.net`) or an
-entry in `KPTNCOOK_IMAGE_HOSTS`. Every redirect target is checked the same
-way before it is requested. Images from any other URL in recipe data are
-skipped with a warning that names neither the URL nor the key; recipe text is
-still exported or imported. Mealie covers are downloaded through the same
+exactly matches one of KptnCook's image hosts (`d2am1qai33sroc.cloudfront.net`,
+`images.kptncook.com`) or an entry in `KPTNCOOK_IMAGE_HOSTS`. Every redirect
+target is checked the same way before it is requested. Images from any other
+URL in recipe data are skipped with a warning that names neither the URL nor
+the key; recipe text is still exported or imported. Mealie covers are downloaded through the same
 checked downloader and uploaded as image bytes; Mealie is never asked to fetch
 a keyed URL itself, since its scraper would follow redirects unchecked.
 Configured hosts must be names, not IP addresses in any spelling.
@@ -559,7 +559,7 @@ Optional image hosts:
 
 - `KPTNCOOK_IMAGE_HOSTS`: comma-separated extra host names allowed to receive
   the API key with image downloads (for example `images.example.org`), in
-  addition to KptnCook's image CDN. Entries are bare host names: no scheme,
+  addition to KptnCook's image hosts. Entries are bare host names: no scheme,
   port, path, user name or IP address.
 
 ### Password Manager Integration
