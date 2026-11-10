@@ -168,6 +168,9 @@ Step-media URL components are percent-encoded and the final HTML attribute is
 escaped, so server-returned filenames remain data. Existing instruction markup
 is preserved. Conversion DEBUG logs contain only recipe identity and counts;
 cover and nested step image URLs (including API keys) are never logged there.
+With logging enabled, the request lines of httpx and httpcore's DEBUG trace
+show `[REDACTED]` in place of API keys, tokens, URL credentials and secret
+header values.
 
 Mealie recipe slugs are admitted as single route components: nonempty Unicode
 letters/numbers, hyphens and underscores only, percent-encoded when building
