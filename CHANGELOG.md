@@ -1,6 +1,14 @@
 Unreleased
 ==========
 
+### Security
+- Redact secrets in httpx and httpcore log records. When logging is enabled,
+  httpx's `HTTP Request: GET <url>` lines carried the `kptnkey` of KptnCook
+  API and image URLs. Query values such as `kptnkey`, `token` and `api_key`,
+  credentials in URLs and the values of headers such as `Authorization`,
+  `Token` and `Cookie` are now replaced with `[REDACTED]` before any handler
+  sees the record. Requests are unchanged.
+
 ### Documentation
 - Add the `just clean-build` and `uv build` steps before `uv publish` to the
   release process, so a release never re-uploads the previous version's files.

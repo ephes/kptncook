@@ -7,6 +7,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 import httpx
 
+from . import log_redaction
 from .api import KptnCookClient, _collect_recipe_identifiers, parse_id
 from .cli import (
     OptionalId,
@@ -45,6 +46,10 @@ from .services.workflows import (
     get_recipe_by_id,
     get_recipe_from_repository_by_oid,
 )
+
+# httpx's request log lines carry the kptnkey; every module that sends requests
+# is under this package, so installing here covers them all.
+log_redaction.install()
 
 try:
     __version__ = version("kptncook")

@@ -4,6 +4,11 @@ from typing import Any
 
 import httpx
 
+from . import log_redaction
+
+# httpx logs request URLs, which carry the kptnkey; keep secrets out of logs.
+log_redaction.install()
+
 DEFAULT_REQUEST_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 
 
