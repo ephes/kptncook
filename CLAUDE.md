@@ -179,7 +179,9 @@ Do not run `git commit` or `git push` unless the user explicitly asks.
 # Run tests first
 uv run pytest
 
-# Publish to PyPI
+# Rebuild dist/ for the new version, then publish to PyPI
+just clean-build
+uv build
 uv publish --token your_token
 ```
 

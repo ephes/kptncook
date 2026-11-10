@@ -822,15 +822,22 @@ Use the helper commands below from a clean worktree:
    ```shell
    $ just release-draft <version>
    ```
-7. Publish the GitHub release and package when ready.
+7. Publish the GitHub release, then rebuild and publish the package as
+   described in [Publish Packages](#publish-packages).
 
 ## Publish Packages
 
-After running `just check`, publish the package to PyPI using uv:
+After running `just check`, rebuild the distributions for the new version and
+publish them to PyPI using uv:
 
 ```shell
+$ just clean-build
+$ uv build
 $ uv publish --token your_token
 ```
+
+`uv publish` uploads whatever is in `dist/`, so skipping the rebuild re-uploads
+the previous release's files instead of the new version.
 
 ## Development dependency checks
 

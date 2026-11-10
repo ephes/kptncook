@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+### Documentation
+- Add the `just clean-build` and `uv build` steps before `uv publish` to the
+  release process, so a release never re-uploads the previous version's files.
+
 0.0.39 - 2026-11-09
 ===================
 
