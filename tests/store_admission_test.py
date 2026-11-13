@@ -71,10 +71,11 @@ def test_growth_after_stat_is_bounded_and_refuses_mutation(tmp_path, monkeypatch
     observed = []
 
     def grow(fd):
-        observed.append(fd)
         result = original(fd)
-        with repo.path.open("ab") as target:
-            target.write(b" " * 100)
+        if result.st_ino == repo.path.stat().st_ino:
+            observed.append(fd)
+            with repo.path.open("ab") as target:
+                target.write(b" " * 100)
         return result
 
     monkeypatch.setattr(storage.os, "fstat", grow)

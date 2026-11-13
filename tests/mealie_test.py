@@ -1,5 +1,4 @@
 import json
-from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx
@@ -16,7 +15,8 @@ from kptncook.mealie import (
     RecipeWithImage,
     kptncook_to_mealie,
 )
-from kptncook.models import Image, LocalizedString, RecipeId
+from kptncook.models import Image
+from kptncook.models import Recipe as KptnCookRecipe
 from kptncook.services import workflows
 
 
@@ -291,22 +291,11 @@ def test_extract_mealie_detail_message_reads_detail_message():
     assert _extract_mealie_detail_message(response) == "Recipe already exists"
 
 
-def test_kptncook_to_mealie_allows_missing_image_url():
-    fake_recipe = SimpleNamespace(
-        ingredients=[],
-        localized_title=LocalizedString(de="Test title"),
-        author_comment=LocalizedString(de="Test note"),
-        recipe_nutrition=SimpleNamespace(calories=1, protein=2, fat=3, carbohydrate=4),
-        preparation_time=10,
-        cooking_time=5,
-        servings=2,
-        steps=[],
-        active_tags=None,
-        id=RecipeId.model_validate({"$oid": "abc123"}),
-        get_image_url=lambda _api_key: None,
-    )
+def test_kptncook_to_mealie_allows_missing_image_url(minimal):
+    minimal["imageList"] = []
+    recipe = KptnCookRecipe.model_validate(minimal)
 
-    mealie_recipe = kptncook_to_mealie(fake_recipe, api_key="test")
+    mealie_recipe = kptncook_to_mealie(recipe, api_key="test")
 
     assert mealie_recipe.image_url is None
 

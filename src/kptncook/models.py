@@ -3,6 +3,7 @@ All the domain models for kptncook live here.
 """
 
 import logging
+import math
 from typing import Any
 from urllib.parse import unquote_plus, urlencode, urlsplit, urlunsplit
 
@@ -160,11 +161,23 @@ class StepIngredientUnit(BaseModel):
 DEFAULT_SERVINGS = 2
 
 
+class QuantityScaleError(ValueError):
+    """A quantity cannot be represented for the requested serving count."""
+
+
 def scale_quantity(quantity: float | None, servings: int) -> float | None:
     """Scale a single-serving quantity, dropping binary float noise."""
     if quantity is None:
         return None
-    return round(quantity * servings, 6)
+    if quantity == 0:
+        return 0.0
+    try:
+        scaled = quantity * servings
+    except OverflowError:
+        raise QuantityScaleError("Scaled quantity must be finite") from None
+    if not math.isfinite(scaled):
+        raise QuantityScaleError("Scaled quantity must be finite")
+    return round(scaled, 6)
 
 
 class Ingredient(BaseModel):
@@ -290,6 +303,32 @@ class Recipe(BaseModel):
             if self.fixed_portion_count is not None
             else default
         )
+
+    def validate_scaled_quantities(self, servings: int | None = None) -> None:
+        """Preflight all quantity fields before export I/O, including overrides."""
+        count = self.servings if servings is None else servings
+        for position, ingredient in enumerate(self.ingredients):
+            try:
+                scale_quantity(ingredient.quantity, count)
+            except QuantityScaleError as exc:
+                raise QuantityScaleError(
+                    f"ingredients.{position}.quantity: {exc}"
+                ) from None
+        for step_position, step in enumerate(self.steps):
+            for position, step_ingredient in enumerate(step.ingredients or []):
+                if step_ingredient is None:
+                    continue
+                try:
+                    scale_quantity(step_ingredient.quantity, count)
+                except QuantityScaleError as exc:
+                    raise QuantityScaleError(
+                        f"steps.{step_position}.ingredients.{position}.quantity: {exc}"
+                    ) from None
+
+    @model_validator(mode="after")
+    def finite_scaled_quantities(self) -> "Recipe":
+        self.validate_scaled_quantities()
+        return self
 
     @model_validator(mode="before")
     def normalize_titles(cls, values):

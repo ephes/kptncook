@@ -128,6 +128,7 @@ class MarkdownExporter:
     def export(self, recipes: Iterable[Recipe]) -> list[Path]:
         recipes = list(recipes)
         for recipe in recipes:
+            recipe.validate_scaled_quantities(self.servings_for(recipe))
             validate_export_id(recipe.id.oid)
         written: list[Path] = []
 
@@ -192,6 +193,7 @@ class MarkdownExporter:
             return None
 
     def render_recipe(self, recipe: Recipe, image_path: str | None = None) -> str:
+        recipe.validate_scaled_quantities(self.servings_for(recipe))
         labels = _section_labels()
         comment = (
             localized_fallback(

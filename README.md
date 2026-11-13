@@ -295,7 +295,12 @@ to the standard two portions when it is absent. KptnCook stores ingredient
 quantities for a single serving, also for fixed-portion recipes such as a batch
 of cookies, so exporters scale them to the portion count they write. Explicit
 portion counts must be positive integers (no booleans or coercion). Ingredient and step-ingredient quantities
-must be finite; zero, fractions and missing quantities remain supported.
+must be finite, and their scaled results must also be representable as finite
+floats. This includes step ingredients and Markdown `--servings` overrides.
+Overflow is refused with a bounded field location before image downloads, file
+publication or remote creates. Export batches are preflighted before writes;
+previous exports remain intact. Zero, fractions and missing quantities remain
+supported, with the same six-decimal rounding across adapters.
 Whole-recipe preparation and cooking times are strict integer minutes from 0 to
 525600 (365 days); booleans, strings and fractional values are refused.
 Preparation time is required. Missing/null cooking time stays unknown; explicit
@@ -422,7 +427,11 @@ Repository mutations use the existing portable `portalocker` backend on supporte
 POSIX and Windows systems. Every mutation must acquire the stable sibling
 `kptncook.json.lock` before rereading and replacing data; lock failures refuse the
 write with a repository error. Use a local filesystem with working advisory locks,
-and retain lock files while writers may run. Read-only recipe/export access
+and retain lock files while writers may run. Lock admission opens without following
+symlinks or waiting on special files, requires a regular descriptor, and verifies
+that its inode still owns the stable name after acquiring the lock. A replaced
+lock is refused before reading or mutating recipes; lock names are never unlinked
+by the application. Read-only recipe/export access
 remains available when locking fails.
 
 Repository-backed commands now warn if `kptncook.json` contains stored entries
@@ -436,8 +445,19 @@ before touching the primary or recovery backup. Over-capacity additions fail
 without changing either snapshot; export and remove unneeded recipes, then retry
 the smaller batch. Every successful write remains reloadable.
 
-Before replacing the repository, its previous contents are copied to a sibling
-temporary backup, flushed and fsynced, then atomically moved over `.backup`.
+Before replacing the repository, the exact bounded bytes admitted for the mutation
+are copied to a sibling temporary backup, flushed and fsynced, then atomically
+moved over `.backup`. The primary generation (device, inode, type, size and
+modification/change timestamps) is checked after reading, before backup publication
+and before primary replacement. A changed, removed or newly appeared primary
+refuses the mutation; reload and retry after external editing has finished.
+Read-only access (listing, exports, sync checks) does not take that pathname
+check: a reader returns the complete generation it opened, even when a writer
+atomically replaces the file meanwhile.
+Backup copying never reopens an unchecked pathname or follows a substituted symlink
+or FIFO. Direct library `create_backup()` calls use the same bounded regular-file
+admission. Advisory locks coordinate cooperating writers; external editors must
+not replace files during publication.
 If copying, syncing or replacing the backup fails, the write reports an error
 and leaves both the main file and the existing recovery snapshot intact.
 Temporary files are cleaned up on failure. The main file is also replaced
@@ -556,7 +576,11 @@ $ kptncook-setup
 ```
 
 The `.env` is written to `$KPTNCOOK_HOME/.env` when `KPTNCOOK_HOME` is set,
-otherwise to `~/.kptncook/.env`.
+otherwise to `~/.kptncook/.env`. Guided setup owns and closes its authentication
+client on success and every failure, before attempting to save the token. Only a
+complete successful response containing a nonempty string access token is saved.
+HTTP, transport and malformed-response failures preserve an existing token and
+report a bounded diagnostic without response payloads.
 
 Configuration is validated lazily. If you run a command before configuring the
 API key, kptncook will scaffold the `.env` file when that command first needs

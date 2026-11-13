@@ -39,7 +39,14 @@ def _fetch_access_token(api_key: str, username: str, password: str) -> str:
     client = KptnCookClient(
         base_url=DEFAULT_API_URL, api_key=api_key, access_token=None
     )
-    return client.get_access_token(username, password)
+    with client:
+        try:
+            token = client.get_access_token(username, password)
+        except (ValueError, KeyError, TypeError):
+            raise ValueError("Invalid authentication response") from None
+        if not isinstance(token, str) or not token.strip():
+            raise ValueError("Invalid authentication response")
+        return token
 
 
 @cli.command()
@@ -126,4 +133,7 @@ def setup(
         sys.exit(1)
     except httpx.HTTPError as exc:
         rprint(f"[red]{escape(format_request_error(exc))}[/red]")
+        sys.exit(1)
+    except ValueError:
+        rprint("[red]Invalid authentication response; no access token saved.[/red]")
         sys.exit(1)

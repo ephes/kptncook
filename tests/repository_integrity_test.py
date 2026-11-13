@@ -92,21 +92,21 @@ def writer(base_dir, oid, ready, read, release):
     if release is not None:
         original = repo._write_models
 
-        def gated_write(models):
+        def gated_write(models, **kwargs):
             read.set()
             assert release.wait(15)
-            original(models)
+            original(models, **kwargs)
 
         repo._write_models = gated_write
     else:
-        original_read = repo._fetch_all
+        original_read = repo._read_models
 
         def tracked_read():
             result = original_read()
             read.set()
             return result
 
-        repo._fetch_all = tracked_read
+        repo._read_models = tracked_read
     ready.set()
     repo.add(entry(oid))
 

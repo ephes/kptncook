@@ -2,6 +2,19 @@ Unreleased
 ==========
 
 ### Fixes
+- Close the guided setup authentication client on success and every failure,
+  including malformed replies; save only a complete nonempty string token and
+  preserve prior credentials when acquisition fails.
+- Refuse nonfinite scaled ingredient quantities during recipe admission and
+  export preflight, including step ingredients and Markdown serving overrides;
+  preserve existing exports and ordinary zero/missing/fractional quantities.
+- Bind recovery backups to the bounded primary snapshot read for each mutation;
+  refuse changed source generations before publication instead of reopening an
+  unchecked source path. Direct backup calls use the same file admission.
+  Read-only access keeps returning the complete generation it opened while a
+  cooperating writer atomically replaces the store.
+- Admit repository mutation locks through nonblocking, no-follow descriptor opens;
+  refuse special files and replaced lock identities without changing store or backup.
 - Preserve unresolved `<timer>` instructions and punctuation in every export,
   including when a timer entry exists but contains no duration. Markdown,
   Tandoor and Mealie write them as a visible `` `<timer>` `` code span.

@@ -92,7 +92,16 @@ def test_valid_numeric_models_roundtrip(minimal, quantity, portions):
 
 
 @pytest.mark.parametrize(
-    "invalid", ["quantity", "timer", "servings", "preparation", "cooking"]
+    "invalid",
+    [
+        "quantity",
+        "scaled",
+        "scaled_step",
+        "timer",
+        "servings",
+        "preparation",
+        "cooking",
+    ],
 )
 @pytest.mark.parametrize("format", ["paprika", "tandoor", "markdown", "mealie"])
 def test_invalid_stored_numeric_recipe_never_reaches_export(
@@ -101,6 +110,10 @@ def test_invalid_stored_numeric_recipe_never_reaches_export(
     minimal["privatePayload"] = "synthetic-private-value"
     if invalid == "quantity":
         minimal["ingredients"] = [ingredient(float("nan"))]
+    elif invalid == "scaled":
+        minimal["ingredients"] = [ingredient(1e308)]
+    elif invalid == "scaled_step":
+        minimal["steps"][0]["ingredients"] = [{"quantity": 1e308}]
     elif invalid == "timer":
         minimal["steps"][0]["timers"] = [{"minOrExact": -5}]
     elif invalid == "servings":
@@ -194,3 +207,145 @@ def test_scale_quantity_drops_float_noise_and_keeps_missing():
     assert scale_quantity(0.1, 3) == 0.3
     assert scale_quantity(None, 4) is None
     assert scale_quantity(0, 4) == 0
+
+
+@pytest.mark.parametrize("quantity", [1e308, -1e308])
+@pytest.mark.parametrize("where", ["ingredients", "steps"])
+@pytest.mark.parametrize("portions", [None, 3, 10**400])
+def test_scaled_quantity_overflow_is_refused_at_recipe_admission(
+    minimal, quantity, where, portions
+):
+    minimal["fixedPortionCount"] = portions
+    if where == "ingredients":
+        minimal["ingredients"] = [ingredient(quantity)]
+    else:
+        minimal["steps"][0]["ingredients"] = [{"quantity": quantity}]
+    with pytest.raises(ValidationError, match=r"quantity.*finite"):
+        Recipe.model_validate(minimal)
+
+
+@pytest.mark.parametrize("format", ["paprika", "tandoor", "markdown", "mealie"])
+def test_overflow_is_refused_before_export_effects(
+    minimal, tmp_path, monkeypatch, format
+):
+    from kptncook.config import get_settings
+    from kptncook.markdown_exporter import MarkdownExporter
+    from kptncook.mealie import kptncook_to_mealie
+    from kptncook.paprika import PaprikaExporter
+    from kptncook.tandoor import TandoorExporter
+
+    minimal["ingredients"] = [ingredient(1)]
+    recipe = Recipe.model_validate(minimal)
+    # Models are mutable: library adapters must preflight them too.
+    recipe.ingredients[0].quantity = 1e308
+    monkeypatch.chdir(tmp_path)
+    sentinel = tmp_path / "previous-export.zip"
+    sentinel.write_bytes(b"previous export")
+    root = get_settings().root
+    before = set(tmp_path.iterdir())
+    image = Mock(side_effect=AssertionError("Image I/O before numeric admission"))
+    for module in ("paprika", "tandoor", "markdown_exporter"):
+        monkeypatch.setattr(f"kptncook.{module}.download_image", image)
+    exports = {
+        "paprika": lambda: PaprikaExporter().export([recipe]),
+        "tandoor": lambda: TandoorExporter().export([recipe]),
+        "markdown": lambda: MarkdownExporter().export([recipe]),
+        "mealie": lambda: kptncook_to_mealie(recipe, api_key="synthetic"),
+    }
+    with pytest.raises(ValueError, match=r"ingredients.0.quantity.*finite"):
+        exports[format]()
+    image.assert_not_called()
+    assert sentinel.read_bytes() == b"previous export"
+    assert set(tmp_path.iterdir()) == before
+    assert not (root / "export_md").exists()
+
+
+def test_markdown_override_preflights_complete_batch(minimal, monkeypatch):
+    from kptncook.config import get_settings
+    from kptncook.markdown_exporter import MarkdownExporter
+
+    minimal["ingredients"] = [ingredient(6e307)]  # Valid for the default 2 servings.
+    recipe = Recipe.model_validate(minimal)
+    ordinary = Recipe.model_validate(dict(minimal, ingredients=[]))
+    image = Mock(side_effect=AssertionError("Image I/O before numeric admission"))
+    monkeypatch.setattr("kptncook.markdown_exporter.download_image", image)
+    with pytest.raises(ValueError, match="quantity.*finite"):
+        MarkdownExporter(servings=4).export([ordinary, recipe])
+    image.assert_not_called()
+    assert not (get_settings().root / "export_md").exists()
+
+
+@pytest.mark.parametrize("quantity", [None, 0, 0.1, 1e307])
+def test_finite_scaled_quantities_in_actual_export_payloads(
+    minimal, tmp_path, monkeypatch, quantity
+):
+    import gzip
+    import zipfile
+
+    import yaml
+
+    from kptncook.markdown_exporter import MarkdownExporter
+    from kptncook.mealie import kptncook_to_mealie
+    from kptncook.paprika import PaprikaExporter
+    from kptncook.tandoor import TandoorExporter
+
+    minimal.update(
+        ingredients=[ingredient(quantity)], fixedPortionCount=3, imageList=[]
+    )
+    minimal["steps"][0].update(ingredients=[ingredient(quantity)])
+    recipe = Recipe.model_validate(minimal)
+    monkeypatch.chdir(tmp_path)
+    for module in ("paprika", "tandoor", "markdown_exporter"):
+        monkeypatch.setattr(f"kptncook.{module}.download_image", lambda *a: None)
+
+    def strict_json(raw):
+        def refuse(value):
+            pytest.fail(f"Nonfinite JSON constant: {value}")
+
+        return json.loads(raw, parse_constant=refuse)
+
+    expected = None if quantity is None else (0.3 if quantity == 0.1 else quantity * 3)
+    [tandoor_path] = TandoorExporter().export([recipe])
+    with zipfile.ZipFile(tandoor_path) as archive:
+        tandoor = strict_json(archive.read("recipe.json"))
+    assert tandoor["ingredients"][0].get("amount") == expected
+    assert tandoor["steps"][0]["ingredients"][0].get("amount") == expected
+    with zipfile.ZipFile(PaprikaExporter().export([recipe])) as archive:
+        paprika = strict_json(gzip.decompress(archive.read(archive.namelist()[0])))
+    [note] = MarkdownExporter().export([recipe])
+    text = note.read_text(encoding="utf-8")
+    assert yaml.safe_load(text.split("---", 2)[1])["servings"] == 3
+    assert "inf" not in paprika["ingredients"].lower()
+    assert "inf" not in text.lower()
+    if expected:
+        assert f"{expected:g}" in paprika["ingredients"]
+        assert f"{expected:g}" in text
+    mealie = strict_json(
+        kptncook_to_mealie(recipe, api_key="synthetic").model_dump_json()
+    )
+    assert mealie["recipe_ingredient"][0]["quantity"] == expected
+
+
+def test_zero_and_missing_scale_with_very_large_valid_servings():
+    from kptncook.models import scale_quantity
+
+    assert scale_quantity(0, 10**400) == 0
+    assert scale_quantity(None, 10**400) is None
+
+
+def test_markdown_override_cli_reports_field_without_output(
+    minimal, monkeypatch, tmp_path
+):
+    from typer.testing import CliRunner
+    from kptncook import cli
+    from kptncook.config import get_settings
+
+    minimal["ingredients"] = [ingredient(6e307)]
+    repo = RecipeRepository(tmp_path)
+    repo.path.write_text(json.dumps([{"date": "2026-01-01", "data": minimal}]))
+    monkeypatch.setattr(service, "get_repository", lambda: repo)
+    result = CliRunner().invoke(cli, ["export-recipes-to-markdown", "--servings", "4"])
+    assert result.exit_code == 1
+    assert "ingredients.0.quantity" in result.output
+    assert "finite" in result.output
+    assert not (get_settings().root / "export_md").exists()

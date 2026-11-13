@@ -57,6 +57,7 @@ class GeneratedData:
 class PaprikaExporter:
     def export(self, recipes: list[Recipe]) -> str:
         for recipe in recipes:
+            recipe.validate_scaled_quantities()
             validate_export_id(recipe.id.oid)
         # Retain only recipe references, with the same last-identity-wins policy
         # as get_export_data; serialized covers/JSON live for one recipe only.
@@ -107,6 +108,7 @@ class PaprikaExporter:
         return GeneratedData(cover_filename, cover_img, dtnow, hash)
 
     def get_recipe_as_json_string(self, recipe: Recipe) -> str:
+        recipe.validate_scaled_quantities()
         generated = self.get_generated_data(recipe=recipe)
         document = {
             "uid": str(recipe.id.oid),
@@ -183,6 +185,7 @@ class PaprikaExporter:
 
     def get_export_data(self, recipes: list[Recipe]) -> dict[str, str]:
         for recipe in recipes:
+            recipe.validate_scaled_quantities()
             validate_export_id(recipe.id.oid)
         return {
             str(recipe.id.oid): self.get_recipe_as_json_string(recipe)

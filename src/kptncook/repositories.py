@@ -6,11 +6,13 @@ remote api, maybe mealie... hmm.
 """
 
 import errno
+import io
 import os
 import shutil
 import stat
 import tempfile
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import List  # noqa F401
@@ -56,6 +58,28 @@ class RecipeListInDb(RootModel):
         return self.root[item]
 
 
+@dataclass(frozen=True)
+class _StoreSnapshot:
+    raw: bytes
+    info: os.stat_result
+
+
+def _generation(info: os.stat_result) -> tuple[int, ...]:
+    return (*_content_generation(info), info.st_ctime_ns)
+
+
+def _content_generation(info: os.stat_result) -> tuple[int, ...]:
+    # An atomic replacement of the name only changes the opened inode's link
+    # count and ctime; its bytes stay the generation the reader opened.
+    return (
+        info.st_dev,
+        info.st_ino,
+        info.st_mode,
+        info.st_size,
+        info.st_mtime_ns,
+    )
+
+
 class RecipeRepository:
     name: str = "kptncook.json"
 
@@ -77,12 +101,15 @@ class RecipeRepository:
     def _ensure_parent_dir(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
-    def create_backup(self) -> None:
-        if not self.path.exists():
+    def create_backup(self, *, snapshot: _StoreSnapshot | None = None) -> None:
+        if snapshot is None:
+            snapshot = self._read_store()
+        self._check_snapshot(snapshot)
+        if snapshot is None:
             return
         temp_path: Path | None = None
         try:
-            with self.path.open("rb") as source:
+            with io.BytesIO(snapshot.raw) as source:
                 with tempfile.NamedTemporaryFile(
                     "wb",
                     dir=self.path.parent,
@@ -94,6 +121,7 @@ class RecipeRepository:
                     shutil.copyfileobj(source, target)
                     target.flush()
                     os.fsync(target.fileno())
+            self._check_snapshot(snapshot)
             os.replace(temp_path, self.backup_path)
             self._fsync_directory()
         except OSError as exc:
@@ -148,8 +176,28 @@ class RecipeRepository:
 
     @contextmanager
     def _write_lock(self) -> Iterator[None]:
-        self._ensure_parent_dir()
-        with self.lock_path.open("a+", encoding="utf-8") as lock_file:
+        try:
+            self._ensure_parent_dir()
+            if self.lock_path.is_symlink():
+                raise RepositoryError("Repository lock must be a regular file.")
+            flags = (
+                os.O_RDWR
+                | os.O_CREAT
+                | getattr(os, "O_NONBLOCK", 0)
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_BINARY", 0)
+            )
+            fd = os.open(self.lock_path, flags, 0o600)
+            try:
+                info = os.fstat(fd)
+                self._check_lock_identity(info)
+                lock_file = os.fdopen(fd, "a+", encoding="utf-8")
+            except BaseException:
+                os.close(fd)
+                raise
+        except OSError as exc:
+            raise RepositoryError("Could not open repository lock safely.") from exc
+        with lock_file:
             try:
                 portalocker.lock(lock_file, portalocker.LOCK_EX)
             except portalocker.exceptions.LockException as exc:
@@ -158,11 +206,28 @@ class RecipeRepository:
                     "OS advisory locking. Use a local filesystem with locking support."
                 ) from exc
             try:
+                # A waiter may have acquired an inode whose name was replaced
+                # while another writer held it. It no longer coordinates writes.
+                self._check_lock_identity(info)
                 yield
             finally:
                 portalocker.unlock(lock_file)
 
-    def _write_models(self, locked):
+    def _check_lock_identity(self, info: os.stat_result) -> None:
+        try:
+            current = self.lock_path.lstat()
+        except OSError as exc:
+            raise RepositoryError(
+                "Repository lock changed; retry the mutation."
+            ) from exc
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or not stat.S_ISREG(current.st_mode)
+            or (info.st_dev, info.st_ino) != (current.st_dev, current.st_ino)
+        ):
+            raise RepositoryError("Repository lock must be a stable regular file.")
+
+    def _write_models(self, locked, *, snapshot: _StoreSnapshot | None):
         self._ensure_parent_dir()
         models = RecipeListInDb.model_validate(locked.values())
         payload = models.model_dump_json().encode("utf-8")
@@ -185,7 +250,10 @@ class RecipeRepository:
                 f.write(payload)
                 f.flush()
                 os.fsync(f.fileno())
-            self.create_backup()
+            self._check_snapshot(snapshot)
+            if snapshot is not None:
+                self.create_backup(snapshot=snapshot)
+            self._check_snapshot(snapshot)
             os.replace(temp_path, self.path)
             self._fsync_directory()
         except OSError as exc:
@@ -199,10 +267,23 @@ class RecipeRepository:
                 except OSError:
                     pass
 
-    def _fetch_all(self):
-        """
-        Fetch dict of pydantic models from json in self.path
-        """
+    def _check_snapshot(self, snapshot: _StoreSnapshot | None) -> None:
+        try:
+            current = self.path.lstat()
+        except FileNotFoundError:
+            if snapshot is None:
+                return
+        except OSError as exc:
+            raise RepositoryError("Could not verify repository generation.") from exc
+        else:
+            if snapshot is not None and _generation(current) == _generation(
+                snapshot.info
+            ):
+                return
+        raise RepositoryError("Repository changed during mutation; reload and retry.")
+
+    def _read_store(self) -> _StoreSnapshot | None:
+        """Admit one bounded, regular-file snapshot without following symlinks."""
         try:
             if self.path.is_symlink():
                 raise RepositoryError(
@@ -225,25 +306,42 @@ class RecipeRepository:
                     raw_bytes = source.read(MAX_STORE_BYTES + 1)
                 if len(raw_bytes) > MAX_STORE_BYTES:
                     raise RepositoryError("Repository exceeds the 64 MiB size limit.")
+                snapshot = _StoreSnapshot(raw_bytes, info)
+                if _content_generation(os.fstat(fd)) != _content_generation(info):
+                    raise RepositoryError("Repository changed while being read; retry.")
+                # Readers keep the complete generation they opened even if a
+                # writer atomically replaces the name meanwhile; mutations bind
+                # the snapshot to the pathname before publishing.
             finally:
                 os.close(fd)
-            raw_data = raw_bytes.decode("utf-8")
+            return snapshot
         except FileNotFoundError:
-            return []
-        except UnicodeDecodeError as exc:
-            raise RepositoryError("Repository contains invalid UTF-8 data.") from exc
+            return None
         except OSError as exc:
             category = errno.errorcode.get(exc.errno or 0, "IO_ERROR")
             raise RepositoryError(
                 f"Could not read repository file ({category})."
             ) from exc
+
+    def _read_models(self):
+        snapshot = self._read_store()
+        if snapshot is None:
+            return [], None
         try:
-            return RecipeListInDb.model_validate_json(raw_data)
+            raw_data = snapshot.raw.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise RepositoryError("Repository contains invalid UTF-8 data.") from exc
+        try:
+            return RecipeListInDb.model_validate_json(raw_data), snapshot
         except ValidationError as exc:
             raise RepositoryError(
                 f"Repository file {self.path} contains invalid data: "
                 f"{format_validation_error(exc)}"
             ) from exc
+
+    def _fetch_all(self):
+        models, _snapshot = self._read_models()
+        return models
 
     def list_by_id(self):
         return self._build_by_id(self.list())
@@ -257,20 +355,23 @@ class RecipeRepository:
     def add(self, recipe: RecipeInDb):
         incoming = self._build_by_id([recipe], source="Incoming")
         with self._write_lock():
-            locked = self._build_by_id(self._fetch_all())
+            models, snapshot = self._read_models()
+            locked = self._build_by_id(models)
             locked.update(incoming)
-            self._write_models(locked)
+            self._write_models(locked, snapshot=snapshot)
 
     def add_list(self, recipes: list[RecipeInDb]):
         incoming = self._build_by_id(recipes, source="Incoming")
         with self._write_lock():
-            locked = self._build_by_id(self._fetch_all())
+            models, snapshot = self._read_models()
+            locked = self._build_by_id(models)
             locked.update(incoming)
-            self._write_models(locked)
+            self._write_models(locked, snapshot=snapshot)
 
     def delete_by_ids(self, ids: list[str]) -> tuple[list[str], list[str]]:
         with self._write_lock():
-            locked = self._build_by_id(self._fetch_all())
+            models, snapshot = self._read_models()
+            locked = self._build_by_id(models)
             key_map = {str(key): key for key in locked.keys()}
             deleted: list[str] = []
             missing: list[str] = []
@@ -282,7 +383,7 @@ class RecipeRepository:
                 locked.pop(key)
                 deleted.append(str(oid))
             if deleted:
-                self._write_models(locked)
+                self._write_models(locked, snapshot=snapshot)
             return deleted, missing
 
     def list(self):

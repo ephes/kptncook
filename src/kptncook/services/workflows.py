@@ -34,7 +34,7 @@ from kptncook.mealie import (
     MealieInventoryError,
     kptncook_to_mealie,
 )
-from kptncook.models import Recipe, localized_fallback
+from kptncook.models import QuantityScaleError, Recipe, localized_fallback
 from kptncook.paprika import PaprikaExporter
 from kptncook.password_manager import get_credentials
 from kptncook.repositories import RecipeInDb
@@ -753,11 +753,12 @@ def export_recipes_to_markdown_result(
             raise UserFacingError("Recipe not found.")
         if len(recipes) > 1:
             raise UserFacingError("More than one recipe found with that ID.")
+    try:
+        paths = MarkdownExporter(servings=servings).export(recipes=recipes)
+    except QuantityScaleError as exc:
+        raise UserFacingError(str(exc)) from exc
     return MarkdownExportResult(
-        filenames=[
-            str(path)
-            for path in MarkdownExporter(servings=servings).export(recipes=recipes)
-        ],
+        filenames=[str(path) for path in paths],
         invalid_repository_entries=repository_result.invalid_entries,
     )
 
