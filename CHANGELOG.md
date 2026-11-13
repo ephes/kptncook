@@ -1,6 +1,9 @@
 Unreleased
 ==========
 
+0.0.40 - 2026-11-13
+===================
+
 ### Security
 - Update locked notebook dependency SoupSieve from 2.9 to 4.1 for
   CVE-2026-126190, retaining Beautiful Soup 4.14.3. Notebook tooling now requires
