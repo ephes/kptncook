@@ -2,12 +2,82 @@
 
 import json
 import multiprocessing
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from kptncook.services import workflows
+
+
+def hold_lock(lock_dir, entered, release):
+    workflows.SYNC_LOCK_DIR = Path(lock_dir)
+    with workflows._mealie_sync_lock():
+        entered.set()
+        release.wait(2)
+
+
+def test_sync_busy_timeout_closes_client_and_allows_retry(monkeypatch, tmp_path):
+    from kptncook.services.repository import RepositoryRecipesResult
+
+    context = multiprocessing.get_context("spawn")
+    entered, release = context.Event(), context.Event()
+    lock_dir = tmp_path / "locks"
+    process = context.Process(target=hold_lock, args=(str(lock_dir), entered, release))
+    calls = []
+    client = SimpleNamespace(
+        close=lambda: calls.append("close"),
+        create_recipe=lambda recipe: pytest.fail("No remote writes"),
+    )
+    monkeypatch.setattr(workflows, "SYNC_LOCK_DIR", lock_dir)
+    monkeypatch.setattr(workflows, "SYNC_LOCK_TIMEOUT_SECONDS", 0.1, raising=False)
+    monkeypatch.setattr(workflows, "get_mealie_client", lambda: client)
+    monkeypatch.setattr(
+        workflows,
+        "get_kptncook_recipes_from_mealie",
+        lambda client: calls.append("inventory") or [],
+    )
+    monkeypatch.setattr(
+        workflows,
+        "load_kptncook_recipes_from_repository",
+        lambda: calls.append("local") or RepositoryRecipesResult([], []),
+    )
+    try:
+        process.start()
+        assert entered.wait(15)
+        start = time.monotonic()
+        with pytest.raises(workflows.UserFacingError, match="busy"):
+            workflows.sync_with_mealie_result()
+        assert time.monotonic() - start < 1.5
+        assert calls == ["close"]
+        release.set()
+        process.join(5)
+        assert process.exitcode == 0
+        assert workflows.sync_with_mealie_result().created_count == 0
+        assert calls == ["close", "inventory", "local", "close"]
+    finally:
+        release.set()
+        if process.is_alive():
+            process.terminate()
+        process.join(5)
+
+
+def test_interrupted_lock_wait_closes_client(monkeypatch):
+    calls = []
+
+    def interrupt(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(
+        workflows,
+        "get_mealie_client",
+        lambda: SimpleNamespace(close=lambda: calls.append("close")),
+    )
+    monkeypatch.setattr(workflows.portalocker.Lock, "acquire", interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        workflows.sync_with_mealie_result()
+    assert calls == ["close"]
 
 
 def sync_process(
@@ -147,7 +217,7 @@ def test_sync_lock_failure_prevents_inventory_and_closes_client(monkeypatch):
         raise workflows.portalocker.exceptions.LockException("synthetic")
 
     monkeypatch.setattr(workflows, "get_mealie_client", Client)
-    monkeypatch.setattr(workflows.portalocker, "lock", fail)
+    monkeypatch.setattr(workflows.portalocker.Lock, "acquire", fail)
     with pytest.raises(workflows.UserFacingError, match="sync lock"):
         workflows.sync_with_mealie_result()
     assert calls == ["close"]

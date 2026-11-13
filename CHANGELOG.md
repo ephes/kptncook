@@ -1,6 +1,12 @@
 Unreleased
 ==========
 
+### Fixes
+- Resolve share URLs from streamed headers only, close unused bodies, and refuse
+  replies observed after the 15-second acquisition budget before recipe lookup.
+- Bound competing Mealie sync lock waits to 30 seconds. Busy/interrupted runs
+  close the client without reading or writing recipes; a later sync can retry.
+
 0.0.40 - 2026-11-13
 ===================
 

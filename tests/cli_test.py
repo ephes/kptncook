@@ -54,10 +54,10 @@ def test_ls_alias_calls_list_recipes(monkeypatch):
 
 
 def test_search_by_id_share_url_handles_http_error(monkeypatch):
-    def fake_get(_url, **_kwargs):
+    def fake_get(*_args, **_kwargs):
         raise httpx.HTTPError("boom")
 
-    monkeypatch.setattr(kptncook.httpx, "get", fake_get)
+    monkeypatch.setattr(kptncook.httpx, "stream", fake_get)
 
     with pytest.raises(SystemExit):
         kptncook.search_kptncook_recipe_by_id(

@@ -136,6 +136,13 @@ stored short UID or OID (including parsed recipe URLs). A missing selector
 match or multiple matching recipes produces an error; selection never fetches
 from the network.
 
+Share URLs are resolved using only the response headers, without reading bodies
+or following redirects. Only 301/302 responses with a Location are accepted.
+Resolution has a 15-second elapsed budget; a reply observed after it is discarded
+before recipe lookup or storage. HTTPX socket timeouts are capped by the remaining
+budget (connect at most 5 seconds); in-flight I/O follows HTTPX's per-operation
+timeout rules. Transport diagnostics do not include the share URL or secrets.
+
 ## Quick examples
 
 Short snippets for the new discovery/dailies/onboarding/ingredient commands
@@ -197,7 +204,9 @@ canonical Mealie API target (host casing, default ports and trailing slashes are
 normalized), including rotated tokens. Locks are per operating-system user,
 independent of `KPTNCOOK_HOME`, under `~/.cache/kptncook/sync-locks/`. Keep these
 stable files while syncs may be running. A competing sync waits for the current
-owner to finish. Filesystem/locking errors stop sync; exceptions and process exit
+owner to finish for at most 30 seconds, then reports that sync is busy. Retry after
+the current sync finishes. Timeout or interruption closes the authenticated client
+without reading or modifying recipes. Filesystem/locking errors stop sync; exceptions and process exit
 release ownership. This does not coordinate different machines or
 manual Mealie clients and does not promise exactly-once delivery.
 
