@@ -35,11 +35,11 @@ def format_timer(timer: StepTimer) -> str:
 
 
 def expand_timer_placeholders(text: str, timers: list[StepTimer] | None) -> str:
-    """Replace <timer> placeholders with formatted timer values by position."""
+    """Expand timers by position, preserving unresolved text and punctuation."""
     if not text:
         return text
     if not timers:
-        return text.replace(TIMER_PLACEHOLDER, "")
+        return text
     timer_index = [0]
 
     def replacer(match: re.Match[str]) -> str:
@@ -48,10 +48,12 @@ def expand_timer_placeholders(text: str, timers: list[StepTimer] | None) -> str:
         punctuation = match.group("punct") or ""
         if idx < len(timers):
             timer_text = format_timer(timers[idx])
+            if not timer_text:
+                return match.group(0)
             if punctuation == "." and timer_text.endswith("."):
                 timer_text = timer_text[:-1]
             return f"{timer_text}{punctuation}"
-        return punctuation
+        return match.group(0)
 
     return TIMER_PLACEHOLDER_PATTERN.sub(replacer, text)
 
@@ -139,6 +141,21 @@ def _hard_links_unsupported(directory: Path, reason: str) -> UserFacingError:
     )
 
 
+MAX_EXPORT_FILENAME_BYTES = 240
+
+
+def bounded_export_filename(stem: str, extension: str, *, suffix: str = "") -> str:
+    """Fit a display stem in UTF-8 bytes, preserving the full identity suffix."""
+    budget = MAX_EXPORT_FILENAME_BYTES - len((suffix + extension).encode("utf-8"))
+    if budget < 1:
+        raise UserFacingError("Export filename suffix exceeds the filename byte budget")
+    display = (
+        (stem or "recipe").encode("utf-8")[:budget].decode("utf-8", errors="ignore")
+    )
+    # A very small budget can end in the middle of the first Unicode character.
+    return f"{display or 'r'}{suffix}{extension}"
+
+
 def move_to_free_target(
     source: str | Path,
     directory: str | Path,
@@ -155,13 +172,15 @@ def move_to_free_target(
     name is published by linking a flushed sibling staging file. Hard-link
     support is required: publication fails safely when unavailable. Existing
     files are never replaced and final names always contain complete data.
+    Display stems are shortened to fit 240 UTF-8 bytes including each suffix
+    and extension; identity/counter suffixes remain intact.
     """
     directory = Path(directory)
-    base = f"{stem}-{disambiguator}" if disambiguator else stem
-    candidates = itertools.chain(
-        [stem],
-        [base] if disambiguator else [],
-        (f"{base}-{counter}" for counter in itertools.count(2)),
+    base_suffix = f"-{disambiguator}" if disambiguator else ""
+    suffixes = itertools.chain(
+        [""],
+        [base_suffix] if disambiguator else [],
+        (f"{base_suffix}-{counter}" for counter in itertools.count(2)),
     )
     # Copy first: the source may be on a different filesystem. Only the sibling
     # staging inode is linked, so publication itself is atomic and no-clobber.
@@ -175,8 +194,8 @@ def move_to_free_target(
                 shutil.copyfileobj(src, staged)
                 staged.flush()
                 os.fsync(staged.fileno())
-        for candidate in candidates:
-            target = directory / f"{candidate}{extension}"
+        for suffix in suffixes:
+            target = directory / bounded_export_filename(stem, extension, suffix=suffix)
             try:
                 link = getattr(os, "link", None)
                 if link is None:

@@ -311,7 +311,7 @@ so punctuation and newlines in tags and URLs retain their string values.
 
 The Markdown export (`export-recipes-to-markdown`) writes one `.md` file per
 recipe into an `export_md` directory under the KptnCook home, with YAML front
-matter (servings, prep/cook time, link, image, tags) followed by ingredients
+matter (full title, servings, prep/cook time, link, image, tags) followed by ingredients
 and instructions. Images are downloaded into its sibling `assets/` directory
 with random filenames and relative references; copy that directory along with
 the notes. Authentication keys and signed image URLs appear only in download
@@ -326,7 +326,10 @@ languages fall back to English). Recipe titles, comments, steps and ingredient
 labels across all exporters prefer that same configured language. Missing or
 empty translations fall back in order to German, English, Spanish, French, then
 Portuguese, without changing the original recipe payload. `<timer>` placeholders in steps are
-replaced with their durations.
+replaced with their durations. If a timer is missing or has no duration metadata,
+the corresponding literal `<timer>` and its punctuation stay in every export
+(including Mealie). Later timers keep their positions; no duration is invented.
+Check the source recipe for unresolved timing instructions before cooking.
 
 Markdown is final cookbook text, so its serving count is configurable:
 `kptncook export-recipes-to-markdown --servings 4` (or `-s 4`) scales standard
@@ -347,6 +350,11 @@ recipes) is taken, for example by an earlier export or by a second recipe with
 the same title, the recipe id and then a counter are appended
 (`Title-<recipe id>.zip`, `Title-<recipe id>-2.zip`, `allrecipes-2.paprikarecipes`).
 The command output lists the names that were actually written.
+Title-derived names are limited to 240 UTF-8 bytes, including extension and any
+recipe ID/counter suffix. The display title stem is shortened on character
+boundaries after transliteration, when applicable; suffixes remain intact and
+every collision still selects a new name. Long or localized titles stay complete
+inside the recipe JSON and Markdown's quoted `title` front matter.
 Archives and Markdown notes are fully written and flushed in sibling staging
 before atomic no-clobber publication. Markdown assets are published completely
 before the note that references them. The destination filesystem must support
@@ -366,8 +374,8 @@ IDs must be portable single filename components of at most 128 bytes (no slash,
 backslash, NUL, dot segments, reserved names or overlong components). Valid opaque
 IDs remain unchanged in recipe content; IDs do not need to be 24-digit OIDs.
 An unsafe ID refuses the batch before downloads or file creation. This check
-covers ID components; title-derived filename lengths and other filesystem
-failures remain subject to the existing export error behavior.
+covers ID components; other filesystem failures remain subject to the existing
+export error behavior.
 Absent or ambiguous Paprika covers are optional, like failed downloads: every
 recipe's text remains in the archive with empty photo fields.
 Its temporary archive files are removed on success and failure; only the final

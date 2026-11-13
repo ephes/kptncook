@@ -2,6 +2,11 @@ Unreleased
 ==========
 
 ### Fixes
+- Preserve unresolved `<timer>` instructions and punctuation in every export,
+  including when a timer entry exists but contains no duration.
+- Limit title-derived export filenames to 240 UTF-8 bytes, reserving space for
+  complete ID/counter suffixes and extensions while keeping no-clobber publication.
+  Retain full titles in recipe content, including Markdown's `title` front matter.
 - Validate discovery list types and opaque list IDs consistently in the CLI and
   public client before authenticated requests; percent-encode admitted IDs.
 - Refuse cyclic or overdeep recipe identifier wrappers with a bounded error

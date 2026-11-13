@@ -15,6 +15,7 @@ import httpx
 from kptncook.config import get_settings
 from kptncook.exporter_utils import (
     asciify_string,
+    bounded_export_filename,
     get_cover,
     get_step_text,
     move_to_free_target,
@@ -83,7 +84,7 @@ class TandoorExporter:
             )
             or "kptncook-recipe"
         )
-        return f"{asciify_string(title)}.zip"
+        return bounded_export_filename(asciify_string(title), ".zip")
 
     def get_cover_image_bytes(self, recipe: Recipe) -> bytes | None:
         cover = get_cover(image_list=recipe.image_list)
