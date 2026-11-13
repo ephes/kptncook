@@ -181,7 +181,7 @@ def test_share_url_transport_failure_is_private(monkeypatch):
             "synthetic-secret-token https://example.test/?signature=private"
         )
 
-    monkeypatch.setattr(workflows.httpx, "get", fail)
+    monkeypatch.setattr(workflows.httpx, "stream", fail)
     result = CliRunner(env={"COLUMNS": "120"}).invoke(
         cli.app, ["search-by-id", "https://share.kptncook.com/Abc1234"]
     )

@@ -201,6 +201,13 @@ class MarkdownExporter:
         )
 
         lines: list[str] = ["---"]
+        title = (
+            localized_fallback(
+                recipe.localized_title, language=get_settings().kptncook_lang
+            )
+            or "recipe"
+        )
+        lines.append(f"title: {_yaml_string(title)}")
         lines.append(f"date: {date.today().isoformat()}")
 
         servings = self.servings_for(recipe)

@@ -24,6 +24,7 @@ import httpx
 from kptncook.config import get_settings
 from kptncook.exporter_utils import (
     asciify_string,
+    bounded_export_filename,
     get_cover,
     get_step_text,
     move_to_free_target,
@@ -85,15 +86,15 @@ class PaprikaExporter:
         self, export_data: dict[str, Any], recipes: list[Recipe]
     ) -> str:
         if len(export_data) == 1:
-            return (
+            return bounded_export_filename(
                 asciify_string(
                     s=localized_fallback(
                         recipes[0].localized_title,
                         language=get_settings().kptncook_lang,
                     )
                     or "recipe"
-                )
-                + ".paprikarecipes"
+                ),
+                ".paprikarecipes",
             )
         else:
             return "allrecipes.paprikarecipes"

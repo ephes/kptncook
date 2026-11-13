@@ -48,15 +48,17 @@ class TestExpandTimerPlaceholders:
         timers = [StepTimer(min_or_exact=5)]
         assert expand_timer_placeholders(text, timers) == "Just add salt."
 
-    def test_no_timers_strips_placeholder(self):
+    def test_no_timers_preserves_placeholder(self):
         text = "Cook <timer> and serve."
-        assert expand_timer_placeholders(text, None) == "Cook  and serve."
-        assert expand_timer_placeholders(text, []) == "Cook  and serve."
+        assert expand_timer_placeholders(text, None) == text
+        assert expand_timer_placeholders(text, []) == text
 
     def test_more_placeholders_than_timers(self):
         text = "<timer> and <timer> and <timer>"
         timers = [StepTimer(min_or_exact=1), StepTimer(min_or_exact=2)]
-        assert expand_timer_placeholders(text, timers) == "1 Min. and 2 Min. and "
+        assert (
+            expand_timer_placeholders(text, timers) == "1 Min. and 2 Min. and <timer>"
+        )
 
     def test_empty_text(self):
         assert expand_timer_placeholders("", [StepTimer(min_or_exact=5)]) == ""
@@ -71,12 +73,12 @@ class TestGetStepText:
         )
         assert get_step_text(step) == "Kartoffeln ca. 15 Min. kochen."
 
-    def test_step_without_timers_strips_placeholder(self):
+    def test_step_without_timers_preserves_placeholder(self):
         step = RecipeStep(
             title=LocalizedString(de="Cook <timer> and serve."),
             image=Image(name="x.jpg", url="https://example.com/x.jpg"),
         )
-        assert get_step_text(step) == "Cook  and serve."
+        assert get_step_text(step) == "Cook <timer> and serve."
 
     def test_step_old_format_no_placeholder(self):
         step = RecipeStep(

@@ -903,7 +903,9 @@ def kptncook_to_mealie_steps(
         mealie_instructions.append(
             RecipeStep(
                 title=None,
-                text=get_step_text(step, language=get_settings().kptncook_lang),
+                text=get_step_text(
+                    step, language=get_settings().kptncook_lang, markup=True
+                ),
                 image=image,
                 ingredientReferences=ingredient_references,
             )

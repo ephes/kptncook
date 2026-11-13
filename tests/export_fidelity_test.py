@@ -192,6 +192,7 @@ def test_markdown_frontmatter_roundtrips_strings(synthetic_recipe, monkeypatch):
     assert payload["prepTime"] == "5m"
     assert payload["author"] == "KptnCook"
     assert set(payload) == {
+        "title",
         "date",
         "servings",
         "prepTime",

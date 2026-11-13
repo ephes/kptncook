@@ -1,6 +1,23 @@
 Unreleased
 ==========
 
+### Fixes
+- Preserve unresolved `<timer>` instructions and punctuation in every export,
+  including when a timer entry exists but contains no duration. Markdown,
+  Tandoor and Mealie write them as a visible `` `<timer>` `` code span.
+- Limit title-derived export filenames to 240 UTF-8 bytes, reserving space for
+  complete ID/counter suffixes and extensions while keeping no-clobber publication.
+  Retain full titles in recipe content, including Markdown's `title` front matter.
+- Validate discovery list types and opaque list IDs consistently in the CLI and
+  public client before authenticated requests; percent-encode admitted IDs.
+- Refuse cyclic or overdeep recipe identifier wrappers with a bounded error
+  before resolution or favorites backup writes, retaining supported shapes.
+- Resolve share URLs from streamed headers only, close unused bodies, and refuse
+  replies observed after the 15-second acquisition budget before recipe lookup.
+- Bound competing Mealie sync lock waits to 30 seconds. Busy/interrupted runs
+  close the client without reading or writing recipes; a later sync can retry.
+  Locking failures other than contention are reported as lock errors, not busy.
+
 0.0.40 - 2026-11-13
 ===================
 

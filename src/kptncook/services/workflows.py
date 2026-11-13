@@ -14,7 +14,12 @@ from typing import Any, Literal
 import httpx
 import portalocker
 
-from kptncook.api import KptnCookClient, _collect_recipe_identifiers, parse_id
+from kptncook.api import (
+    KptnCookClient,
+    RecipeIdentifierError,
+    _collect_recipe_identifiers,
+    parse_id,
+)
 from kptncook.config import get_settings
 from kptncook.env import ENV_PATH
 from kptncook.http_errors import (
@@ -49,6 +54,8 @@ from kptncook.tandoor import TandoorExporter
 logger = logging.getLogger(__name__)
 SYNC_LOCK_DIR = Path.home() / ".cache" / "kptncook" / "sync-locks"
 SHARE_URL_TIMEOUT = httpx.Timeout(15.0, connect=5.0)
+SHARE_RESOLUTION_SECONDS = 15.0
+SYNC_LOCK_TIMEOUT_SECONDS = 30.0
 
 
 @dataclass(frozen=True)
@@ -275,6 +282,8 @@ def _resolve_recipe_summaries(
         return []
     try:
         return client.resolve_recipe_summaries(items)
+    except RecipeIdentifierError as exc:
+        raise UserFacingError(str(exc)) from exc
     except httpx.HTTPStatusError as exc:
         raise UserFacingError(
             format_http_status_error(exc.response, action=action)
@@ -320,20 +329,36 @@ def _mealie_sync_lock() -> Iterator[None]:
     lock_path = SYNC_LOCK_DIR / (hashlib.sha256(target.encode()).hexdigest() + ".lock")
     try:
         lock_path.parent.mkdir(parents=True, exist_ok=True)
-        fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     except OSError as exc:
         raise UserFacingError("Could not open the local Mealie sync lock") from exc
-    with os.fdopen(fd, "a") as handle:
-        try:
-            portalocker.lock(handle, portalocker.LOCK_EX)
-        except portalocker.exceptions.LockException as exc:
-            raise UserFacingError(
-                "Could not acquire the local Mealie sync lock"
-            ) from exc
-        try:
-            yield
-        finally:
-            portalocker.unlock(handle)
+
+    def private_opener(path: str, flags: int) -> int:
+        return os.open(path, flags, 0o600)
+
+    lock = portalocker.Lock(
+        lock_path,
+        mode="a",
+        timeout=SYNC_LOCK_TIMEOUT_SECONDS,
+        check_interval=0.1,
+        flags=portalocker.LOCK_EX | portalocker.LOCK_NB,
+        opener=private_opener,
+    )
+    try:
+        lock.acquire()
+    except portalocker.exceptions.AlreadyLocked as exc:
+        raise UserFacingError(
+            "Mealie sync is busy: could not acquire the local Mealie sync lock "
+            "within the wait budget. Try again after the current sync finishes."
+        ) from exc
+    except portalocker.exceptions.LockException as exc:
+        # Not contention (e.g. no locking support): fail with the lock error.
+        raise UserFacingError("Could not acquire the local Mealie sync lock") from exc
+    except OSError as exc:
+        raise UserFacingError("Could not open the local Mealie sync lock") from exc
+    try:
+        yield
+    finally:
+        lock.release()
 
 
 def sync_with_mealie_result() -> SyncWithMealieResult:
@@ -438,7 +463,10 @@ def backup_kptncook_favorites() -> FavoritesBackupResult:
         except ValueError as exc:
             raise UserFacingError(str(exc)) from exc
 
-        identifiers = _collect_recipe_identifiers(favorites)
+        try:
+            identifiers = _collect_recipe_identifiers(favorites)
+        except RecipeIdentifierError as exc:
+            raise UserFacingError(str(exc)) from exc
         if not identifiers:
             raise UserFacingError("Could not find any favorites")
 
@@ -600,20 +628,40 @@ def delete_repository_recipes(ids: list[str]) -> tuple[list[str], list[str]]:
 def search_recipe_by_id(id_: str) -> SearchResult:
     resolved_id = id_
     if resolved_id.startswith("https://share.kptncook.com/"):
+        deadline = monotonic() + SHARE_RESOLUTION_SECONDS
         try:
-            response = httpx.get(resolved_id, timeout=SHARE_URL_TIMEOUT)
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise UserFacingError(
+                    "Request failed: timeout while resolving share URL"
+                )
+            timeout = httpx.Timeout(
+                min(SHARE_URL_TIMEOUT.read or remaining, remaining),
+                connect=min(SHARE_URL_TIMEOUT.connect or remaining, remaining),
+            )
+            # Only Location is needed. Never buffer a redirect or error body,
+            # and never follow a redirect to an arbitrary target.
+            with httpx.stream(
+                "GET", resolved_id, timeout=timeout, follow_redirects=False
+            ) as response:
+                if monotonic() >= deadline:
+                    raise UserFacingError(
+                        "Request failed: timeout while resolving share URL"
+                    )
+                if response.status_code not in (301, 302):
+                    raise UserFacingError(
+                        f"Could not get redirect location (HTTP {response.status_code})."
+                    )
+                location = response.headers.get("location")
+                if not location:
+                    raise UserFacingError(
+                        "Share URL did not include a redirect location."
+                    )
+                resolved_id = location
         except httpx.HTTPError as exc:
             raise UserFacingError(
                 f"{format_request_error(exc)} while resolving share URL"
             ) from exc
-        if response.status_code not in (301, 302):
-            raise UserFacingError(
-                f"Could not get redirect location (HTTP {response.status_code})."
-            )
-        location = response.headers.get("location")
-        if not location:
-            raise UserFacingError("Share URL did not include a redirect location.")
-        resolved_id = location
 
     parsed = parse_id(resolved_id)
     if parsed is None:

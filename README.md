@@ -136,6 +136,13 @@ stored short UID or OID (including parsed recipe URLs). A missing selector
 match or multiple matching recipes produces an error; selection never fetches
 from the network.
 
+Share URLs are resolved using only the response headers, without reading bodies
+or following redirects. Only 301/302 responses with a Location are accepted.
+Resolution has a 15-second elapsed budget; a reply observed after it is discarded
+before recipe lookup or storage. HTTPX socket timeouts are capped by the remaining
+budget (connect at most 5 seconds); in-flight I/O follows HTTPX's per-operation
+timeout rules. Transport diagnostics do not include the share URL or secrets.
+
 ## Quick examples
 
 Short snippets for the new discovery/dailies/onboarding/ingredient commands
@@ -197,7 +204,9 @@ canonical Mealie API target (host casing, default ports and trailing slashes are
 normalized), including rotated tokens. Locks are per operating-system user,
 independent of `KPTNCOOK_HOME`, under `~/.cache/kptncook/sync-locks/`. Keep these
 stable files while syncs may be running. A competing sync waits for the current
-owner to finish. Filesystem/locking errors stop sync; exceptions and process exit
+owner to finish for at most 30 seconds, then reports that sync is busy. Retry after
+the current sync finishes. Timeout or interruption closes the authenticated client
+without reading or modifying recipes. Filesystem/locking errors stop sync; exceptions and process exit
 release ownership. This does not coordinate different machines or
 manual Mealie clients and does not promise exactly-once delivery.
 
@@ -302,7 +311,7 @@ so punctuation and newlines in tags and URLs retain their string values.
 
 The Markdown export (`export-recipes-to-markdown`) writes one `.md` file per
 recipe into an `export_md` directory under the KptnCook home, with YAML front
-matter (servings, prep/cook time, link, image, tags) followed by ingredients
+matter (full title, servings, prep/cook time, link, image, tags) followed by ingredients
 and instructions. Images are downloaded into its sibling `assets/` directory
 with random filenames and relative references; copy that directory along with
 the notes. Authentication keys and signed image URLs appear only in download
@@ -317,7 +326,13 @@ languages fall back to English). Recipe titles, comments, steps and ingredient
 labels across all exporters prefer that same configured language. Missing or
 empty translations fall back in order to German, English, Spanish, French, then
 Portuguese, without changing the original recipe payload. `<timer>` placeholders in steps are
-replaced with their durations.
+replaced with their durations. If a timer is missing or has no duration metadata,
+the placeholder and its punctuation stay in every export: Paprika keeps the
+literal `<timer>`, while the rendered Markdown, Tandoor and Mealie step texts
+write it as the code span `` `<timer>` `` so renderers show it instead of
+hiding it as an HTML tag. Later timers keep their positions; no duration is
+invented.
+Check the source recipe for unresolved timing instructions before cooking.
 
 Markdown is final cookbook text, so its serving count is configurable:
 `kptncook export-recipes-to-markdown --servings 4` (or `-s 4`) scales standard
@@ -338,6 +353,11 @@ recipes) is taken, for example by an earlier export or by a second recipe with
 the same title, the recipe id and then a counter are appended
 (`Title-<recipe id>.zip`, `Title-<recipe id>-2.zip`, `allrecipes-2.paprikarecipes`).
 The command output lists the names that were actually written.
+Title-derived names are limited to 240 UTF-8 bytes, including extension and any
+recipe ID/counter suffix. The display title stem is shortened on character
+boundaries after transliteration, when applicable; suffixes remain intact and
+every collision still selects a new name. Long or localized titles stay complete
+inside the recipe JSON and Markdown's quoted `title` front matter.
 Archives and Markdown notes are fully written and flushed in sibling staging
 before atomic no-clobber publication. Markdown assets are published completely
 before the note that references them. The destination filesystem must support
@@ -357,8 +377,8 @@ IDs must be portable single filename components of at most 128 bytes (no slash,
 backslash, NUL, dot segments, reserved names or overlong components). Valid opaque
 IDs remain unchanged in recipe content; IDs do not need to be 24-digit OIDs.
 An unsafe ID refuses the batch before downloads or file creation. This check
-covers ID components; title-derived filename lengths and other filesystem
-failures remain subject to the existing export error behavior.
+covers ID components; other filesystem failures remain subject to the existing
+export error behavior.
 Absent or ambiguous Paprika covers are optional, like failed downloads: every
 recipe's text remains in the archive with empty photo fields.
 Its temporary archive files are removed on success and failure; only the final
@@ -458,6 +478,18 @@ List types are case-insensitive; short flags are `-t` for `--list-type` and
 `-i` for `--list-id`. For `curated` and `automated`, pass the list id from
 `discovery-screen` with `--list-id`. For `latest` and `recommended`, omit
 `--list-id`.
+
+The CLI and public client accept only these four list types. List IDs are single
+opaque path components containing Unicode letters/numbers or `-._~`; `.` and `..`,
+percent escapes, separators, controls and query/fragment markers are refused
+before authenticated requests. Unicode IDs are percent-encoded in the route.
+Outer spaces are trimmed, as in the CLI's other list input normalization.
+
+Recipe identifiers retain the supported `identifier`, `uid`, `_id`/`$oid`,
+`id`, `recipeId`/`recipe_id` and recipe/summary wrapper shapes, up to 16 dictionary
+levels. Cycles or deeper wrappers stop resolution with a payload-free error.
+Favorites backup rejects the whole identifier batch before recipe search or
+storage, including when another favorite is valid; no partial backup is saved.
 Use `--no-quick-search` if you only want discovery list ids, and add `--save`
 to `discovery-list` to store the resolved recipes locally.
 Discovery screen entries are printed as `id | title | type` so you can copy the

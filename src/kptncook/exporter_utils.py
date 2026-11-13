@@ -21,6 +21,9 @@ TIMER_PLACEHOLDER = "<timer>"
 TIMER_PLACEHOLDER_PATTERN = re.compile(
     rf"{re.escape(TIMER_PLACEHOLDER)}(?P<punct>[.!?])?"
 )
+# Markdown/HTML-rendered targets would treat a bare ``<timer>`` as an unknown
+# tag and hide it; a code span keeps the unresolved marker visible.
+UNRESOLVED_TIMER_MARKUP = f"`{TIMER_PLACEHOLDER}`"
 
 
 def format_timer(timer: StepTimer) -> str:
@@ -34,32 +37,42 @@ def format_timer(timer: StepTimer) -> str:
     return ""
 
 
-def expand_timer_placeholders(text: str, timers: list[StepTimer] | None) -> str:
-    """Replace <timer> placeholders with formatted timer values by position."""
+def expand_timer_placeholders(
+    text: str, timers: list[StepTimer] | None, *, markup: bool = False
+) -> str:
+    """Expand timers by position, preserving unresolved text and punctuation.
+
+    With ``markup=True`` (Markdown/HTML-rendered targets) an unresolved
+    placeholder is emitted as a code span so renderers keep it visible.
+    """
     if not text:
         return text
-    if not timers:
-        return text.replace(TIMER_PLACEHOLDER, "")
+    timers = timers or []
+    unresolved = UNRESOLVED_TIMER_MARKUP if markup else TIMER_PLACEHOLDER
+    if not timers and not markup:
+        return text
     timer_index = [0]
 
     def replacer(match: re.Match[str]) -> str:
         idx = timer_index[0]
         timer_index[0] += 1
         punctuation = match.group("punct") or ""
-        if idx < len(timers):
-            timer_text = format_timer(timers[idx])
-            if punctuation == "." and timer_text.endswith("."):
-                timer_text = timer_text[:-1]
-            return f"{timer_text}{punctuation}"
-        return punctuation
+        timer_text = format_timer(timers[idx]) if idx < len(timers) else ""
+        if not timer_text:
+            return f"{unresolved}{punctuation}"
+        if punctuation == "." and timer_text.endswith("."):
+            timer_text = timer_text[:-1]
+        return f"{timer_text}{punctuation}"
 
     return TIMER_PLACEHOLDER_PATTERN.sub(replacer, text)
 
 
-def get_step_text(step: RecipeStep, language: str = "de") -> str:
+def get_step_text(
+    step: RecipeStep, language: str = "de", *, markup: bool = False
+) -> str:
     """Get localized step text with timer placeholders expanded."""
     raw = localized_fallback(step.title, language) or ""
-    return expand_timer_placeholders(raw, step.timers or [])
+    return expand_timer_placeholders(raw, step.timers or [], markup=markup)
 
 
 ZipContent = bytes | str | Path
@@ -85,24 +98,24 @@ def replace_timers_in_step(step, text: str) -> str:
     """Replace ``<timer>`` placeholders in ``text`` with the step's timers.
 
     Timers are consumed in order, retaining exact, max-only and ranged minutes. A
-    placeholder with no remaining timer is left untouched. The original
-    ``step.timers`` list is not mutated.
+    placeholder with no remaining or no usable timer becomes a visible Markdown
+    code span. The original ``step.timers`` list is not mutated.
     """
     timer_iter = iter(getattr(step, "timers", None) or [])
 
     def repl(match: re.Match[str]) -> str:
         timer = next(timer_iter, None)
         if timer is None:
-            return match.group(0)
+            return UNRESOLVED_TIMER_MARKUP
         if timer.min_or_exact is not None and timer.max is not None:
             return f"{timer.min_or_exact}–{timer.max}m"
         if timer.min_or_exact is not None:
             return f"{timer.min_or_exact}m"
         if timer.max is not None:
             return f"≤{timer.max}m"
-        return match.group(0)
+        return UNRESOLVED_TIMER_MARKUP
 
-    return re.sub(r"<timer>", repl, text)
+    return re.sub(re.escape(TIMER_PLACEHOLDER), repl, text)
 
 
 def validate_export_id(identifier: str) -> None:
@@ -139,6 +152,21 @@ def _hard_links_unsupported(directory: Path, reason: str) -> UserFacingError:
     )
 
 
+MAX_EXPORT_FILENAME_BYTES = 240
+
+
+def bounded_export_filename(stem: str, extension: str, *, suffix: str = "") -> str:
+    """Fit a display stem in UTF-8 bytes, preserving the full identity suffix."""
+    budget = MAX_EXPORT_FILENAME_BYTES - len((suffix + extension).encode("utf-8"))
+    if budget < 1:
+        raise UserFacingError("Export filename suffix exceeds the filename byte budget")
+    display = (
+        (stem or "recipe").encode("utf-8")[:budget].decode("utf-8", errors="ignore")
+    )
+    # A very small budget can end in the middle of the first Unicode character.
+    return f"{display or 'r'}{suffix}{extension}"
+
+
 def move_to_free_target(
     source: str | Path,
     directory: str | Path,
@@ -155,13 +183,15 @@ def move_to_free_target(
     name is published by linking a flushed sibling staging file. Hard-link
     support is required: publication fails safely when unavailable. Existing
     files are never replaced and final names always contain complete data.
+    Display stems are shortened to fit 240 UTF-8 bytes including each suffix
+    and extension; identity/counter suffixes remain intact.
     """
     directory = Path(directory)
-    base = f"{stem}-{disambiguator}" if disambiguator else stem
-    candidates = itertools.chain(
-        [stem],
-        [base] if disambiguator else [],
-        (f"{base}-{counter}" for counter in itertools.count(2)),
+    base_suffix = f"-{disambiguator}" if disambiguator else ""
+    suffixes = itertools.chain(
+        [""],
+        [base_suffix] if disambiguator else [],
+        (f"{base_suffix}-{counter}" for counter in itertools.count(2)),
     )
     # Copy first: the source may be on a different filesystem. Only the sibling
     # staging inode is linked, so publication itself is atomic and no-clobber.
@@ -175,8 +205,8 @@ def move_to_free_target(
                 shutil.copyfileobj(src, staged)
                 staged.flush()
                 os.fsync(staged.fileno())
-        for candidate in candidates:
-            target = directory / f"{candidate}{extension}"
+        for suffix in suffixes:
+            target = directory / bounded_export_filename(stem, extension, suffix=suffix)
             try:
                 link = getattr(os, "link", None)
                 if link is None:
