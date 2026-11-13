@@ -573,7 +573,11 @@ $ kptncook-setup
 ```
 
 The `.env` is written to `$KPTNCOOK_HOME/.env` when `KPTNCOOK_HOME` is set,
-otherwise to `~/.kptncook/.env`.
+otherwise to `~/.kptncook/.env`. Guided setup owns and closes its authentication
+client on success and every failure, before attempting to save the token. Only a
+complete successful response containing a nonempty string access token is saved.
+HTTP, transport and malformed-response failures preserve an existing token and
+report a bounded diagnostic without response payloads.
 
 Configuration is validated lazily. If you run a command before configuring the
 API key, kptncook will scaffold the `.env` file when that command first needs

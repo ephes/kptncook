@@ -2,6 +2,9 @@ Unreleased
 ==========
 
 ### Fixes
+- Close the guided setup authentication client on success and every failure,
+  including malformed replies; save only a complete nonempty string token and
+  preserve prior credentials when acquisition fails.
 - Refuse nonfinite scaled ingredient quantities during recipe admission and
   export preflight, including step ingredients and Markdown serving overrides;
   preserve existing exports and ordinary zero/missing/fractional quantities.
