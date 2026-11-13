@@ -221,3 +221,16 @@ def test_sync_lock_failure_prevents_inventory_and_closes_client(monkeypatch):
     with pytest.raises(workflows.UserFacingError, match="sync lock"):
         workflows.sync_with_mealie_result()
     assert calls == ["close"]
+
+
+def test_sync_lock_non_contention_failure_is_not_reported_busy(monkeypatch, tmp_path):
+    def fail(*args, **kwargs):
+        raise workflows.portalocker.exceptions.LockException("no locking support")
+
+    monkeypatch.setattr(workflows, "SYNC_LOCK_DIR", tmp_path / "locks")
+    monkeypatch.setattr(workflows.portalocker.Lock, "acquire", fail)
+    with pytest.raises(workflows.UserFacingError) as exc_info:
+        with workflows._mealie_sync_lock():
+            pytest.fail("Lock body must not run without ownership")
+    assert "busy" not in str(exc_info.value)
+    assert "Could not acquire the local Mealie sync lock" in str(exc_info.value)

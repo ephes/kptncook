@@ -21,6 +21,9 @@ TIMER_PLACEHOLDER = "<timer>"
 TIMER_PLACEHOLDER_PATTERN = re.compile(
     rf"{re.escape(TIMER_PLACEHOLDER)}(?P<punct>[.!?])?"
 )
+# Markdown/HTML-rendered targets would treat a bare ``<timer>`` as an unknown
+# tag and hide it; a code span keeps the unresolved marker visible.
+UNRESOLVED_TIMER_MARKUP = f"`{TIMER_PLACEHOLDER}`"
 
 
 def format_timer(timer: StepTimer) -> str:
@@ -34,11 +37,19 @@ def format_timer(timer: StepTimer) -> str:
     return ""
 
 
-def expand_timer_placeholders(text: str, timers: list[StepTimer] | None) -> str:
-    """Expand timers by position, preserving unresolved text and punctuation."""
+def expand_timer_placeholders(
+    text: str, timers: list[StepTimer] | None, *, markup: bool = False
+) -> str:
+    """Expand timers by position, preserving unresolved text and punctuation.
+
+    With ``markup=True`` (Markdown/HTML-rendered targets) an unresolved
+    placeholder is emitted as a code span so renderers keep it visible.
+    """
     if not text:
         return text
-    if not timers:
+    timers = timers or []
+    unresolved = UNRESOLVED_TIMER_MARKUP if markup else TIMER_PLACEHOLDER
+    if not timers and not markup:
         return text
     timer_index = [0]
 
@@ -46,22 +57,22 @@ def expand_timer_placeholders(text: str, timers: list[StepTimer] | None) -> str:
         idx = timer_index[0]
         timer_index[0] += 1
         punctuation = match.group("punct") or ""
-        if idx < len(timers):
-            timer_text = format_timer(timers[idx])
-            if not timer_text:
-                return match.group(0)
-            if punctuation == "." and timer_text.endswith("."):
-                timer_text = timer_text[:-1]
-            return f"{timer_text}{punctuation}"
-        return match.group(0)
+        timer_text = format_timer(timers[idx]) if idx < len(timers) else ""
+        if not timer_text:
+            return f"{unresolved}{punctuation}"
+        if punctuation == "." and timer_text.endswith("."):
+            timer_text = timer_text[:-1]
+        return f"{timer_text}{punctuation}"
 
     return TIMER_PLACEHOLDER_PATTERN.sub(replacer, text)
 
 
-def get_step_text(step: RecipeStep, language: str = "de") -> str:
+def get_step_text(
+    step: RecipeStep, language: str = "de", *, markup: bool = False
+) -> str:
     """Get localized step text with timer placeholders expanded."""
     raw = localized_fallback(step.title, language) or ""
-    return expand_timer_placeholders(raw, step.timers or [])
+    return expand_timer_placeholders(raw, step.timers or [], markup=markup)
 
 
 ZipContent = bytes | str | Path
@@ -87,24 +98,24 @@ def replace_timers_in_step(step, text: str) -> str:
     """Replace ``<timer>`` placeholders in ``text`` with the step's timers.
 
     Timers are consumed in order, retaining exact, max-only and ranged minutes. A
-    placeholder with no remaining timer is left untouched. The original
-    ``step.timers`` list is not mutated.
+    placeholder with no remaining or no usable timer becomes a visible Markdown
+    code span. The original ``step.timers`` list is not mutated.
     """
     timer_iter = iter(getattr(step, "timers", None) or [])
 
     def repl(match: re.Match[str]) -> str:
         timer = next(timer_iter, None)
         if timer is None:
-            return match.group(0)
+            return UNRESOLVED_TIMER_MARKUP
         if timer.min_or_exact is not None and timer.max is not None:
             return f"{timer.min_or_exact}–{timer.max}m"
         if timer.min_or_exact is not None:
             return f"{timer.min_or_exact}m"
         if timer.max is not None:
             return f"≤{timer.max}m"
-        return match.group(0)
+        return UNRESOLVED_TIMER_MARKUP
 
-    return re.sub(r"<timer>", repl, text)
+    return re.sub(re.escape(TIMER_PLACEHOLDER), repl, text)
 
 
 def validate_export_id(identifier: str) -> None:

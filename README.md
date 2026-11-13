@@ -327,8 +327,11 @@ labels across all exporters prefer that same configured language. Missing or
 empty translations fall back in order to German, English, Spanish, French, then
 Portuguese, without changing the original recipe payload. `<timer>` placeholders in steps are
 replaced with their durations. If a timer is missing or has no duration metadata,
-the corresponding literal `<timer>` and its punctuation stay in every export
-(including Mealie). Later timers keep their positions; no duration is invented.
+the placeholder and its punctuation stay in every export: Paprika keeps the
+literal `<timer>`, while the rendered Markdown, Tandoor and Mealie step texts
+write it as the code span `` `<timer>` `` so renderers show it instead of
+hiding it as an HTML tag. Later timers keep their positions; no duration is
+invented.
 Check the source recipe for unresolved timing instructions before cooking.
 
 Markdown is final cookbook text, so its serving count is configurable:

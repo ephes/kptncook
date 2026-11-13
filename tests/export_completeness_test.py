@@ -32,14 +32,16 @@ def test_missing_timers_preserve_positions_and_punctuation(
         "get_generated_data",
         lambda *a, **kw: GeneratedData(None, None, "synthetic", "synthetic"),
     )
-    expected = text
+    # Rendered targets get a code span so the marker is not swallowed as HTML.
+    marker = "<timer>" if kind == "paprika" else "`<timer>`"
+    expected = text.replace("<timer>", marker)
     if timers == [{"min_or_exact": 3}]:
-        expected = text.replace("<timer>", "3m" if kind == "markdown" else "3 Min.", 1)
+        expected = expected.replace(marker, "3m" if kind == "markdown" else "3 Min.", 1)
     elif timers == [{}, {"max": 9}]:
         expected = (
-            "Erst <timer>, dann "
+            f"Erst {marker}, dann "
             + ("≤9m" if kind == "markdown" else "bis zu 9 Min.")
-            + "! Zuletzt <timer>."
+            + f"! Zuletzt {marker}."
         )
     if kind == "markdown":
         assert f"- {expected}\n" in MarkdownExporter().render_recipe(recipe)

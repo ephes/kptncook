@@ -159,7 +159,7 @@ class TandoorExporter:
             steps.append(
                 {
                     "instruction": get_step_text(
-                        step, language=get_settings().kptncook_lang
+                        step, language=get_settings().kptncook_lang, markup=True
                     ),
                     "ingredients": self.get_step_ingredients(
                         step=step, servings=recipe.servings

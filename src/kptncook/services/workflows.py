@@ -345,11 +345,14 @@ def _mealie_sync_lock() -> Iterator[None]:
     )
     try:
         lock.acquire()
-    except portalocker.exceptions.LockException as exc:
+    except portalocker.exceptions.AlreadyLocked as exc:
         raise UserFacingError(
             "Mealie sync is busy: could not acquire the local Mealie sync lock "
             "within the wait budget. Try again after the current sync finishes."
         ) from exc
+    except portalocker.exceptions.LockException as exc:
+        # Not contention (e.g. no locking support): fail with the lock error.
+        raise UserFacingError("Could not acquire the local Mealie sync lock") from exc
     except OSError as exc:
         raise UserFacingError("Could not open the local Mealie sync lock") from exc
     try:
