@@ -2,6 +2,9 @@ Unreleased
 ==========
 
 ### Fixes
+- Refuse nonfinite scaled ingredient quantities during recipe admission and
+  export preflight, including step ingredients and Markdown serving overrides;
+  preserve existing exports and ordinary zero/missing/fractional quantities.
 - Bind recovery backups to the bounded primary snapshot read for each mutation;
   refuse changed source generations before publication instead of reopening an
   unchecked source path. Direct backup calls use the same file admission.

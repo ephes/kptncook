@@ -931,6 +931,7 @@ def kptncook_to_mealie_tags(active_tags: list[str] | None) -> list[RecipeTag]:
 def kptncook_to_mealie(
     kcin: KptnCookRecipe, api_key: str | None = None
 ) -> RecipeWithImage:
+    kcin.validate_scaled_quantities()
     if api_key is None:
         api_key = get_settings().kptncook_api_key
     ingredients, ingredient_id_to_reference_ids = kptncook_to_mealie_ingredients(

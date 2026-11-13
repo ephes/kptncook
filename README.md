@@ -295,7 +295,12 @@ to the standard two portions when it is absent. KptnCook stores ingredient
 quantities for a single serving, also for fixed-portion recipes such as a batch
 of cookies, so exporters scale them to the portion count they write. Explicit
 portion counts must be positive integers (no booleans or coercion). Ingredient and step-ingredient quantities
-must be finite; zero, fractions and missing quantities remain supported.
+must be finite, and their scaled results must also be representable as finite
+floats. This includes step ingredients and Markdown `--servings` overrides.
+Overflow is refused with a bounded field location before image downloads, file
+publication or remote creates. Export batches are preflighted before writes;
+previous exports remain intact. Zero, fractions and missing quantities remain
+supported, with the same six-decimal rounding across adapters.
 Whole-recipe preparation and cooking times are strict integer minutes from 0 to
 525600 (365 days); booleans, strings and fractional values are refused.
 Preparation time is required. Missing/null cooking time stays unknown; explicit

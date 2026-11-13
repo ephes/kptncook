@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 class TandoorExporter:
     def export(self, recipes: list[Recipe]) -> list[str]:
         for recipe in recipes:
+            recipe.validate_scaled_quantities()
             validate_export_id(recipe.id.oid)
         filenames = []
         for recipe in recipes:
@@ -117,6 +118,7 @@ class TandoorExporter:
             return None
 
     def get_recipe_payload(self, recipe: Recipe) -> dict[str, Any]:
+        recipe.validate_scaled_quantities()
         return {
             "name": localized_fallback(
                 recipe.localized_title, language=get_settings().kptncook_lang
