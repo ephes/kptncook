@@ -2,6 +2,10 @@ Unreleased
 ==========
 
 ### Security
+- Update locked notebook dependency SoupSieve from 2.9 to 4.1 for
+  CVE-2026-126190, retaining Beautiful Soup 4.14.3. Notebook tooling now requires
+  Python 3.11.5+ to match SoupSieve; the recipe client still supports Python 3.10+.
+  Cover ordinary selectors and deeply nested HTML with a bounded regression test.
 - Redact secrets in httpx and httpcore log records. When logging is enabled,
   httpx's `HTTP Request: GET <url>` lines carried the `kptnkey` of KptnCook
   API and image URLs. Query values such as `kptnkey`, `token` and `api_key`,
