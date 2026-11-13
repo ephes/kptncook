@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Admit repository mutation locks through nonblocking, no-follow descriptor opens;
+  refuse special files and replaced lock identities without changing store or backup.
 - Preserve unresolved `<timer>` instructions and punctuation in every export,
   including when a timer entry exists but contains no duration. Markdown,
   Tandoor and Mealie write them as a visible `` `<timer>` `` code span.

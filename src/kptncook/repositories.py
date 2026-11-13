@@ -148,8 +148,28 @@ class RecipeRepository:
 
     @contextmanager
     def _write_lock(self) -> Iterator[None]:
-        self._ensure_parent_dir()
-        with self.lock_path.open("a+", encoding="utf-8") as lock_file:
+        try:
+            self._ensure_parent_dir()
+            if self.lock_path.is_symlink():
+                raise RepositoryError("Repository lock must be a regular file.")
+            flags = (
+                os.O_RDWR
+                | os.O_CREAT
+                | getattr(os, "O_NONBLOCK", 0)
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_BINARY", 0)
+            )
+            fd = os.open(self.lock_path, flags, 0o600)
+            try:
+                info = os.fstat(fd)
+                self._check_lock_identity(info)
+                lock_file = os.fdopen(fd, "a+", encoding="utf-8")
+            except BaseException:
+                os.close(fd)
+                raise
+        except OSError as exc:
+            raise RepositoryError("Could not open repository lock safely.") from exc
+        with lock_file:
             try:
                 portalocker.lock(lock_file, portalocker.LOCK_EX)
             except portalocker.exceptions.LockException as exc:
@@ -158,9 +178,26 @@ class RecipeRepository:
                     "OS advisory locking. Use a local filesystem with locking support."
                 ) from exc
             try:
+                # A waiter may have acquired an inode whose name was replaced
+                # while another writer held it. It no longer coordinates writes.
+                self._check_lock_identity(info)
                 yield
             finally:
                 portalocker.unlock(lock_file)
+
+    def _check_lock_identity(self, info: os.stat_result) -> None:
+        try:
+            current = self.lock_path.lstat()
+        except OSError as exc:
+            raise RepositoryError(
+                "Repository lock changed; retry the mutation."
+            ) from exc
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or not stat.S_ISREG(current.st_mode)
+            or (info.st_dev, info.st_ino) != (current.st_dev, current.st_ino)
+        ):
+            raise RepositoryError("Repository lock must be a stable regular file.")
 
     def _write_models(self, locked):
         self._ensure_parent_dir()

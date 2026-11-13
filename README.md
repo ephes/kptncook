@@ -422,7 +422,11 @@ Repository mutations use the existing portable `portalocker` backend on supporte
 POSIX and Windows systems. Every mutation must acquire the stable sibling
 `kptncook.json.lock` before rereading and replacing data; lock failures refuse the
 write with a repository error. Use a local filesystem with working advisory locks,
-and retain lock files while writers may run. Read-only recipe/export access
+and retain lock files while writers may run. Lock admission opens without following
+symlinks or waiting on special files, requires a regular descriptor, and verifies
+that its inode still owns the stable name after acquiring the lock. A replaced
+lock is refused before reading or mutating recipes; lock names are never unlinked
+by the application. Read-only recipe/export access
 remains available when locking fails.
 
 Repository-backed commands now warn if `kptncook.json` contains stored entries
