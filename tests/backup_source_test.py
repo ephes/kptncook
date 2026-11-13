@@ -136,3 +136,42 @@ def test_direct_backup_uses_bounded_regular_source(tmp_path, monkeypatch, kind):
         repo.create_backup()
     assert repo.backup_path.read_bytes() == b"previous recovery"
     assert list(tmp_path.glob(".*.tmp")) == []
+
+
+def _replace_after_open(repo, monkeypatch):
+    from kptncook import repositories
+
+    real_fstat = repositories.os.fstat
+    replaced = False
+
+    def fstat_then_replace(fd):
+        nonlocal replaced
+        info = real_fstat(fd)
+        if not replaced and info.st_ino == repo.path.stat().st_ino:
+            replaced = True
+            staged = repo.base_dir / "staged.json"
+            staged.write_bytes(b"[]")
+            os.replace(staged, repo.path)
+        return info
+
+    monkeypatch.setattr(repositories.os, "fstat", fstat_then_replace)
+
+
+def test_reader_keeps_opened_generation_during_atomic_replace(tmp_path, monkeypatch):
+    repo = RecipeRepository(tmp_path)
+    repo.add(RecipeInDb(date=date(2026, 1, 1), data={"_id": {"$oid": "old"}}))
+    _replace_after_open(repo, monkeypatch)
+    assert [recipe.data["_id"]["$oid"] for recipe in repo.list()] == ["old"]
+    assert repo.path.read_bytes() == b"[]"
+
+
+def test_mutation_refuses_generation_replaced_after_open(tmp_path, monkeypatch):
+    repo = RecipeRepository(tmp_path)
+    repo.add(RecipeInDb(date=date(2026, 1, 1), data={"_id": {"$oid": "old"}}))
+    repo.backup_path.write_bytes(b"previous recovery")
+    _replace_after_open(repo, monkeypatch)
+    with pytest.raises(RepositoryError, match="changed"):
+        repo.add(RecipeInDb(date=date(2026, 1, 1), data={"_id": {"$oid": "new"}}))
+    assert repo.path.read_bytes() == b"[]"
+    assert repo.backup_path.read_bytes() == b"previous recovery"
+    assert list(tmp_path.glob(".*.tmp")) == []

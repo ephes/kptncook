@@ -65,13 +65,18 @@ class _StoreSnapshot:
 
 
 def _generation(info: os.stat_result) -> tuple[int, ...]:
+    return (*_content_generation(info), info.st_ctime_ns)
+
+
+def _content_generation(info: os.stat_result) -> tuple[int, ...]:
+    # An atomic replacement of the name only changes the opened inode's link
+    # count and ctime; its bytes stay the generation the reader opened.
     return (
         info.st_dev,
         info.st_ino,
         info.st_mode,
         info.st_size,
         info.st_mtime_ns,
-        info.st_ctime_ns,
     )
 
 
@@ -302,9 +307,11 @@ class RecipeRepository:
                 if len(raw_bytes) > MAX_STORE_BYTES:
                     raise RepositoryError("Repository exceeds the 64 MiB size limit.")
                 snapshot = _StoreSnapshot(raw_bytes, info)
-                if _generation(os.fstat(fd)) != _generation(info):
+                if _content_generation(os.fstat(fd)) != _content_generation(info):
                     raise RepositoryError("Repository changed while being read; retry.")
-                self._check_snapshot(snapshot)
+                # Readers keep the complete generation they opened even if a
+                # writer atomically replaces the name meanwhile; mutations bind
+                # the snapshot to the pathname before publishing.
             finally:
                 os.close(fd)
             return snapshot

@@ -451,6 +451,9 @@ moved over `.backup`. The primary generation (device, inode, type, size and
 modification/change timestamps) is checked after reading, before backup publication
 and before primary replacement. A changed, removed or newly appeared primary
 refuses the mutation; reload and retry after external editing has finished.
+Read-only access (listing, exports, sync checks) does not take that pathname
+check: a reader returns the complete generation it opened, even when a writer
+atomically replaces the file meanwhile.
 Backup copying never reopens an unchecked pathname or follows a substituted symlink
 or FIFO. Direct library `create_backup()` calls use the same bounded regular-file
 admission. Advisory locks coordinate cooperating writers; external editors must
