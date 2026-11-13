@@ -846,9 +846,14 @@ the previous release's files instead of the new version.
 
 Run `uv sync --frozen`, then `just lint`, `just typecheck`, and `just test`.
 The recipe client supports Python 3.10+. Notebook tooling (JupyterLab in the
-`dev` group) requires Python 3.11+; Python 3.10 installs the other development
-tools without JupyterLab. Smoke-check notebooks with
-`uv run --frozen python -c "import jupyterlab, tornado, setuptools"` on Python 3.11+.
+`dev` group) requires Python 3.11.5+; older interpreters install the other
+development tools without JupyterLab. Smoke-check notebooks with
+`uv run --frozen python -c "import jupyterlab, tornado, setuptools"` on Python 3.11.5+.
+
+The notebook dependency graph locks SoupSieve 4.1 for CVE-2026-126190, with
+Beautiful Soup 4.14.3. SoupSieve requires Python 3.11.5+, so the notebook marker
+keeps older interpreters from falling back to an obsolete Beautiful Soup release.
+The recipe client continues to support Python 3.10+.
 
 The notebook/build lock uses setuptools 84.2.1 and Tornado 6.6 to address
 PYSEC-2026-3447, GHSA-xmj3-9gf7-h52w and CVE-2026-116577/115927/116578.

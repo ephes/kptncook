@@ -48,7 +48,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "jupyterlab >= 3.2.9; python_version >= '3.11'",
+    "jupyterlab >= 3.2.9; python_full_version >= '3.11.5'",
     "mkdocs >= 1.2",
     "mypy",
     "prek>=0.3.9",
