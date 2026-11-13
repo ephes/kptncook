@@ -322,9 +322,9 @@ def list_discovery_list(
     """
     try:
         list_type = normalize_discovery_list_type(list_type)
+        list_id = normalize_discovery_list_id(list_id)
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
-    list_id = normalize_discovery_list_id(list_id)
     if list_type in DISCOVERY_LIST_TYPES_REQUIRE_ID and list_id is None:
         raise typer.BadParameter(
             "list-id is required when list-type is curated or automated"

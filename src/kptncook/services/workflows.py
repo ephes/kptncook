@@ -14,7 +14,12 @@ from typing import Any, Literal
 import httpx
 import portalocker
 
-from kptncook.api import KptnCookClient, _collect_recipe_identifiers, parse_id
+from kptncook.api import (
+    KptnCookClient,
+    RecipeIdentifierError,
+    _collect_recipe_identifiers,
+    parse_id,
+)
 from kptncook.config import get_settings
 from kptncook.env import ENV_PATH
 from kptncook.http_errors import (
@@ -277,6 +282,8 @@ def _resolve_recipe_summaries(
         return []
     try:
         return client.resolve_recipe_summaries(items)
+    except RecipeIdentifierError as exc:
+        raise UserFacingError(str(exc)) from exc
     except httpx.HTTPStatusError as exc:
         raise UserFacingError(
             format_http_status_error(exc.response, action=action)
@@ -453,7 +460,10 @@ def backup_kptncook_favorites() -> FavoritesBackupResult:
         except ValueError as exc:
             raise UserFacingError(str(exc)) from exc
 
-        identifiers = _collect_recipe_identifiers(favorites)
+        try:
+            identifiers = _collect_recipe_identifiers(favorites)
+        except RecipeIdentifierError as exc:
+            raise UserFacingError(str(exc)) from exc
         if not identifiers:
             raise UserFacingError("Could not find any favorites")
 

@@ -467,6 +467,18 @@ List types are case-insensitive; short flags are `-t` for `--list-type` and
 `-i` for `--list-id`. For `curated` and `automated`, pass the list id from
 `discovery-screen` with `--list-id`. For `latest` and `recommended`, omit
 `--list-id`.
+
+The CLI and public client accept only these four list types. List IDs are single
+opaque path components containing Unicode letters/numbers or `-._~`; `.` and `..`,
+percent escapes, separators, controls and query/fragment markers are refused
+before authenticated requests. Unicode IDs are percent-encoded in the route.
+Outer spaces are trimmed, as in the CLI's other list input normalization.
+
+Recipe identifiers retain the supported `identifier`, `uid`, `_id`/`$oid`,
+`id`, `recipeId`/`recipe_id` and recipe/summary wrapper shapes, up to 16 dictionary
+levels. Cycles or deeper wrappers stop resolution with a payload-free error.
+Favorites backup rejects the whole identifier batch before recipe search or
+storage, including when another favorite is valid; no partial backup is saved.
 Use `--no-quick-search` if you only want discovery list ids, and add `--save`
 to `discovery-list` to store the resolved recipes locally.
 Discovery screen entries are printed as `id | title | type` so you can copy the

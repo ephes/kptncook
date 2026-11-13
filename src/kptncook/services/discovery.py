@@ -164,7 +164,17 @@ def normalize_discovery_list_id(value: str | None) -> str | None:
     if value is None:
         return None
     normalized = value.strip()
-    return normalized or None
+    if not normalized:
+        return None
+    if (
+        normalized in {".", ".."}
+        or any(not (char.isalnum() or char in "-._~") for char in normalized)
+        or any(ord(char) < 32 or ord(char) == 127 for char in value)
+    ):
+        raise ValueError(
+            "list-id must be one opaque path component: letters, numbers, -._~"
+        )
+    return normalized
 
 
 def _normalize_list_input(items: list[str]) -> list[str]:

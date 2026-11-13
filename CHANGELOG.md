@@ -2,6 +2,10 @@ Unreleased
 ==========
 
 ### Fixes
+- Validate discovery list types and opaque list IDs consistently in the CLI and
+  public client before authenticated requests; percent-encode admitted IDs.
+- Refuse cyclic or overdeep recipe identifier wrappers with a bounded error
+  before resolution or favorites backup writes, retaining supported shapes.
 - Resolve share URLs from streamed headers only, close unused bodies, and refuse
   replies observed after the 15-second acquisition budget before recipe lookup.
 - Bound competing Mealie sync lock waits to 30 seconds. Busy/interrupted runs

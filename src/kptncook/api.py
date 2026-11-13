@@ -3,16 +3,26 @@ from collections.abc import Sequence
 from datetime import date
 from time import time
 from typing import Any, Literal
+from urllib.parse import quote
 
 import httpx
 
 from .config import get_settings
 from .http_client import BaseHttpClient, DEFAULT_REQUEST_TIMEOUT
 from .repositories import RecipeInDb
+from .services.discovery import (
+    normalize_discovery_list_id,
+    normalize_discovery_list_type,
+)
 
 RECIPE_RESOLUTION_TIMEOUT = httpx.Timeout(120.0, connect=10.0)
 
 RecipeIdentifier = tuple[Literal["oid", "uid"], str]
+MAX_IDENTIFIER_WRAPPER_DEPTH = 16
+
+
+class RecipeIdentifierError(ValueError):
+    """An identifier wrapper exceeded the supported structural limits."""
 
 
 def ids_to_payload(ids: list[RecipeIdentifier]) -> list[dict]:
@@ -29,39 +39,52 @@ def ids_to_payload(ids: list[RecipeIdentifier]) -> list[dict]:
     return payload
 
 
-def _coerce_recipe_identifier(value: object) -> RecipeIdentifier | None:
+def _coerce_recipe_identifier(
+    value: object, *, _depth: int = 0, _ancestors: frozenset[int] = frozenset()
+) -> RecipeIdentifier | None:
     if isinstance(value, tuple) and len(value) == 2:
         id_type, id_value = value
         if id_type in ("oid", "uid") and id_value is not None:
             return id_type, str(id_value)
     if isinstance(value, dict):
+        if _depth >= MAX_IDENTIFIER_WRAPPER_DEPTH or id(value) in _ancestors:
+            raise RecipeIdentifierError(
+                "Recipe identifier wrapper is cyclic or exceeds 16 levels"
+            )
+        ancestors = _ancestors | {id(value)}
+
+        def nested_identifier(child: object) -> RecipeIdentifier | None:
+            return _coerce_recipe_identifier(
+                child, _depth=_depth + 1, _ancestors=ancestors
+            )
+
         identifier = value.get("identifier")
         if identifier is not None:
-            nested = _coerce_recipe_identifier(identifier)
+            nested = nested_identifier(identifier)
             if nested is not None:
                 return nested if nested[0] == "oid" else ("oid", nested[1])
             if not isinstance(identifier, dict):
                 return "oid", str(identifier)
         uid = value.get("uid")
         if uid is not None:
-            nested = _coerce_recipe_identifier(uid)
+            nested = nested_identifier(uid)
             if nested is not None:
                 return nested if nested[0] == "uid" else ("uid", nested[1])
             if not isinstance(uid, dict):
                 return "uid", str(uid)
         for key in ("_id", "id", "recipeId", "recipe_id"):
             if key in value:
-                nested = _coerce_recipe_identifier(value.get(key))
+                nested = nested_identifier(value.get(key))
                 if nested is not None:
                     return nested
         for key in ("$oid", "oid"):
             if key in value:
-                nested = _coerce_recipe_identifier(value.get(key))
+                nested = nested_identifier(value.get(key))
                 if nested is not None:
                     return nested if nested[0] == "oid" else ("oid", nested[1])
         for key in ("recipe", "recipeSummary", "recipe_summary", "summary"):
             if key in value:
-                nested = _coerce_recipe_identifier(value.get(key))
+                nested = nested_identifier(value.get(key))
                 if nested is not None:
                     return nested
     if isinstance(value, str):
@@ -359,17 +382,17 @@ class KptnCookClient(BaseHttpClient):
         """
         Get discovery list summary entries from kptncook api.
         """
+        list_type = normalize_discovery_list_type(list_type)
+        list_id = normalize_discovery_list_id(list_id)
         params = self._standard_query_params(
             lang=lang, store=store, preferences=preferences
         )
         if list_type in ("latest", "recommended"):
             path = f"discovery/list/{list_type}"
-        elif list_type in ("curated", "automated"):
+        else:
             if list_id is None:
                 raise ValueError("list_id is required for curated or automated lists")
-            path = f"discovery/list/{list_type}/{list_id}"
-        else:
-            path = f"discovery/list/{list_type}"
+            path = f"discovery/list/{list_type}/{quote(list_id, safe='')}"
         response = self.get(path, params=params)
         response.raise_for_status()
         return _extract_discovery_list_payload(response.json())
