@@ -151,3 +151,57 @@ def test_unsupported_project_layout_preserves_both_files(tmp_path, text):
     with pytest.raises(release.ReleaseError, match="Could not update version"):
         release.prepare_release(changelog, project, version="0.0.2")
     assert (changelog.read_bytes(), project.read_bytes()) == before
+
+
+def test_edit_after_first_publication_prevents_second_publication(
+    tmp_path, monkeypatch
+):
+    changelog, project = files(tmp_path)
+    originals = changelog.read_bytes(), project.read_bytes()
+    replace = release.os.replace
+    edited = b"Unreleased\n==========\n\n- Competing notes.\n"
+
+    def edit(source, target):
+        replace(source, target)
+        if target == changelog:
+            changelog.write_bytes(edited)
+
+    monkeypatch.setattr(release.os, "replace", edit)
+    with pytest.raises(release.ReleaseError, match="recovery copy"):
+        release.prepare_release(changelog, project, version="0.0.2")
+    assert changelog.read_bytes() == edited
+    assert project.read_bytes() == originals[1]
+    assert next(tmp_path.glob("CHANGELOG.md.recovery-*")).read_bytes() == originals[0]
+
+
+def test_release_wait_is_bounded(tmp_path, monkeypatch):
+    import time
+
+    files(tmp_path)
+    ctx = multiprocessing.get_context("spawn")
+    started, entered, resume = ctx.Event(), ctx.Event(), ctx.Event()
+    results = ctx.Queue()
+    process = ctx.Process(
+        target=prepare_process, args=(str(tmp_path), started, entered, resume, results)
+    )
+    try:
+        process.start()
+        assert entered.wait(10)
+        monkeypatch.setattr(release, "RELEASE_LOCK_TIMEOUT_SECONDS", 0.1)
+        begin = time.monotonic()
+        with pytest.raises(release.ReleaseError, match="busy"):
+            release.prepare_release(
+                tmp_path / "CHANGELOG.md", tmp_path / "pyproject.toml", version="0.0.3"
+            )
+        assert time.monotonic() - begin < 1.5
+        resume.set()
+        process.join(10)
+        assert process.exitcode == 0
+        assert results.get(timeout=2) == "ok"
+    finally:
+        resume.set()
+        if process.is_alive():
+            process.terminate()
+            process.join(5)
+        results.close()
+        results.join_thread()

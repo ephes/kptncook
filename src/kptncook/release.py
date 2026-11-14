@@ -2,20 +2,21 @@ from __future__ import annotations
 
 import argparse
 import os
-import tempfile
 import re
-
-import portalocker
+import stat
 import subprocess
 import sys
+import tempfile
+from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
+
+import portalocker
 
 if sys.version_info >= (3, 11):
     import tomllib
 else:
     import tomli as tomllib
-from dataclasses import dataclass
-from datetime import date
-from pathlib import Path
 
 VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 RELEASE_HEADING_PATTERN = re.compile(
@@ -23,6 +24,7 @@ RELEASE_HEADING_PATTERN = re.compile(
     re.MULTILINE,
 )
 UNRELEASED_PREFIX = "Unreleased\n==========\n"
+RELEASE_LOCK_TIMEOUT_SECONDS = 30.0
 
 
 class ReleaseError(Exception):
@@ -260,8 +262,41 @@ def prepare_release(
     normalized_date = _validate_release_date(release_date or date.today().isoformat())
     # Keep this inode: unlinking a lock lets later waiters lock a different file.
     lock_path = changelog_path.resolve().parent / ".kptncook-release.lock"
+
+    def open_lock(path: str, flags: int) -> int:
+        if lock_path.is_symlink():
+            raise OSError("Unsafe release lock")
+        fd = os.open(
+            path,
+            flags | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
+            0o600,
+        )
+        try:
+            opened = os.fstat(fd)
+            if not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1:
+                raise OSError("Unsafe release lock")
+            return fd
+        except BaseException:
+            os.close(fd)
+            raise
+
     try:
-        with portalocker.Lock(lock_path, mode="a", timeout=30, check_interval=0.1):
+        with portalocker.Lock(
+            lock_path,
+            mode="a",
+            timeout=RELEASE_LOCK_TIMEOUT_SECONDS,
+            check_interval=0.1,
+            opener=open_lock,
+            flags=portalocker.LOCK_EX | portalocker.LOCK_NB,
+        ) as handle:
+            named, opened = lock_path.lstat(), os.fstat(handle.fileno())
+            if (
+                not stat.S_ISREG(named.st_mode)
+                or named.st_nlink != 1
+                or opened.st_nlink != 1
+                or (opened.st_dev, opened.st_ino) != (named.st_dev, named.st_ino)
+            ):
+                raise ReleaseError("Release lock changed; retry preparation.")
             original_changelog = _generation(changelog_path)
             original_project = _generation(pyproject_path)
             changelog = _updated_changelog(
@@ -284,6 +319,7 @@ def prepare_release(
                 changelog_path, changelog.encode("utf-8"), expected=original_changelog
             )
             try:
+                _require_generation(changelog_path, owned)
                 _atomic_replace(
                     pyproject_path, project.encode("utf-8"), expected=original_project
                 )
