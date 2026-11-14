@@ -2,6 +2,12 @@ Unreleased
 ==========
 
 ### Fixes
+- Update the notebook Tornado lock to 6.6.1 for CVE-2026-126347, keeping the
+  frozen runtime/development dependency audit clean.
+- Refuse duplicate members in Mealie control JSON, including nested and escaped
+  identity/instruction keys, with value-free domain errors before follow-ups.
+- Bound discovery-screen searches with iterative depth/work admission and cycle
+  detection; refuse malformed screens without rendering a partial listing.
 - Admit Mealie sync locks without following links or blocking on special files;
   require a private regular single-link inode and verify its name after locking.
 - Re-read Mealie recipe identity and complete instructions after step asset

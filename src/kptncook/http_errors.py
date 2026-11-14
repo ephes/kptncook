@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import httpx
 
+from .control_json import decode_control_json
+
 
 MAX_ERROR_BODY_BYTES = 16 * 1024
 # Only known protocol details are safe to display; arbitrary body/URL text may
@@ -34,7 +36,7 @@ def _json_body(response: httpx.Response) -> object | None:
     try:
         if len(response.content) > MAX_ERROR_BODY_BYTES:
             return None
-        return response.json()
+        return decode_control_json(response)
     except (ValueError, RecursionError, httpx.ResponseNotRead):
         return None
 

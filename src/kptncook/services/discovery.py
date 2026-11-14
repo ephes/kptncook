@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Iterator
 from typing import Any
 
 
@@ -17,17 +18,54 @@ class DiscoveryScreenData:
     quick_search: list[str]
 
 
+MAX_SCREEN_DEPTH = 16
+MAX_SCREEN_WORK = 4096
+
+
+class DiscoveryScreenError(ValueError):
+    """A malformed screen must not produce a partial presentation."""
+
+
 def _extract_nested_list(payload: object, keys: tuple[str, ...]) -> list[Any]:
-    if isinstance(payload, dict):
+    # Incremental DFS preserves supported-key and dictionary insertion order.
+    # Lists are leaves. Empty lists at nested nodes stop that node's search,
+    # but do not hide a later sibling's nonempty result.
+    stack: list[tuple[Iterator[object], int, frozenset[int]]] = [
+        (iter((payload,)), 0, frozenset())
+    ]
+    work = 0
+
+    def charge() -> None:
+        nonlocal work
+        work += 1
+        if work > MAX_SCREEN_WORK:
+            raise DiscoveryScreenError(
+                "Malformed discovery screen: work limit exceeded"
+            )
+
+    while stack:
+        children, depth, ancestors = stack[-1]
+        try:
+            node = next(children)
+        except StopIteration:
+            stack.pop()
+            continue
+        charge()
+        if not isinstance(node, dict):
+            continue
+        if depth >= MAX_SCREEN_DEPTH or id(node) in ancestors:
+            raise DiscoveryScreenError(
+                "Malformed discovery screen: cycle or depth limit exceeded"
+            )
         for key in keys:
-            value = payload.get(key)
+            charge()
+            value = node.get(key)
             if isinstance(value, list):
-                return value
-        for value in payload.values():
-            if isinstance(value, dict):
-                nested = _extract_nested_list(value, keys)
-                if nested:
-                    return nested
+                if value or depth == 0:
+                    return value
+                break
+        else:
+            stack.append((iter(node.values()), depth + 1, ancestors | {id(node)}))
     return []
 
 

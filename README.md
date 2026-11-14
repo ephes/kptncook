@@ -150,6 +150,11 @@ probe costs one unit). Traversal is iterative, detects active dictionary cycles
 for library inputs and stops before resolving or saving a backup on refusal.
 Recipe lists are leaves, so this budget applies to finding the list, not its
 records. Supported key precedence and legitimate empty lists are preserved.
+The `discovery-screen` presentation path also uses iterative traversal, limited
+to 16 dictionary levels and 4,096 visited-value/key-probe operations per list
+search (lists and quick search). Cycles, depth and work overflow produce a short
+malformed-screen error with no partial listing; localized text, key precedence
+and entry order are retained. Screen entry lists are leaves for these searches.
 
 Share URLs are resolved using only the response headers, without reading bodies
 or following redirects. Only 301/302 responses with a Location are accepted.
@@ -302,6 +307,14 @@ Mealie organizer pages must contain a list of objects and a nonnegative integer
 `total_pages` (zero is allowed only for an empty inventory). Invalid pages abort
 listing before organizer creation. Successful password login requires a nonempty
 string token; malformed replies leave any existing authorization unchanged.
+Mealie control JSON refuses duplicate object member names at every nesting
+level, including escaped spellings of the same name, before identity checks or
+follow-up requests. This applies to login, inventories/details, import, organizer
+and media responses, version discovery, PATCH replies and conflict details.
+Repeated values in arrays remain valid. Decode failures use fixed diagnostics
+without response fragments, member names or tokens; existing error-body limits
+and inventory budgets still apply. A malformed response after a write does not
+cause a retry or rollback.
 
 Library callers own healthy clients returned by `get_mealie_client()` and should
 close them or use a context manager. Failed authentication closes the new client.
@@ -967,8 +980,10 @@ Beautiful Soup 4.14.3. SoupSieve requires Python 3.11.5+, so the notebook marker
 keeps older interpreters from falling back to an obsolete Beautiful Soup release.
 The recipe client continues to support Python 3.10+.
 
-The notebook/build lock uses setuptools 84.2.1 and Tornado 6.6 to address
-PYSEC-2026-3447, GHSA-xmj3-9gf7-h52w and CVE-2026-116577/115927/116578.
+The notebook/build lock uses setuptools 84.2.1 and Tornado 6.6.1 to address
+PYSEC-2026-3447, GHSA-xmj3-9gf7-h52w, CVE-2026-116577/115927/116578 and
+CVE-2026-126347. [Tornado 6.6.1 release notes](https://www.tornadoweb.org/en/stable/releases/v6.6.1.html)
+cover the additional security fixes.
 These findings concern development tools; they do not establish a recipe API exploit.
 
 Run the same frozen dependency audit as CI with

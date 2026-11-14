@@ -20,6 +20,7 @@ from pydantic import UUID4, BaseModel, ConfigDict, Field, TypeAdapter, Validatio
 from pydantic.alias_generators import to_camel
 
 from .exporter_utils import get_step_text
+from .control_json import decode_control_json
 from .config import get_settings
 from .http_errors import extract_mealie_detail_message
 from .auth import validate_token
@@ -259,7 +260,7 @@ class MealieApiClient(BaseHttpClient):
         r = self.post("/auth/token", data=login_data, timeout=60)
         r.raise_for_status()
         try:
-            payload = r.json()
+            payload = decode_control_json(r)
         except ValueError:
             raise ValueError("Invalid Mealie login response") from None
         token = payload.get("access_token") if isinstance(payload, dict) else None
@@ -304,7 +305,7 @@ class MealieApiClient(BaseHttpClient):
         r = self.post(asset_path, data=data, files={"file": download})
         r.raise_for_status()
 
-        return r.json()
+        return decode_control_json(r)
 
     @staticmethod
     def _build_recipestep_text(recipe_uuid, text, image_name):
@@ -352,7 +353,7 @@ class MealieApiClient(BaseHttpClient):
         )
         r.raise_for_status()
         try:
-            return r.json()
+            return decode_control_json(r)
         except ValueError:
             raise MealieInventoryError(
                 "Invalid Mealie inventory: expected JSON"
@@ -467,7 +468,7 @@ class MealieApiClient(BaseHttpClient):
             headers={"Content-Type": "application/json"},
         )
         r.raise_for_status()
-        return r.json()
+        return decode_control_json(r)
 
     def _load_organizer_index(
         self, endpoint_name, model_class, normalize_name: Callable[[str], str]
@@ -638,7 +639,7 @@ class MealieApiClient(BaseHttpClient):
         if self._archive_endpoint is None:
             response = self.get("/app/about")
             response.raise_for_status()
-            version = str(response.json()["version"])
+            version = str(decode_control_json(response)["version"])
             # Mealie 2 and 3 renamed the legacy v1 create routes.
             match = re.match(r"v?(\d+)\.", version)
             if match is None:
@@ -683,10 +684,10 @@ class MealieApiClient(BaseHttpClient):
         # Never retry or roll back an ambiguous import. Identity was present at
         # commit, so the next inventory pass can discover a completed recipe.
         response.raise_for_status()
-        slug = response.json()
+        slug = decode_control_json(response)
         response = self.get(_recipe_path(slug))
         response.raise_for_status()
-        return response.json()
+        return decode_control_json(response)
 
     def _attach_step_images(
         self, recipe: Recipe, stored: dict[str, Any], source: RecipeWithImage
@@ -736,7 +737,7 @@ class MealieApiClient(BaseHttpClient):
             # immediately before the write; never compensate or retry a PATCH.
             current_response = self.get(_recipe_path(recipe.slug))
             current_response.raise_for_status()
-            current = current_response.json()
+            current = decode_control_json(current_response)
             if (
                 not isinstance(current, dict)
                 or any(
@@ -758,7 +759,7 @@ class MealieApiClient(BaseHttpClient):
                 json={"recipeInstructions": instructions},
             )
             response.raise_for_status()
-            return Recipe.model_validate(response.json())
+            return Recipe.model_validate(decode_control_json(response))
         return recipe
 
     def create_recipe(self, recipe: RecipeWithImage) -> Recipe:
@@ -790,9 +791,11 @@ class MealieApiClient(BaseHttpClient):
             )
         try:
             created = self._attach_step_images(created, stored, recipe)
-        except Exception:
+        except Exception as exc:
             logger.warning(
-                "Skipping step image update for recipe %s", created.slug, exc_info=True
+                "Skipping step image update for recipe %s (%s)",
+                created.slug,
+                _media_failure_reason(exc),
             )
         return created
 
@@ -828,13 +831,13 @@ class MealieApiClient(BaseHttpClient):
     def delete_via_slug(self, slug):
         r = self.delete(_recipe_path(slug))
         r.raise_for_status()
-        return r.json() if r.content else None
+        return decode_control_json(r) if r.content else None
 
     def get_via_slug(self, slug, *, timeout=httpx.USE_CLIENT_DEFAULT):
         r = self.get(_recipe_path(slug), timeout=timeout)
         r.raise_for_status()
         try:
-            payload = r.json()
+            payload = decode_control_json(r)
         except ValueError:
             raise MealieInventoryError(
                 "Invalid Mealie inventory: expected recipe JSON"

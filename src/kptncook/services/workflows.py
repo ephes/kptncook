@@ -42,7 +42,11 @@ from kptncook.models import QuantityScaleError, Recipe, localized_fallback
 from kptncook.paprika import PaprikaExporter
 from kptncook.password_manager import get_credentials
 from kptncook.repositories import RecipeInDb
-from kptncook.services.discovery import DiscoveryScreenData, parse_discovery_screen
+from kptncook.services.discovery import (
+    DiscoveryScreenData,
+    DiscoveryScreenError,
+    parse_discovery_screen,
+)
 from kptncook.services.repository import (
     InvalidStoredRecipe,
     RepositoryRecipesResult,
@@ -590,7 +594,10 @@ def get_discovery_screen() -> DiscoveryScreenData:
             ) from exc
         except httpx.HTTPError as exc:
             raise UserFacingError(format_request_error(exc)) from exc
-        return parse_discovery_screen(payload)
+        try:
+            return parse_discovery_screen(payload)
+        except DiscoveryScreenError as exc:
+            raise UserFacingError(str(exc)) from None
 
 
 def get_discovery_list_recipes(
