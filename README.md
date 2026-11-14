@@ -624,8 +624,9 @@ lock and does not overwrite an existing nonempty configuration. If the filesyste
 cannot provide a lock, updates fail without replacing the configuration.
 Lock files must be regular files with exactly one hard link; symlinks, special
 files and a lock name replaced during acquisition are refused. A competing
-credential writer waits at most 30 seconds, then reports a busy configuration;
-retry after the current writer finishes. Timeout or interruption closes the lock
+credential writer waits at most 30 seconds, then reports a busy configuration
+(guided setup reports it once instead of waiting again); retry after the current
+writer finishes. Timeout or interruption closes the lock
 handle without changing credentials.
 
 Setup and credential updates read one regular UTF-8 configuration file of at
@@ -636,7 +637,7 @@ credential replacement. Repair the file and retry; setup does not reset it.
 
 **Important:** The `.env` file must be created in the `~/.kptncook/` directory, NOT in the installation directory or by editing the `kptncook` executable.
 
-If you want to back up your favorite recipes from KptnCook, you have to set the `KPTNCOOK_ACCESS_TOKEN` variable as well. You can obtain the access token by running `kptncook kptncook-access-token`; the command fetches the token and saves `KPTNCOOK_ACCESS_TOKEN` into `~/.kptncook/.env` instead of printing the raw token to stdout. But you need a kptncook account to do that.
+If you want to back up your favorite recipes from KptnCook, you have to set the `KPTNCOOK_ACCESS_TOKEN` variable as well. You can obtain the access token by running `kptncook kptncook-access-token`; the command fetches the token and saves `KPTNCOOK_ACCESS_TOKEN` into `~/.kptncook/.env` instead of printing the raw token to stdout. It logs in without the stored token, so it also replaces an invalid one; other commands stop with a short error naming the invalid setting (never its value). A login reply without a valid token, or a recipe-list reply whose wrapper is too deep or too large, ends as a short error instead of a traceback. But you need a kptncook account to do that.
 Beware: If you don't have a kptncook account, you'll lose all your favorites by creating a new one.
 
 Optional API defaults for discovery/dailies/onboarding requests:

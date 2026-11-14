@@ -221,3 +221,28 @@ def test_config_lock_interruption_closes_waiting_descriptor(tmp_path, monkeypatc
         assert config.read_text() == "KEEP=synthetic\n"
     env.upsert_env_value(config, "NEW", "value")
     assert env.read_env_values(config)["NEW"] == "value"
+
+
+def test_setup_reports_busy_configuration_once(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+
+    from typer.testing import CliRunner
+
+    from kptncook import env, setup
+
+    env_path = tmp_path / ".env"
+    calls = []
+
+    @contextmanager
+    def busy(path):
+        calls.append(path)
+        raise env.ConfigurationBusyError(env.ENV_BUSY_MESSAGE)
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(env, "_locked_env_path", busy)
+    result = CliRunner().invoke(
+        setup.cli, ["--env-path", str(env_path)], input="\n\n\n"
+    )
+    assert result.exit_code == 1
+    assert "Configuration is busy" in result.output
+    assert len(calls) == 1

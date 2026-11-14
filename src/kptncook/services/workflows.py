@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 from collections.abc import Iterator, Sequence
@@ -15,11 +16,13 @@ import httpx
 import portalocker
 
 from kptncook.api import (
+    ResponseShapeError,
     KptnCookClient,
     RecipeIdentifierError,
     _collect_recipe_identifiers,
     parse_id,
 )
+from kptncook.auth import InvalidTokenError
 from kptncook.config import get_settings
 from kptncook.env import ENV_PATH
 from kptncook.http_errors import (
@@ -166,8 +169,30 @@ def _delete_repository_ids(ids: list[str]) -> tuple[list[str], list[str]]:
         raise _wrap_repository_error(exc) from exc
 
 
+INVALID_CONFIGURED_TOKEN_MESSAGE = (
+    "The configured KPTNCOOK_ACCESS_TOKEN is invalid; "
+    "run kptncook-access-token to replace it."
+)
+INVALID_LOGIN_RESPONSE_MESSAGE = "Login response did not contain a valid access token."
+
+
+def _kptncook_client() -> KptnCookClient:
+    """Build the configured client; a refused stored token is a short CLI error."""
+    try:
+        return KptnCookClient()
+    except InvalidTokenError:
+        raise UserFacingError(INVALID_CONFIGURED_TOKEN_MESSAGE) from None
+
+
+def _recipe_list_shape_error(exc: ValueError) -> UserFacingError:
+    # Only fixed envelope texts are shown; decoder/validation details stay hidden.
+    if isinstance(exc, ResponseShapeError):
+        return UserFacingError(str(exc))
+    return UserFacingError("KptnCook returned an unreadable recipe list response.")
+
+
 def get_today_recipes() -> list[RecipeInDb]:
-    with closing(KptnCookClient()) as client:
+    with closing(_kptncook_client()) as client:
         return client.list_today()
 
 
@@ -298,7 +323,7 @@ def list_dailies(
     zone: str | None = None,
     is_subscribed: Literal[False] | None = None,
 ) -> list[RecipeInDb]:
-    with closing(KptnCookClient()) as client:
+    with closing(_kptncook_client()) as client:
         try:
             return client.list_dailies(
                 recipe_filter=recipe_filter,
@@ -446,7 +471,7 @@ def sync_with_mealie() -> int:
 
 def backup_kptncook_favorites() -> FavoritesBackupResult:
     _require_access_token()
-    client = KptnCookClient()
+    client = _kptncook_client()
     try:
         try:
             favorites = client.list_favorites()
@@ -494,9 +519,17 @@ def get_kptncook_access_token() -> str:
     if not username or not password:
         raise UserFacingError("Failed to get credentials")
 
-    with closing(KptnCookClient()) as client:
+    # Logging in must not depend on the (possibly invalid) stored token.
+    with closing(
+        KptnCookClient(
+            base_url=str(settings.kptncook_api_url),
+            api_key=settings.kptncook_api_key,
+        )
+    ) as client:
         try:
             return client.get_access_token(username, password)
+        except InvalidTokenError:
+            raise UserFacingError(INVALID_LOGIN_RESPONSE_MESSAGE) from None
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 401:
                 message = (
@@ -513,7 +546,7 @@ def get_kptncook_access_token() -> str:
 
 
 def get_discovery_screen() -> DiscoveryScreenData:
-    with closing(KptnCookClient()) as client:
+    with closing(_kptncook_client()) as client:
         try:
             payload = client.get_discovery_screen()
         except httpx.HTTPStatusError as exc:
@@ -530,7 +563,7 @@ def get_discovery_screen() -> DiscoveryScreenData:
 def get_discovery_list_recipes(
     *, list_type: str, list_id: str | None
 ) -> list[RecipeInDb]:
-    with closing(KptnCookClient()) as client:
+    with closing(_kptncook_client()) as client:
         try:
             items = client.get_discovery_list(list_type=list_type, list_id=list_id)
         except httpx.HTTPStatusError as exc:
@@ -539,12 +572,14 @@ def get_discovery_list_recipes(
             ) from exc
         except httpx.HTTPError as exc:
             raise UserFacingError(format_request_error(exc)) from exc
+        except (ResponseShapeError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise _recipe_list_shape_error(exc) from None
         return _resolve_recipe_summaries(client, items, action="resolving recipes")
 
 
 def list_popular_ingredients() -> list[dict[str, object]]:
     _require_access_token()
-    with closing(KptnCookClient()) as client:
+    with closing(_kptncook_client()) as client:
         try:
             return client.list_popular_ingredients()
         except httpx.HTTPStatusError as exc:
@@ -559,7 +594,7 @@ def list_popular_ingredients() -> list[dict[str, object]]:
 
 def get_recipes_with_ingredients(ingredient_ids: list[str]) -> list[RecipeInDb]:
     _require_access_token()
-    with closing(KptnCookClient()) as client:
+    with closing(_kptncook_client()) as client:
         try:
             items = client.get_recipes_with_ingredients(ingredient_ids=ingredient_ids)
         except httpx.HTTPStatusError as exc:
@@ -571,11 +606,13 @@ def get_recipes_with_ingredients(ingredient_ids: list[str]) -> list[RecipeInDb]:
             ) from exc
         except httpx.HTTPError as exc:
             raise UserFacingError(format_request_error(exc)) from exc
+        except (ResponseShapeError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise _recipe_list_shape_error(exc) from None
         return _resolve_recipe_summaries(client, items, action="resolving recipes")
 
 
 def get_onboarding_recipes(tags: list[str]) -> list[RecipeInDb]:
-    with closing(KptnCookClient()) as client:
+    with closing(_kptncook_client()) as client:
         try:
             items = client.get_onboarding_recipes(tags=tags)
         except httpx.HTTPStatusError as exc:
@@ -586,6 +623,8 @@ def get_onboarding_recipes(tags: list[str]) -> list[RecipeInDb]:
             ) from exc
         except httpx.HTTPError as exc:
             raise UserFacingError(format_request_error(exc)) from exc
+        except (ResponseShapeError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise _recipe_list_shape_error(exc) from None
         return _resolve_recipe_summaries(client, items, action="resolving recipes")
 
 
@@ -668,7 +707,7 @@ def search_recipe_by_id(id_: str) -> SearchResult:
         raise UserFacingError("Could not parse id")
 
     id_type, id_value = parsed
-    with closing(KptnCookClient()) as client:
+    with closing(_kptncook_client()) as client:
         try:
             recipes = client.get_by_ids([(id_type, id_value)])
         except httpx.HTTPStatusError as exc:

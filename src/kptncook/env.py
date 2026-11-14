@@ -19,6 +19,11 @@ DEFAULT_API_KEY = "6q7QNKy-oIgk-IMuWisJ-jfN7s6"
 ENV_FILE_MODE = 0o600
 MAX_ENV_BYTES = 64 * 1024
 ENV_LOCK_TIMEOUT_SECONDS = 30.0
+ENV_BUSY_MESSAGE = "Configuration is busy; retry after the current writer finishes"
+
+
+class ConfigurationBusyError(OSError):
+    """Another writer holds the configuration lock (message is value-free)."""
 
 
 def _default_env_dir() -> Path:
@@ -171,9 +176,7 @@ def _locked_env_path(env_path: Path) -> Iterator[Path]:
     try:
         handle = lock.acquire()
     except portalocker.exceptions.AlreadyLocked:
-        raise OSError(
-            "Configuration is busy; retry after the current writer finishes"
-        ) from None
+        raise ConfigurationBusyError(ENV_BUSY_MESSAGE) from None
     except portalocker.exceptions.LockException:
         raise OSError("Could not lock configuration file") from None
     try:
@@ -192,13 +195,18 @@ def _locked_env_path(env_path: Path) -> Iterator[Path]:
         lock.release()
 
 
-def scaffold_env_file(env_path: Path = ENV_PATH) -> bool:
+def scaffold_env_file(env_path: Path = ENV_PATH, *, report_busy: bool = False) -> bool:
+    """Create the starter file; ``report_busy`` re-raises lock contention."""
     try:
         with _locked_env_path(env_path) as target:
             if _read_env_content(target):
                 return False
             _atomic_write_env(target, ENV_TEMPLATE)
             _tighten_env_permissions(target)
+    except ConfigurationBusyError:
+        if report_busy:
+            raise
+        return False
     except OSError:
         return False
     return True

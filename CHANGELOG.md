@@ -19,6 +19,10 @@ Unreleased
   64 KiB; refuse corrupt or unreadable sources without replacing credentials.
 - Bound competing credential-writer lock waits to 30 seconds and release
   handles on timeout or interruption; retry after the current writer finishes.
+- Report refused stored tokens, login replies and recipe-list envelopes as
+  short value-free CLI errors instead of tracebacks; `kptncook-access-token`
+  logs in without the stored token so it can replace an invalid one. Guided
+  setup reports a busy configuration once instead of waiting a second time.
 - Close the guided setup authentication client on success and every failure,
   including malformed replies; save only a complete nonempty string token and
   preserve prior credentials when acquisition fails.

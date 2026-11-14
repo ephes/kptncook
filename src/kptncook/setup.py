@@ -26,6 +26,8 @@ from kptncook.env import (
     ENV_PATH,
     ENV_TEMPLATE,
     read_env_values,
+    ENV_BUSY_MESSAGE,
+    ConfigurationBusyError,
     scaffold_env_file,
     upsert_env_value,
 )
@@ -53,6 +55,9 @@ def _fetch_access_token(api_key: str, username: str, password: str) -> str:
 def _configuration_errors() -> Iterator[None]:
     try:
         yield
+    except ConfigurationBusyError:
+        rprint(f"[red]{ENV_BUSY_MESSAGE}.[/red]")
+        raise typer.Exit(1) from None
     except OSError:
         rprint(
             "[red]Could not read configuration or update it; check the file and lock, then retry.[/red]"
@@ -91,7 +96,7 @@ def setup(
     """
     with _configuration_errors():
         read_env_values(env_path)
-        scaffolded = scaffold_env_file(env_path)
+        scaffolded = scaffold_env_file(env_path, report_busy=True)
         if scaffolded:
             rprint(f"Created {env_path} with a starter template.")
 

@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 import httpx
 
-from .auth import validate_token
+from .auth import InvalidTokenError, validate_token
 from .config import get_settings
 from .http_client import BaseHttpClient, DEFAULT_REQUEST_TIMEOUT
 from .repositories import RecipeInDb
@@ -122,6 +122,10 @@ def _extract_dailies_payload(payload: object) -> list[dict[str, Any]]:
     return []
 
 
+class ResponseShapeError(ValueError):
+    """A recipe response envelope was refused with a fixed, value-free message."""
+
+
 MAX_RESPONSE_WRAPPER_DEPTH = 16
 MAX_RESPONSE_WRAPPER_WORK = 4096
 _FAVORITES_KEYS = ("favorites", "items", "recipes", "data", "results")
@@ -149,7 +153,7 @@ def _extract_wrapper_payload(
         nonlocal work
         work += 1
         if work > MAX_RESPONSE_WRAPPER_WORK:
-            raise ValueError("Recipe response wrapper exceeds the work limit")
+            raise ResponseShapeError("Recipe response wrapper exceeds the work limit")
 
     while stack:
         children, depth, ancestors, invalid_on_empty, allow_list = stack[-1]
@@ -168,7 +172,9 @@ def _extract_wrapper_payload(
         if not isinstance(node, dict):
             continue
         if depth >= MAX_RESPONSE_WRAPPER_DEPTH or id(node) in ancestors:
-            raise ValueError("Recipe response wrapper is cyclic or exceeds 16 levels")
+            raise ResponseShapeError(
+                "Recipe response wrapper is cyclic or exceeds 16 levels"
+            )
         active = ancestors | {id(node)}
         handled = False
         for key in keys:
@@ -337,7 +343,7 @@ class KptnCookClient(BaseHttpClient):
                 token_data.get("accessToken") if isinstance(token_data, dict) else None
             )
         except ValueError:
-            raise ValueError("Invalid authentication response") from None
+            raise InvalidTokenError("Invalid authentication response") from None
 
     def list_favorites(self) -> list[object]:
         """
