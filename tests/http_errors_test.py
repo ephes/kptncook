@@ -223,7 +223,7 @@ def test_json_decoder_recursion_failure_is_controlled(monkeypatch):
     response = httpx.Response(500, json={"detail": []})
     attempted = []
 
-    def fail_decode():
+    def fail_decode(**kwargs):
         attempted.append(True)
         raise RecursionError("synthetic decoder failure")
 

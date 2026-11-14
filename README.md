@@ -150,6 +150,11 @@ probe costs one unit). Traversal is iterative, detects active dictionary cycles
 for library inputs and stops before resolving or saving a backup on refusal.
 Recipe lists are leaves, so this budget applies to finding the list, not its
 records. Supported key precedence and legitimate empty lists are preserved.
+The `discovery-screen` presentation path also uses iterative traversal, limited
+to 16 dictionary levels and 4,096 visited-value/key-probe operations per list
+search (lists and quick search). Cycles, depth and work overflow produce a short
+malformed-screen error with no partial listing; localized text, key precedence
+and entry order are retained. Screen entry lists are leaves for these searches.
 
 Share URLs are resolved using only the response headers, without reading bodies
 or following redirects. Only 301/302 responses with a Location are accepted.
@@ -205,6 +210,15 @@ imported text recipe and server-assigned instruction fields.
 
 Cover and step images are best-effort follow-ups. A media failure does not
 undo the core import, and step-image updates patch only the instructions.
+Immediately before the instruction PATCH, the client re-reads recipe identity
+and the complete instruction list. Changes to text, IDs, order, references or
+other instruction fields during asset uploads skip enrichment with a warning.
+Uploaded assets may remain unused. There is still a server race between this
+GET and PATCH: the checked Mealie
+[v1.12](https://github.com/mealie-recipes/mealie/blob/v1.12.0/mealie/routes/recipe/recipe_crud_routes.py#L389)
+and [v3.28](https://github.com/mealie-recipes/mealie/blob/v3.28.0/mealie/routes/recipe/recipe_crud_routes.py#L624)
+PATCH routes expose no conditional revision/ETag contract. An ambiguous PATCH
+is never retried, and human edits are never rolled back.
 The summary means:
 
 * `Created N recipes`: recipes newly created in Mealie.
@@ -218,7 +232,11 @@ complete inventory and create sequence. The lock covers all accounts on the same
 canonical Mealie API target (host casing, default ports and trailing slashes are
 normalized), including rotated tokens. Locks are per operating-system user,
 independent of `KPTNCOOK_HOME`, under `~/.cache/kptncook/sync-locks/`. Keep these
-stable files while syncs may be running. A competing sync waits for the current
+stable files while syncs may be running. Lock admission refuses symlinks,
+special files (including FIFOs), hardlinks, nonprivate permissions and files
+owned by another user, and verifies the named inode again after acquisition.
+It never repairs or replaces an unsafe lock file. An uncooperative process
+replacing lock names after admission is outside this advisory lock contract. A competing sync waits for the current
 owner to finish for at most 30 seconds, then reports that sync is busy. Retry after
 the current sync finishes. Timeout or interruption closes the authenticated client
 without reading or modifying recipes. Filesystem/locking errors stop sync; exceptions and process exit
@@ -289,6 +307,14 @@ Mealie organizer pages must contain a list of objects and a nonnegative integer
 `total_pages` (zero is allowed only for an empty inventory). Invalid pages abort
 listing before organizer creation. Successful password login requires a nonempty
 string token; malformed replies leave any existing authorization unchanged.
+Mealie control JSON refuses duplicate object member names at every nesting
+level, including escaped spellings of the same name, before identity checks or
+follow-up requests. This applies to login, inventories/details, import, organizer
+and media responses, version discovery, PATCH replies and conflict details.
+Repeated values in arrays remain valid. Decode failures use fixed diagnostics
+without response fragments, member names or tokens; existing error-body limits
+and inventory budgets still apply. A malformed response after a write does not
+cause a retry or rollback.
 
 Library callers own healthy clients returned by `get_mealie_client()` and should
 close them or use a context manager. Failed authentication closes the new client.
@@ -885,8 +911,19 @@ Use the helper commands below from a clean worktree:
    $ just release-prepare <version>
    ```
    Preparation validates both replacement texts before writing either file.
-   Each file is replaced atomically; if the second write fails, the changelog
-   is restored. Invalid inputs preserve both original files.
+   Preparations sharing a changelog directory serialize on the stable
+   `.kptncook-release.lock` (30-second wait; keep this file). Both source
+   generations are checked before publication and each atomic replacement.
+   If the second write fails, only this attempt's changelog generation is
+   restored. A conflicting edit is preserved and the error names a private
+   `CHANGELOG.md.recovery-*` copy of the original for manual reconciliation.
+   These checks detect edits before publication; editors do not honor the
+   advisory lock, so a final check-to-replace race remains. This is not a
+   two-file transaction or crash recovery mechanism.
+   The TOML parser validates `project.version`; only an ordinary single-line
+   string assignment in an explicit `[project]` table is supported. Quoted
+   keys/strings and inline comments are preserved. Other layouts are refused
+   before either file changes. Invalid inputs preserve both original files.
 
    This moves the current `Unreleased` section into a dated changelog entry and
    bumps `version` in `pyproject.toml`. `kptncook.__version__` is derived from
@@ -943,8 +980,10 @@ Beautiful Soup 4.14.3. SoupSieve requires Python 3.11.5+, so the notebook marker
 keeps older interpreters from falling back to an obsolete Beautiful Soup release.
 The recipe client continues to support Python 3.10+.
 
-The notebook/build lock uses setuptools 84.2.1 and Tornado 6.6 to address
-PYSEC-2026-3447, GHSA-xmj3-9gf7-h52w and CVE-2026-116577/115927/116578.
+The notebook/build lock uses setuptools 84.2.1 and Tornado 6.6.1 to address
+PYSEC-2026-3447, GHSA-xmj3-9gf7-h52w, CVE-2026-116577/115927/116578 and
+CVE-2026-126347. [Tornado 6.6.1 release notes](https://www.tornadoweb.org/en/stable/releases/v6.6.1.html)
+cover the additional security fixes.
 These findings concern development tools; they do not establish a recipe API exploit.
 
 Run the same frozen dependency audit as CI with

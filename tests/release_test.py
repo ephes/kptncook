@@ -187,7 +187,7 @@ def test_main_propagates_gh_failure(tmp_path, mocker):
     assert exc_info.value.code == 2
 
 
-@pytest.mark.parametrize("version_line", ["", "version = '0.0.29'\n"])
+@pytest.mark.parametrize("version_line", ["", "version = 29\n"])
 def test_prepare_invalid_version_preserves_files(tmp_path, version_line):
     changelog = tmp_path / "CHANGELOG.md"
     project = tmp_path / "pyproject.toml"
@@ -222,6 +222,7 @@ def test_prepare_second_replace_failure_preserves_files(tmp_path, monkeypatch):
     assert failed == [True]
     assert (changelog.read_bytes(), project.read_bytes()) == originals
     assert sorted(path.name for path in tmp_path.iterdir()) == [
+        ".kptncook-release.lock",
         "CHANGELOG.md",
         "pyproject.toml",
     ]

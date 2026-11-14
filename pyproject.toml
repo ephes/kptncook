@@ -44,6 +44,7 @@ dependencies = [
     "pathvalidate",
     "portalocker>=3.2",
     "python-dotenv>=1.2.2",
+    "tomli>=2 ; python_full_version < '3.11'",
 ]
 
 [dependency-groups]
