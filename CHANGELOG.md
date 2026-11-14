@@ -2,6 +2,27 @@ Unreleased
 ==========
 
 ### Fixes
+- Keep API client requests on their configured origin, reject URL userinfo,
+  and disable automatic redirects even on injected HTTPX pools so credentials
+  cannot be forwarded to a second origin.
+- Validate returned and directly supplied auth tokens before persistence or
+  client state changes: 1–8,192 visible ASCII characters, unchanged on success.
+  Preserve previous credentials/cache on refusal; blank optional configured
+  KptnCook tokens remain unset.
+- Bound iterative favorites/discovery envelope searches to 16 dictionary levels
+  and 4,096 visited-value/key-probe operations, with cycle detection and no
+  backup writes on refusal; preserve list precedence and empty-list behavior.
+- Admit credential lock files without following links or blocking on special
+  files; require a regular single-link file and recheck its named identity
+  after acquisition, preserving resolved `.env` symlinks.
+- Limit setup and credential-update reads to regular UTF-8 files of at most
+  64 KiB; refuse corrupt or unreadable sources without replacing credentials.
+- Bound competing credential-writer lock waits to 30 seconds and release
+  handles on timeout or interruption; retry after the current writer finishes.
+- Report refused stored tokens, login replies and recipe-list envelopes as
+  short value-free CLI errors instead of tracebacks; `kptncook-access-token`
+  logs in without the stored token so it can replace an invalid one. Guided
+  setup reports a busy configuration once instead of waiting a second time.
 - Close the guided setup authentication client on success and every failure,
   including malformed replies; save only a complete nonempty string token and
   preserve prior credentials when acquisition fails.

@@ -26,9 +26,7 @@ def test_request_wire_contract():
         )
         client.get("items", headers={"X-Override": "request"}, params={"q": "test"})
         client.post("/items", timeout=2.5, json={"value": 1})
-        client.get(
-            "https://other.example/absolute", timeout=httpx.Timeout(9, connect=3)
-        )
+        client.get("https://api.example/absolute", timeout=httpx.Timeout(9, connect=3))
     assert str(requests[0].url) == "https://api.example/base/items?q=test"
     assert requests[0].headers["authorization"] == "Bearer synthetic"
     assert requests[0].headers["x-override"] == "request"
@@ -39,7 +37,7 @@ def test_request_wire_contract():
     assert requests[1].extensions["timeout"] == dict(
         connect=2.5, read=2.5, write=2.5, pool=2.5
     )
-    assert str(requests[2].url) == "https://other.example/absolute"
+    assert str(requests[2].url) == "https://api.example/absolute"
     assert requests[2].extensions["timeout"] == dict(connect=3, read=9, write=9, pool=9)
 
 

@@ -55,7 +55,7 @@ def test_workflows_close_once(monkeypatch, name, kwargs, method, payload, failur
     client = SimpleNamespace(close=lambda: closes.append(True))
     setattr(client, method, lambda *a, **kw: fail_or_return("request", payload))
     client.resolve_recipe_summaries = lambda *a: fail_or_return("processing", [])
-    monkeypatch.setattr(workflows, "KptnCookClient", lambda: client)
+    monkeypatch.setattr(workflows, "KptnCookClient", lambda *a, **kw: client)
     monkeypatch.setattr(workflows, "_require_access_token", lambda: None)
     monkeypatch.setattr(workflows, "get_credentials", lambda **kw: ("user", "password"))
     monkeypatch.setattr(

@@ -136,6 +136,21 @@ stored short UID or OID (including parsed recipe URLs). A missing selector
 match or multiple matching recipes produces an error; selection never fetches
 from the network.
 
+Library API clients send requests only to their configured HTTP(S) origin
+(scheme, host and effective port), with no userinfo in the URL. Relative paths
+and same-origin absolute URLs are supported, including an explicit default
+port. Cross-origin requests are refused before transport. Automatic redirects
+are disabled even for injected HTTPX clients; requesting `follow_redirects=True`
+is refused. Follow an intended Location explicitly through the API client so
+it receives the same origin check.
+
+Favorites and discovery-list envelope searches allow at most 16 dictionary
+levels and 4,096 work units per response (each visited value or supported-key
+probe costs one unit). Traversal is iterative, detects active dictionary cycles
+for library inputs and stops before resolving or saving a backup on refusal.
+Recipe lists are leaves, so this budget applies to finding the list, not its
+records. Supported key precedence and legitimate empty lists are preserved.
+
 Share URLs are resolved using only the response headers, without reading bodies
 or following redirects. Only 301/302 responses with a Location are accepted.
 Resolution has a 15-second elapsed budget; a reply observed after it is discarded
@@ -578,7 +593,12 @@ $ kptncook-setup
 The `.env` is written to `$KPTNCOOK_HOME/.env` when `KPTNCOOK_HOME` is set,
 otherwise to `~/.kptncook/.env`. Guided setup owns and closes its authentication
 client on success and every failure, before attempting to save the token. Only a
-complete successful response containing a nonempty string access token is saved.
+complete successful response containing an admitted access token is saved.
+KptnCook and Mealie tokens must contain 1–8,192 visible ASCII characters
+(`!` through `~`); whitespace, controls, non-ASCII text and oversized tokens
+are refused before persistence or changes to authenticated client state.
+Valid opaque tokens are kept unchanged. The optional blank
+`KPTNCOOK_ACCESS_TOKEN=` in the starter configuration means no token.
 HTTP, transport and malformed-response failures preserve an existing token and
 report a bounded diagnostic without response payloads.
 
@@ -602,10 +622,22 @@ comments. Updates quote literal values (including backslashes, quotes, spaces,
 interpolation still applies when reading configuration. Scaffolding uses the same
 lock and does not overwrite an existing nonempty configuration. If the filesystem
 cannot provide a lock, updates fail without replacing the configuration.
+Lock files must be regular files with exactly one hard link; symlinks, special
+files and a lock name replaced during acquisition are refused. A competing
+credential writer waits at most 30 seconds, then reports a busy configuration
+(guided setup reports it once instead of waiting again); retry after the current
+writer finishes. Timeout or interruption closes the lock
+handle without changing credentials.
+
+Setup and credential updates read one regular UTF-8 configuration file of at
+most 64 KiB, including when `.env` is a symlink to the configuration target.
+Growing files are subject to the same byte limit. Only a missing file counts as
+empty; unreadable, invalid UTF-8, oversized and special files stop setup before
+credential replacement. Repair the file and retry; setup does not reset it.
 
 **Important:** The `.env` file must be created in the `~/.kptncook/` directory, NOT in the installation directory or by editing the `kptncook` executable.
 
-If you want to back up your favorite recipes from KptnCook, you have to set the `KPTNCOOK_ACCESS_TOKEN` variable as well. You can obtain the access token by running `kptncook kptncook-access-token`; the command fetches the token and saves `KPTNCOOK_ACCESS_TOKEN` into `~/.kptncook/.env` instead of printing the raw token to stdout. But you need a kptncook account to do that.
+If you want to back up your favorite recipes from KptnCook, you have to set the `KPTNCOOK_ACCESS_TOKEN` variable as well. You can obtain the access token by running `kptncook kptncook-access-token`; the command fetches the token and saves `KPTNCOOK_ACCESS_TOKEN` into `~/.kptncook/.env` instead of printing the raw token to stdout. It logs in without the stored token, so it also replaces an invalid one; other commands stop with a short error naming the invalid setting (never its value). A login reply without a valid token, or a recipe-list reply whose wrapper is too deep or too large, ends as a short error instead of a traceback. But you need a kptncook account to do that.
 Beware: If you don't have a kptncook account, you'll lose all your favorites by creating a new one.
 
 Optional API defaults for discovery/dailies/onboarding requests:

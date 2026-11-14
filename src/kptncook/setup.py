@@ -10,6 +10,8 @@ way: ``kptncook_setup`` -> ``kptncook.setup``, never back.
 from __future__ import annotations
 
 import sys
+from contextlib import contextmanager
+from collections.abc import Iterator
 from pathlib import Path
 
 import httpx
@@ -18,11 +20,14 @@ from rich import print as rprint
 from rich.markup import escape
 
 from kptncook.api import KptnCookClient
+from kptncook.auth import validate_token
 from kptncook.env import (
     DEFAULT_API_KEY,
     ENV_PATH,
     ENV_TEMPLATE,
     read_env_values,
+    ENV_BUSY_MESSAGE,
+    ConfigurationBusyError,
     scaffold_env_file,
     upsert_env_value,
 )
@@ -41,12 +46,23 @@ def _fetch_access_token(api_key: str, username: str, password: str) -> str:
     )
     with client:
         try:
-            token = client.get_access_token(username, password)
+            return validate_token(client.get_access_token(username, password))
         except (ValueError, KeyError, TypeError):
             raise ValueError("Invalid authentication response") from None
-        if not isinstance(token, str) or not token.strip():
-            raise ValueError("Invalid authentication response")
-        return token
+
+
+@contextmanager
+def _configuration_errors() -> Iterator[None]:
+    try:
+        yield
+    except ConfigurationBusyError:
+        rprint(f"[red]{ENV_BUSY_MESSAGE}.[/red]")
+        raise typer.Exit(1) from None
+    except OSError:
+        rprint(
+            "[red]Could not read configuration or update it; check the file and lock, then retry.[/red]"
+        )
+        raise typer.Exit(1) from None
 
 
 @cli.command()
@@ -78,62 +94,64 @@ def setup(
     """
     Interactive setup for kptncook configuration.
     """
-    scaffolded = scaffold_env_file(env_path)
-    if scaffolded:
-        rprint(f"Created {env_path} with a starter template.")
+    with _configuration_errors():
+        read_env_values(env_path)
+        scaffolded = scaffold_env_file(env_path, report_busy=True)
+        if scaffolded:
+            rprint(f"Created {env_path} with a starter template.")
 
-    values = read_env_values(env_path)
-    existing_api_key = values.get("KPTNCOOK_API_KEY", "").strip()
-    if not existing_api_key:
-        chosen_key = api_key or DEFAULT_API_KEY
-        upsert_env_value(env_path, "KPTNCOOK_API_KEY", chosen_key)
-        rprint("Added KPTNCOOK_API_KEY to the .env file.")
-    else:
-        chosen_key = existing_api_key
-        rprint("KPTNCOOK_API_KEY is already set.")
-
-    if username_command:
-        upsert_env_value(env_path, "KPTNCOOK_USERNAME_COMMAND", username_command)
-        rprint("Stored KPTNCOOK_USERNAME_COMMAND in the .env file.")
-    if password_command:
-        upsert_env_value(env_path, "KPTNCOOK_PASSWORD_COMMAND", password_command)
-        rprint("Stored KPTNCOOK_PASSWORD_COMMAND in the .env file.")
-
-    if not fetch_access_token:
-        rprint("Skipping access token fetch.")
-        return
-
-    values = read_env_values(env_path)
-    username, password = get_credentials(
-        username_command or values.get("KPTNCOOK_USERNAME_COMMAND"),
-        password_command or values.get("KPTNCOOK_PASSWORD_COMMAND"),
-    )
-
-    if not username or not password:
-        rprint("[red]Failed to get credentials.[/red]")
-        sys.exit(1)
-
-    try:
-        access_token = _fetch_access_token(chosen_key, username, password)
-        upsert_env_value(env_path, "KPTNCOOK_ACCESS_TOKEN", access_token)
-        rprint("[green]✓ Access token retrieved successfully.[/green]")
-        rprint(f"Saved KPTNCOOK_ACCESS_TOKEN to {env_path}.")
-    except httpx.HTTPStatusError as exc:
-        detail = extract_http_error_message(exc.response)
-        if exc.response.status_code == 401:
-            message = (
-                "Login failed (HTTP 401). Check your email/password and make sure "
-                "KPTNCOOK_API_KEY is set to your real API key."
-            )
+        values = read_env_values(env_path)
+        existing_api_key = values.get("KPTNCOOK_API_KEY", "").strip()
+        if not existing_api_key:
+            chosen_key = api_key or DEFAULT_API_KEY
+            upsert_env_value(env_path, "KPTNCOOK_API_KEY", chosen_key)
+            rprint("Added KPTNCOOK_API_KEY to the .env file.")
         else:
-            message = f"HTTP {exc.response.status_code} while getting access token"
-            if detail:
-                message = f"{message}: {detail}"
-        rprint(f"[red]{escape(message)}[/red]")
-        sys.exit(1)
-    except httpx.HTTPError as exc:
-        rprint(f"[red]{escape(format_request_error(exc))}[/red]")
-        sys.exit(1)
-    except ValueError:
-        rprint("[red]Invalid authentication response; no access token saved.[/red]")
-        sys.exit(1)
+            chosen_key = existing_api_key
+            rprint("KPTNCOOK_API_KEY is already set.")
+
+        if username_command:
+            upsert_env_value(env_path, "KPTNCOOK_USERNAME_COMMAND", username_command)
+            rprint("Stored KPTNCOOK_USERNAME_COMMAND in the .env file.")
+        if password_command:
+            upsert_env_value(env_path, "KPTNCOOK_PASSWORD_COMMAND", password_command)
+            rprint("Stored KPTNCOOK_PASSWORD_COMMAND in the .env file.")
+
+        if not fetch_access_token:
+            rprint("Skipping access token fetch.")
+            return
+
+        values = read_env_values(env_path)
+        username, password = get_credentials(
+            username_command or values.get("KPTNCOOK_USERNAME_COMMAND"),
+            password_command or values.get("KPTNCOOK_PASSWORD_COMMAND"),
+        )
+
+        if not username or not password:
+            rprint("[red]Failed to get credentials.[/red]")
+            sys.exit(1)
+
+        try:
+            access_token = _fetch_access_token(chosen_key, username, password)
+            upsert_env_value(env_path, "KPTNCOOK_ACCESS_TOKEN", access_token)
+            rprint("[green]✓ Access token retrieved successfully.[/green]")
+            rprint(f"Saved KPTNCOOK_ACCESS_TOKEN to {env_path}.")
+        except httpx.HTTPStatusError as exc:
+            detail = extract_http_error_message(exc.response)
+            if exc.response.status_code == 401:
+                message = (
+                    "Login failed (HTTP 401). Check your email/password and make sure "
+                    "KPTNCOOK_API_KEY is set to your real API key."
+                )
+            else:
+                message = f"HTTP {exc.response.status_code} while getting access token"
+                if detail:
+                    message = f"{message}: {detail}"
+            rprint(f"[red]{escape(message)}[/red]")
+            sys.exit(1)
+        except httpx.HTTPError as exc:
+            rprint(f"[red]{escape(format_request_error(exc))}[/red]")
+            sys.exit(1)
+        except ValueError:
+            rprint("[red]Invalid authentication response; no access token saved.[/red]")
+            sys.exit(1)

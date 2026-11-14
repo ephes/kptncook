@@ -30,7 +30,7 @@ def test_httpx_request_log_redacts_query_secrets(caplog):
             "recipes",
             params={"kptnkey": SECRET, "token": SECRET, "lang": "de"},
         )
-        client.get(f"https://user:{SECRET}@images.example/a.jpg?kptnkey={SECRET}")
+        http.get(f"https://user:{SECRET}@images.example/a.jpg?kptnkey={SECRET}")
 
     # The request itself is unchanged; only the log record is redacted.
     assert requests[0].url.params["kptnkey"] == SECRET
