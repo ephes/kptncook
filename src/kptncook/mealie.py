@@ -1,4 +1,5 @@
 import datetime
+from copy import deepcopy
 import io
 import json
 import logging
@@ -711,6 +712,8 @@ class MealieApiClient(BaseHttpClient):
                 "Skipping step images: imported instructions do not match source unambiguously"
             )
             return recipe
+        original_instructions = deepcopy(instructions)
+        instructions = deepcopy(instructions)
         changed = False
         for instruction, source_step in zip(instructions, source_steps):
             if source_step.image is None:
@@ -729,6 +732,26 @@ class MealieApiClient(BaseHttpClient):
                     _media_failure_reason(exc),
                 )
         if changed:
+            # Mealie v1.12/v3.28 PATCH accepts no conditional revision. Re-read
+            # immediately before the write; never compensate or retry a PATCH.
+            current_response = self.get(_recipe_path(recipe.slug))
+            current_response.raise_for_status()
+            current = current_response.json()
+            if (
+                not isinstance(current, dict)
+                or any(
+                    current.get(key) != stored.get(key)
+                    for key in ("id", "slug", "extras")
+                )
+                or current.get(
+                    "recipeInstructions", current.get("recipe_instructions", [])
+                )
+                != original_instructions
+            ):
+                logger.warning(
+                    "Skipping step images: recipe changed during asset uploads"
+                )
+                return recipe
             response = self.request(
                 "PATCH",
                 _recipe_path(recipe.slug),

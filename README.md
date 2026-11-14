@@ -205,6 +205,15 @@ imported text recipe and server-assigned instruction fields.
 
 Cover and step images are best-effort follow-ups. A media failure does not
 undo the core import, and step-image updates patch only the instructions.
+Immediately before the instruction PATCH, the client re-reads recipe identity
+and the complete instruction list. Changes to text, IDs, order, references or
+other instruction fields during asset uploads skip enrichment with a warning.
+Uploaded assets may remain unused. There is still a server race between this
+GET and PATCH: the checked Mealie
+[v1.12](https://github.com/mealie-recipes/mealie/blob/v1.12.0/mealie/routes/recipe/recipe_crud_routes.py#L389)
+and [v3.28](https://github.com/mealie-recipes/mealie/blob/v3.28.0/mealie/routes/recipe/recipe_crud_routes.py#L624)
+PATCH routes expose no conditional revision/ETag contract. An ambiguous PATCH
+is never retried, and human edits are never rolled back.
 The summary means:
 
 * `Created N recipes`: recipes newly created in Mealie.
@@ -218,7 +227,11 @@ complete inventory and create sequence. The lock covers all accounts on the same
 canonical Mealie API target (host casing, default ports and trailing slashes are
 normalized), including rotated tokens. Locks are per operating-system user,
 independent of `KPTNCOOK_HOME`, under `~/.cache/kptncook/sync-locks/`. Keep these
-stable files while syncs may be running. A competing sync waits for the current
+stable files while syncs may be running. Lock admission refuses symlinks,
+special files (including FIFOs), hardlinks, nonprivate permissions and files
+owned by another user, and verifies the named inode again after acquisition.
+It never repairs or replaces an unsafe lock file. An uncooperative process
+replacing lock names after admission is outside this advisory lock contract. A competing sync waits for the current
 owner to finish for at most 30 seconds, then reports that sync is busy. Retry after
 the current sync finishes. Timeout or interruption closes the authenticated client
 without reading or modifying recipes. Filesystem/locking errors stop sync; exceptions and process exit

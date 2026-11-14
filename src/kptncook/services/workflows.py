@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import os
+import stat
 from collections.abc import Iterator, Sequence
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
@@ -353,12 +354,31 @@ def _mealie_sync_lock() -> Iterator[None]:
     target = f"{url.scheme}://{url.host}:{url.port or (443 if url.scheme == 'https' else 80)}{url.path.rstrip('/')}"
     lock_path = SYNC_LOCK_DIR / (hashlib.sha256(target.encode()).hexdigest() + ".lock")
     try:
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     except OSError as exc:
         raise UserFacingError("Could not open the local Mealie sync lock") from exc
 
     def private_opener(path: str, flags: int) -> int:
-        return os.open(path, flags, 0o600)
+        if lock_path.is_symlink():
+            raise OSError("Unsafe Mealie sync lock")
+        fd = os.open(
+            path,
+            flags | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
+            0o600,
+        )
+        try:
+            opened = os.fstat(fd)
+            if (
+                not stat.S_ISREG(opened.st_mode)
+                or opened.st_nlink != 1
+                or opened.st_mode & 0o077
+                or (hasattr(os, "geteuid") and opened.st_uid != os.geteuid())
+            ):
+                raise OSError("Unsafe Mealie sync lock")
+            return fd
+        except BaseException:
+            os.close(fd)
+            raise
 
     lock = portalocker.Lock(
         lock_path,
@@ -369,7 +389,7 @@ def _mealie_sync_lock() -> Iterator[None]:
         opener=private_opener,
     )
     try:
-        lock.acquire()
+        handle = lock.acquire()
     except portalocker.exceptions.AlreadyLocked as exc:
         raise UserFacingError(
             "Mealie sync is busy: could not acquire the local Mealie sync lock "
@@ -381,6 +401,19 @@ def _mealie_sync_lock() -> Iterator[None]:
     except OSError as exc:
         raise UserFacingError("Could not open the local Mealie sync lock") from exc
     try:
+        try:
+            named = lock_path.lstat()
+            current = os.fstat(handle.fileno())
+            if (
+                not stat.S_ISREG(named.st_mode)
+                or named.st_nlink != 1
+                or current.st_nlink != 1
+                or current.st_mode & 0o077
+                or (current.st_dev, current.st_ino) != (named.st_dev, named.st_ino)
+            ):
+                raise OSError("Mealie sync lock changed")
+        except OSError as exc:
+            raise UserFacingError("Could not use the local Mealie sync lock") from exc
         yield
     finally:
         lock.release()

@@ -2,6 +2,10 @@ Unreleased
 ==========
 
 ### Fixes
+- Admit Mealie sync locks without following links or blocking on special files;
+  require a private regular single-link inode and verify its name after locking.
+- Re-read Mealie recipe identity and complete instructions after step asset
+  uploads; skip stale enrichment instead of overwriting concurrent edits.
 - Serialize release preparations with a bounded stable lock, verify source
   generations before publication, and preserve competing changelog edits with
   a named recovery copy when compensation conflicts.
