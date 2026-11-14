@@ -2,6 +2,13 @@ Unreleased
 ==========
 
 ### Fixes
+- Admit credential lock files without following links or blocking on special
+  files; require a regular single-link file and recheck its named identity
+  after acquisition, preserving resolved `.env` symlinks.
+- Limit setup and credential-update reads to regular UTF-8 files of at most
+  64 KiB; refuse corrupt or unreadable sources without replacing credentials.
+- Bound competing credential-writer lock waits to 30 seconds and release
+  handles on timeout or interruption; retry after the current writer finishes.
 - Close the guided setup authentication client on success and every failure,
   including malformed replies; save only a complete nonempty string token and
   preserve prior credentials when acquisition fails.

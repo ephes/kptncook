@@ -5,6 +5,7 @@ Environment configuration helpers for kptncook.
 from __future__ import annotations
 
 import os
+import stat
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -16,6 +17,8 @@ from dotenv import dotenv_values, set_key
 
 DEFAULT_API_KEY = "6q7QNKy-oIgk-IMuWisJ-jfN7s6"
 ENV_FILE_MODE = 0o600
+MAX_ENV_BYTES = 64 * 1024
+ENV_LOCK_TIMEOUT_SECONDS = 30.0
 
 
 def _default_env_dir() -> Path:
@@ -137,22 +140,62 @@ def _locked_env_path(env_path: Path) -> Iterator[Path]:
     target = env_path.resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
     lock_path = target.with_name(f".{target.name}.lock")
-    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, ENV_FILE_MODE)
-    with os.fdopen(fd, "a") as handle:
+    opened: os.stat_result | None = None
+
+    def open_lock(path: str, flags: int) -> int:
+        nonlocal opened
+        if lock_path.is_symlink():
+            raise OSError("Unsafe configuration lock file")
+        fd = os.open(
+            path,
+            flags | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0),
+            ENV_FILE_MODE,
+        )
         try:
-            portalocker.lock(handle, portalocker.LOCK_EX)
-            try:
-                yield target
-            finally:
-                portalocker.unlock(handle)
-        except portalocker.exceptions.LockException as exc:
-            raise OSError("Could not lock configuration file") from exc
+            opened = os.fstat(fd)
+            if not stat.S_ISREG(opened.st_mode) or opened.st_nlink != 1:
+                raise OSError("Unsafe configuration lock file")
+            return fd
+        except BaseException:
+            os.close(fd)
+            raise
+
+    lock = portalocker.Lock(
+        lock_path,
+        mode="a",
+        timeout=ENV_LOCK_TIMEOUT_SECONDS,
+        check_interval=0.05,
+        flags=portalocker.LOCK_EX | portalocker.LOCK_NB,
+        opener=open_lock,
+    )
+    try:
+        handle = lock.acquire()
+    except portalocker.exceptions.AlreadyLocked:
+        raise OSError(
+            "Configuration is busy; retry after the current writer finishes"
+        ) from None
+    except portalocker.exceptions.LockException:
+        raise OSError("Could not lock configuration file") from None
+    try:
+        assert opened is not None
+        named = lock_path.lstat()
+        current = os.fstat(handle.fileno())
+        if (
+            not stat.S_ISREG(named.st_mode)
+            or named.st_nlink != 1
+            or current.st_nlink != 1
+            or (opened.st_dev, opened.st_ino) != (named.st_dev, named.st_ino)
+        ):
+            raise OSError("Configuration lock file changed")
+        yield target
+    finally:
+        lock.release()
 
 
 def scaffold_env_file(env_path: Path = ENV_PATH) -> bool:
     try:
         with _locked_env_path(env_path) as target:
-            if target.exists() and target.stat().st_size > 0:
+            if _read_env_content(target):
                 return False
             _atomic_write_env(target, ENV_TEMPLATE)
             _tighten_env_permissions(target)
@@ -162,15 +205,40 @@ def scaffold_env_file(env_path: Path = ENV_PATH) -> bool:
 
 
 def read_env_values(env_path: Path) -> dict[str, str]:
-    try:
-        content = env_path.read_text(encoding="utf-8")
-    except OSError:
-        return {}
+    content = _read_env_content(env_path)
     return {
         key: value
         for key, value in dotenv_values(stream=StringIO(content)).items()
         if value is not None
     }
+
+
+def _read_env_content(env_path: Path) -> str:
+    """Only absence counts as empty; admit one regular, bounded descriptor."""
+    try:
+        target = env_path.resolve()
+        try:
+            fd = os.open(
+                target,
+                os.O_RDONLY
+                | getattr(os, "O_NONBLOCK", 0)
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_BINARY", 0),
+            )
+        except FileNotFoundError:
+            return ""
+        with os.fdopen(fd, "rb") as handle:
+            info = os.fstat(handle.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_ENV_BYTES:
+                raise OSError
+            content = handle.read(MAX_ENV_BYTES + 1)
+            if len(content) > MAX_ENV_BYTES:
+                raise OSError
+        return content.decode("utf-8")
+    except (OSError, UnicodeError, RuntimeError):
+        raise OSError(
+            "Could not read configuration; expected a regular UTF-8 file of at most 64 KiB"
+        ) from None
 
 
 def upsert_env_value(env_path: Path, key: str, value: str) -> None:
@@ -180,9 +248,6 @@ def upsert_env_value(env_path: Path, key: str, value: str) -> None:
     unreadable file is never replaced by one that holds just ``key``.
     """
     with _locked_env_path(env_path) as target:
-        try:
-            content = target.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            content = ""
+        content = _read_env_content(target)
         _atomic_write_env(target, content, assignment=(key, value))
         _tighten_env_permissions(target)

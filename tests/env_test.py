@@ -197,23 +197,23 @@ def test_upsert_env_value_does_not_replace_unreadable_file(tmp_path, monkeypatch
     env_path = tmp_path / ".env"
     original = "MEALIE_PASSWORD=keep-me\n"
     env_path.write_text(original)
-    real_read_text = Path.read_text
+    real_open = os.open
 
-    def failing_read_text(self, *args, **kwargs):
-        if self == env_path:
+    def failing_open(path, *args, **kwargs):
+        if Path(path) == env_path:
             raise PermissionError("denied")
-        return real_read_text(self, *args, **kwargs)
+        return real_open(path, *args, **kwargs)
 
-    monkeypatch.setattr(Path, "read_text", failing_read_text)
+    monkeypatch.setattr(os, "open", failing_open)
 
     try:
         upsert_env_value(env_path, "KPTNCOOK_ACCESS_TOKEN", "token")
-    except PermissionError:
+    except OSError:
         pass
     else:
         raise AssertionError("expected the read error to propagate")
 
-    monkeypatch.setattr(Path, "read_text", real_read_text)
+    monkeypatch.setattr(os, "open", real_open)
     assert env_path.read_text() == original
 
 
@@ -241,8 +241,7 @@ def _concurrent_env_writer(path, key, value, entered, release, read, started):
     import kptncook.env as env_module
 
     original_write = env_module._atomic_write_env
-    original_read = Path.read_text
-    original_exists = Path.exists
+    original_read = env_module._read_env_content
     target_path = path.resolve()
 
     def write(*args, **kwargs):
@@ -251,19 +250,13 @@ def _concurrent_env_writer(path, key, value, entered, release, read, started):
             assert release.wait(10)
         return original_write(*args, **kwargs)
 
-    def read_text(self, *args, **kwargs):
-        if self in (path, target_path) and read is not None:
+    def read_content(target):
+        if target in (path, target_path) and read is not None:
             read.set()
-        return original_read(self, *args, **kwargs)
+        return original_read(target)
 
-    def exists(self):
-        if key is None and self == target_path and read is not None:
-            read.set()
-        return original_exists(self)
-
-    Path.exists = exists
     env_module._atomic_write_env = write
-    Path.read_text = read_text
+    env_module._read_env_content = read_content
     if started is not None:
         started.set()
     if key is None:
@@ -419,7 +412,7 @@ def test_lock_failure_keeps_existing_error_contract(tmp_path, monkeypatch, opera
         attempted.append(True)
         raise portalocker.exceptions.LockException("synthetic locking unavailable")
 
-    monkeypatch.setattr(env_module.portalocker, "lock", fail_lock)
+    monkeypatch.setattr(env_module.portalocker.Lock, "acquire", fail_lock)
     if operation == "scaffold":
         assert scaffold_env_file(env_path) is False
     elif operation == "upsert":

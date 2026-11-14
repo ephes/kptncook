@@ -602,6 +602,17 @@ comments. Updates quote literal values (including backslashes, quotes, spaces,
 interpolation still applies when reading configuration. Scaffolding uses the same
 lock and does not overwrite an existing nonempty configuration. If the filesystem
 cannot provide a lock, updates fail without replacing the configuration.
+Lock files must be regular files with exactly one hard link; symlinks, special
+files and a lock name replaced during acquisition are refused. A competing
+credential writer waits at most 30 seconds, then reports a busy configuration;
+retry after the current writer finishes. Timeout or interruption closes the lock
+handle without changing credentials.
+
+Setup and credential updates read one regular UTF-8 configuration file of at
+most 64 KiB, including when `.env` is a symlink to the configuration target.
+Growing files are subject to the same byte limit. Only a missing file counts as
+empty; unreadable, invalid UTF-8, oversized and special files stop setup before
+credential replacement. Repair the file and retry; setup does not reset it.
 
 **Important:** The `.env` file must be created in the `~/.kptncook/` directory, NOT in the installation directory or by editing the `kptncook` executable.
 
