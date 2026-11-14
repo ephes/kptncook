@@ -21,6 +21,7 @@ from pydantic.alias_generators import to_camel
 from .exporter_utils import get_step_text
 from .config import get_settings
 from .http_errors import extract_mealie_detail_message
+from .auth import validate_token
 from .http_client import BaseHttpClient, DEFAULT_REQUEST_TIMEOUT
 from .image_download import download_image
 from .image_origin import ImageOriginError, is_allowed_image_url
@@ -261,19 +262,20 @@ class MealieApiClient(BaseHttpClient):
         except ValueError:
             raise ValueError("Invalid Mealie login response") from None
         token = payload.get("access_token") if isinstance(payload, dict) else None
-        if not isinstance(token, str) or not token.strip():
-            raise ValueError("Invalid Mealie login response: expected a nonempty token")
-        return token
+        try:
+            return validate_token(token)
+        except ValueError:
+            raise ValueError("Invalid Mealie login response") from None
 
     def login(self, username: str = "admin", password: str = ""):
         if password == "":
             password = getpass()
         access_token = self.fetch_api_token(username, password)
-        self.headers["authorization"] = f"Bearer {access_token}"
+        self.headers["authorization"] = f"Bearer {validate_token(access_token)}"
         self.clear_organizer_cache()
 
     def login_with_token(self, token: str):
-        self.headers["authorization"] = f"Bearer {token}"
+        self.headers["authorization"] = f"Bearer {validate_token(token)}"
         self.clear_organizer_cache()
 
     def clear_organizer_cache(self) -> None:

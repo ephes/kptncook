@@ -20,6 +20,7 @@ from rich import print as rprint
 from rich.markup import escape
 
 from kptncook.api import KptnCookClient
+from kptncook.auth import validate_token
 from kptncook.env import (
     DEFAULT_API_KEY,
     ENV_PATH,
@@ -43,12 +44,9 @@ def _fetch_access_token(api_key: str, username: str, password: str) -> str:
     )
     with client:
         try:
-            token = client.get_access_token(username, password)
+            return validate_token(client.get_access_token(username, password))
         except (ValueError, KeyError, TypeError):
             raise ValueError("Invalid authentication response") from None
-        if not isinstance(token, str) or not token.strip():
-            raise ValueError("Invalid authentication response")
-        return token
 
 
 @contextmanager

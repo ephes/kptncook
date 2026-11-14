@@ -136,6 +136,21 @@ stored short UID or OID (including parsed recipe URLs). A missing selector
 match or multiple matching recipes produces an error; selection never fetches
 from the network.
 
+Library API clients send requests only to their configured HTTP(S) origin
+(scheme, host and effective port), with no userinfo in the URL. Relative paths
+and same-origin absolute URLs are supported, including an explicit default
+port. Cross-origin requests are refused before transport. Automatic redirects
+are disabled even for injected HTTPX clients; requesting `follow_redirects=True`
+is refused. Follow an intended Location explicitly through the API client so
+it receives the same origin check.
+
+Favorites and discovery-list envelope searches allow at most 16 dictionary
+levels and 4,096 work units per response (each visited value or supported-key
+probe costs one unit). Traversal is iterative, detects active dictionary cycles
+for library inputs and stops before resolving or saving a backup on refusal.
+Recipe lists are leaves, so this budget applies to finding the list, not its
+records. Supported key precedence and legitimate empty lists are preserved.
+
 Share URLs are resolved using only the response headers, without reading bodies
 or following redirects. Only 301/302 responses with a Location are accepted.
 Resolution has a 15-second elapsed budget; a reply observed after it is discarded
@@ -578,7 +593,12 @@ $ kptncook-setup
 The `.env` is written to `$KPTNCOOK_HOME/.env` when `KPTNCOOK_HOME` is set,
 otherwise to `~/.kptncook/.env`. Guided setup owns and closes its authentication
 client on success and every failure, before attempting to save the token. Only a
-complete successful response containing a nonempty string access token is saved.
+complete successful response containing an admitted access token is saved.
+KptnCook and Mealie tokens must contain 1–8,192 visible ASCII characters
+(`!` through `~`); whitespace, controls, non-ASCII text and oversized tokens
+are refused before persistence or changes to authenticated client state.
+Valid opaque tokens are kept unchanged. The optional blank
+`KPTNCOOK_ACCESS_TOKEN=` in the starter configuration means no token.
 HTTP, transport and malformed-response failures preserve an existing token and
 report a bounded diagnostic without response payloads.
 

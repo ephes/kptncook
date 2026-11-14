@@ -2,6 +2,16 @@ Unreleased
 ==========
 
 ### Fixes
+- Keep API client requests on their configured origin, reject URL userinfo,
+  and disable automatic redirects even on injected HTTPX pools so credentials
+  cannot be forwarded to a second origin.
+- Validate returned and directly supplied auth tokens before persistence or
+  client state changes: 1–8,192 visible ASCII characters, unchanged on success.
+  Preserve previous credentials/cache on refusal; blank optional configured
+  KptnCook tokens remain unset.
+- Bound iterative favorites/discovery envelope searches to 16 dictionary levels
+  and 4,096 visited-value/key-probe operations, with cycle detection and no
+  backup writes on refusal; preserve list precedence and empty-list behavior.
 - Admit credential lock files without following links or blocking on special
   files; require a regular single-link file and recheck its named identity
   after acquisition, preserving resolved `.env` symlinks.

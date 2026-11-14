@@ -116,6 +116,12 @@ class Settings(BaseSettings):
             raise ValueError("KPTNCOOK_API_KEY is required")
         return value
 
+    @field_validator("kptncook_access_token", mode="before")
+    @classmethod
+    def empty_optional_token_is_unset(cls, value: object) -> object:
+        # The starter template contains an intentionally blank optional token.
+        return None if value == "" else value
+
 
 def get_settings() -> Settings:
     global _settings_cache

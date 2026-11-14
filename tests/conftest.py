@@ -3,11 +3,21 @@ from pathlib import Path
 
 import pytest
 
-from kptncook.config import clear_settings_cache, settings
+from kptncook.config import Settings, clear_settings_cache, settings
 
 
 @pytest.fixture(autouse=True)
 def reset_grouping_settings(monkeypatch, tmp_path):
+    # Keep credential admission tests independent of the operator's real .env
+    # and shell credentials. Individual tests can supply synthetic values.
+    monkeypatch.setitem(Settings.model_config, "env_file", tmp_path / ".env")
+    for name in (
+        "KPTNCOOK_ACCESS_TOKEN",
+        "MEALIE_API_TOKEN",
+        "MEALIE_USERNAME",
+        "MEALIE_PASSWORD",
+    ):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("KPTNCOOK_API_KEY", "test-key")
     monkeypatch.setenv("KPTNCOOK_HOME", str(tmp_path / "kptncook-home"))
     # Synthetic image hosts used across the suite; origin refusals are tested

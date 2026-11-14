@@ -235,10 +235,15 @@ def test_json_decoder_recursion_failure_is_controlled(monkeypatch):
     assert attempted == [True]
 
 
-@pytest.mark.parametrize("failure", ["status", "transport"])
+@pytest.mark.parametrize("failure", ["status", "transport", "userinfo"])
 def test_mealie_login_error_is_private_through_sync_cli(monkeypatch, failure):
     secrets = ["synthetic-url-password", "synthetic-login-password", "synthetic-token"]
-    monkeypatch.setenv("MEALIE_URL", f"https://user:{secrets[0]}@example.test/api")
+    monkeypatch.setenv(
+        "MEALIE_URL",
+        f"https://user:{secrets[0]}@example.test/api"
+        if failure == "userinfo"
+        else "https://example.test/api",
+    )
     monkeypatch.setenv("MEALIE_USERNAME", "synthetic-user")
     monkeypatch.setenv("MEALIE_PASSWORD", secrets[1])
     monkeypatch.setenv("MEALIE_API_TOKEN", "")
@@ -256,11 +261,12 @@ def test_mealie_login_error_is_private_through_sync_cli(monkeypatch, failure):
     monkeypatch.setattr("kptncook.http_client.httpx.Client", lambda **kwargs: http)
     result = CliRunner(env={"COLUMNS": "120"}).invoke(cli.app, ["sync-with-mealie"])
     assert result.exit_code == 1
-    assert attempted
+    assert bool(attempted) == (failure != "userinfo")
     assert http.is_closed
     assert all(secret not in result.output for secret in secrets)
-    assert (
-        "HTTP 403" in result.output
-        if failure == "status"
-        else "connection error" in result.output
-    )
+    expected = {
+        "status": "HTTP 403",
+        "transport": "connection error",
+        "userinfo": "origin",
+    }
+    assert expected[failure] in result.output

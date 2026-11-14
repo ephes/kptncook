@@ -38,14 +38,28 @@ class BaseHttpClient:
         self.close()
 
     def to_url(self, path: str) -> str:
-        if path.startswith(("http://", "https://")):
-            return path
-        base = self.base_url.rstrip("/")
-        if not path:
-            return base
-        if path.startswith("/"):
-            return f"{base}{path}"
-        return f"{base}/{path}"
+        try:
+            base = httpx.URL(self.base_url)
+            candidate = httpx.URL(path)
+            if not candidate.is_absolute_url:
+                if candidate.scheme or candidate.host:
+                    raise ValueError
+                prefix = self.base_url.rstrip("/")
+                candidate = httpx.URL(f"{prefix}/{path.lstrip('/')}") if path else base
+            if (
+                base.scheme not in ("http", "https")
+                or not base.host
+                or base.userinfo
+                or candidate.userinfo
+                or (candidate.scheme, candidate.host, candidate.port)
+                != (base.scheme, base.host, base.port)
+            ):
+                raise ValueError
+        except (httpx.InvalidURL, ValueError):
+            raise ValueError(
+                "API request must use the configured origin without userinfo"
+            ) from None
+        return str(candidate)
 
     def request(
         self,
@@ -58,6 +72,11 @@ class BaseHttpClient:
     ) -> httpx.Response:
         merged_headers = self.headers | (headers or {})
         request_kwargs = dict(kwargs)
+        if request_kwargs.get("follow_redirects"):
+            raise ValueError("API clients do not support automatic redirects")
+        # An injected pool may enable redirects; Token is not stripped by HTTPX
+        # on a cross-origin redirect as Authorization is.
+        request_kwargs["follow_redirects"] = False
         request_kwargs["headers"] = merged_headers
         if timeout is not httpx.USE_CLIENT_DEFAULT:
             request_kwargs["timeout"] = timeout

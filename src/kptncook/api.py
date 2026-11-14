@@ -1,5 +1,5 @@
 import re
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from datetime import date
 from time import time
 from typing import Any, Literal
@@ -7,6 +7,7 @@ from urllib.parse import quote
 
 import httpx
 
+from .auth import validate_token
 from .config import get_settings
 from .http_client import BaseHttpClient, DEFAULT_REQUEST_TIMEOUT
 from .repositories import RecipeInDb
@@ -121,47 +122,82 @@ def _extract_dailies_payload(payload: object) -> list[dict[str, Any]]:
     return []
 
 
-def _extract_discovery_list_payload(payload: object) -> list[object]:
-    if isinstance(payload, list):
-        return payload
-    if isinstance(payload, dict):
-        for key in ("recipes", "items", "list", "data"):
-            value = payload.get(key)
-            if isinstance(value, list):
-                return value
-        for value in payload.values():
-            if isinstance(value, dict):
-                nested = _extract_discovery_list_payload(value)
-                if nested:
-                    return nested
-    return []
-
-
+MAX_RESPONSE_WRAPPER_DEPTH = 16
+MAX_RESPONSE_WRAPPER_WORK = 4096
 _FAVORITES_KEYS = ("favorites", "items", "recipes", "data", "results")
+_DISCOVERY_KEYS = ("recipes", "items", "list", "data")
 
 
-def _extract_favorites_payload(
-    payload: object,
+def _extract_wrapper_payload(
+    payload: object, *, favorites: bool
 ) -> tuple[list[object], bool, bool]:
-    if isinstance(payload, list):
-        return payload, True, False
-    if isinstance(payload, dict):
-        for key in _FAVORITES_KEYS:
-            if key in payload:
-                value = payload.get(key)
-                if isinstance(value, list):
-                    return value, True, False
-                if isinstance(value, dict):
-                    nested, found, invalid = _extract_favorites_payload(value)
-                    if found:
-                        return nested, True, invalid
+    """Depth-first envelope search with incremental iterators and a shared budget.
+
+    Each frame carries its active ancestors, so shared acyclic dictionaries are
+    allowed. A favorites key whose nested dictionary has no list is invalid;
+    discovery ignores empty nested results and continues with sibling wrappers.
+    Lists of recipe records are leaves, not additional envelope work.
+    """
+    keys = _FAVORITES_KEYS if favorites else _DISCOVERY_KEYS
+    # Iterator, depth, active ancestors, invalid if exhausted, allow a list leaf.
+    stack: list[tuple[Iterator[object], int, frozenset[int], bool, bool]] = [
+        (iter((payload,)), 0, frozenset(), False, True)
+    ]
+    work = 0
+
+    def charge() -> None:
+        nonlocal work
+        work += 1
+        if work > MAX_RESPONSE_WRAPPER_WORK:
+            raise ValueError("Recipe response wrapper exceeds the work limit")
+
+    while stack:
+        children, depth, ancestors, invalid_on_empty, allow_list = stack[-1]
+        try:
+            node = next(children)
+        except StopIteration:
+            stack.pop()
+            if invalid_on_empty:
                 return [], True, True
-        for value in payload.values():
-            if isinstance(value, dict):
-                nested, found, invalid = _extract_favorites_payload(value)
-                if found:
-                    return nested, True, invalid
+            continue
+        charge()
+        if isinstance(node, list):
+            if allow_list and (favorites or node or depth == 0):
+                return node, True, False
+            continue
+        if not isinstance(node, dict):
+            continue
+        if depth >= MAX_RESPONSE_WRAPPER_DEPTH or id(node) in ancestors:
+            raise ValueError("Recipe response wrapper is cyclic or exceeds 16 levels")
+        active = ancestors | {id(node)}
+        handled = False
+        for key in keys:
+            charge()
+            if key not in node:
+                continue
+            value = node[key]
+            if isinstance(value, list):
+                if favorites or value or depth == 0:
+                    return value, True, False
+                handled = True
+                break
+            if favorites:
+                if not isinstance(value, dict):
+                    return [], True, True
+                stack.append((iter((value,)), depth + 1, active, True, True))
+                handled = True
+                break
+        if not handled:
+            stack.append((iter(node.values()), depth + 1, active, False, False))
     return [], False, False
+
+
+def _extract_discovery_list_payload(payload: object) -> list[object]:
+    return _extract_wrapper_payload(payload, favorites=False)[0]
+
+
+def _extract_favorites_payload(payload: object) -> tuple[list[object], bool, bool]:
+    return _extract_wrapper_payload(payload, favorites=True)
 
 
 class KptnCookClient(BaseHttpClient):
@@ -195,7 +231,7 @@ class KptnCookClient(BaseHttpClient):
             "hasIngredients": "yes",
         }
         if access_token is not None:
-            headers["Token"] = access_token
+            headers["Token"] = validate_token(access_token)
         super().__init__(
             str(base_url),
             headers=headers,
@@ -295,8 +331,13 @@ class KptnCookClient(BaseHttpClient):
             headers=headers,
         )
         response.raise_for_status()
-        token_data = response.json()
-        return token_data["accessToken"]
+        try:
+            token_data = response.json()
+            return validate_token(
+                token_data.get("accessToken") if isinstance(token_data, dict) else None
+            )
+        except ValueError:
+            raise ValueError("Invalid authentication response") from None
 
     def list_favorites(self) -> list[object]:
         """
