@@ -27,3 +27,6 @@ __pycache__
 .*swo
 
 specs/
+
+# Stable release preparation lock
+.kptncook-release.lock

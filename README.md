@@ -885,8 +885,19 @@ Use the helper commands below from a clean worktree:
    $ just release-prepare <version>
    ```
    Preparation validates both replacement texts before writing either file.
-   Each file is replaced atomically; if the second write fails, the changelog
-   is restored. Invalid inputs preserve both original files.
+   Preparations sharing a changelog directory serialize on the stable
+   `.kptncook-release.lock` (30-second wait; keep this file). Both source
+   generations are checked before publication and each atomic replacement.
+   If the second write fails, only this attempt's changelog generation is
+   restored. A conflicting edit is preserved and the error names a private
+   `CHANGELOG.md.recovery-*` copy of the original for manual reconciliation.
+   These checks detect edits before publication; editors do not honor the
+   advisory lock, so a final check-to-replace race remains. This is not a
+   two-file transaction or crash recovery mechanism.
+   The TOML parser validates `project.version`; only an ordinary single-line
+   string assignment in an explicit `[project]` table is supported. Quoted
+   keys/strings and inline comments are preserved. Other layouts are refused
+   before either file changes. Invalid inputs preserve both original files.
 
    This moves the current `Unreleased` section into a dated changelog entry and
    bumps `version` in `pyproject.toml`. `kptncook.__version__` is derived from

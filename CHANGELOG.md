@@ -2,6 +2,11 @@ Unreleased
 ==========
 
 ### Fixes
+- Serialize release preparations with a bounded stable lock, verify source
+  generations before publication, and preserve competing changelog edits with
+  a named recovery copy when compensation conflicts.
+- Bind release version edits to TOML `project.version`, preserving surrounding
+  text/comments and refusing unsupported layouts before changing either file.
 - Keep API client requests on their configured origin, reject URL userinfo,
   and disable automatic redirects even on injected HTTPX pools so credentials
   cannot be forwarded to a second origin.

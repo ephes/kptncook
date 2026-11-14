@@ -4,7 +4,15 @@ import argparse
 import os
 import tempfile
 import re
+
+import portalocker
 import subprocess
+import sys
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -117,18 +125,78 @@ def _updated_pyproject(
     pyproject_text: str, pyproject_path: Path, *, version: str
 ) -> str:
     _validate_version(version)
-    updated_text, replacements = re.subn(
-        r'(?m)^version = "([^"]+)"(?=\r?$)',
-        f'version = "{version}"',
-        pyproject_text,
-        count=1,
-    )
-    if replacements != 1:
-        raise ReleaseError(f"Could not update version in {pyproject_path}.")
-    return updated_text
+    error = f"Could not update version in {pyproject_path}."
+    try:
+        parsed = tomllib.loads(pyproject_text)
+        if not isinstance(parsed.get("project", {}).get("version"), str):
+            raise ReleaseError(error)
+        # Only ordinary, single-line assignments in an explicit project table
+        # are edited. The parser verifies the complete result below, including
+        # any apparent table/assignment text inside TOML multiline strings.
+        in_project = False
+        candidates = []
+        offset = 0
+        for line in pyproject_text.splitlines(keepends=True):
+            if line.lstrip().startswith("["):
+                in_project = bool(
+                    re.fullmatch(
+                        r"\s*\[\s*(?:project|\"project\"|'project')\s*\]\s*(?:#[^\r\n]*)?\r?\n?",
+                        line,
+                    )
+                )
+            if in_project:
+                match = re.fullmatch(
+                    r"[ \t]*(?:version|\"version\"|'version')[ \t]*=[ \t]*(?P<quote>[\"'])(?P<value>[^\"'\r\n]*)(?P=quote)[ \t]*(?:#[^\r\n]*)?\r?\n?",
+                    line,
+                )
+                if match:
+                    candidates.append(
+                        (offset + match.start("value"), offset + match.end("value"))
+                    )
+            offset += len(line)
+        if len(candidates) != 1:
+            raise ReleaseError(error)
+        start, end = candidates[0]
+        updated = pyproject_text[:start] + version + pyproject_text[end:]
+        parsed["project"]["version"] = version
+        if tomllib.loads(updated) != parsed:
+            raise ReleaseError(error)
+        return updated
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise ReleaseError(error) from exc
 
 
-def _atomic_replace(path: Path, content: bytes) -> None:
+@dataclass(frozen=True)
+class _Generation:
+    content: bytes
+    device: int
+    inode: int
+    modified: int
+
+
+def _generation(path: Path) -> _Generation:
+    with path.open("rb") as stream:
+        before = os.fstat(stream.fileno())
+        content = stream.read()
+        after = os.fstat(stream.fileno())
+    named = path.stat()
+
+    def identity(info: os.stat_result) -> tuple[int, int, int, int]:
+        return info.st_dev, info.st_ino, info.st_mtime_ns, info.st_size
+
+    if identity(before) != identity(after) or identity(after) != identity(named):
+        raise ReleaseError("Release source changed while reading; retry preparation.")
+    return _Generation(content, after.st_dev, after.st_ino, after.st_mtime_ns)
+
+
+def _require_generation(path: Path, expected: _Generation) -> None:
+    if _generation(path) != expected:
+        raise ReleaseError("Release source changed; retry preparation.")
+
+
+def _atomic_replace(
+    path: Path, content: bytes, *, expected: _Generation | None = None
+) -> _Generation:
     temporary: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
@@ -137,10 +205,30 @@ def _atomic_replace(path: Path, content: bytes) -> None:
             stream.flush()
             os.fsync(stream.fileno())
         temporary.chmod(path.stat().st_mode & 0o777)
+        published = _generation(temporary)
+        if expected is not None:
+            _require_generation(path, expected)
         os.replace(temporary, path)
+        return published
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
+
+
+def _restore_changelog(path: Path, original: _Generation, owned: _Generation) -> None:
+    try:
+        _atomic_replace(path, original.content, expected=owned)
+    except (OSError, ReleaseError) as exc:
+        with tempfile.NamedTemporaryFile(
+            dir=path.parent, prefix=path.name + ".recovery-", delete=False
+        ) as stream:
+            stream.write(original.content)
+            stream.flush()
+            os.fsync(stream.fileno())
+            recovery = stream.name
+        raise ReleaseError(
+            f"Could not restore changelog (changed or unavailable); recovery copy: {recovery}"
+        ) from exc
 
 
 def update_changelog_for_release(
@@ -170,26 +258,42 @@ def prepare_release(
     release_date: str | None = None,
 ) -> str:
     normalized_date = _validate_release_date(release_date or date.today().isoformat())
+    # Keep this inode: unlinking a lock lets later waiters lock a different file.
+    lock_path = changelog_path.resolve().parent / ".kptncook-release.lock"
     try:
-        original_changelog = changelog_path.read_bytes()
-        original_project = pyproject_path.read_bytes()
-        changelog = _updated_changelog(
-            original_changelog.decode("utf-8")
-            .replace("\r\n", "\n")
-            .replace("\r", "\n"),
-            changelog_path,
-            version=version,
-            release_date=normalized_date,
-        )
-        project = _updated_pyproject(
-            original_project.decode("utf-8"), pyproject_path, version=version
-        )
-        _atomic_replace(changelog_path, changelog.encode("utf-8"))
-        try:
-            _atomic_replace(pyproject_path, project.encode("utf-8"))
-        except OSError:
-            _atomic_replace(changelog_path, original_changelog)
-            raise
+        with portalocker.Lock(lock_path, mode="a", timeout=30, check_interval=0.1):
+            original_changelog = _generation(changelog_path)
+            original_project = _generation(pyproject_path)
+            changelog = _updated_changelog(
+                original_changelog.content.decode("utf-8")
+                .replace("\r\n", "\n")
+                .replace("\r", "\n"),
+                changelog_path,
+                version=version,
+                release_date=normalized_date,
+            )
+            project = _updated_pyproject(
+                original_project.content.decode("utf-8"),
+                pyproject_path,
+                version=version,
+            )
+            # Preflight both sources before publishing the first file.
+            _require_generation(changelog_path, original_changelog)
+            _require_generation(pyproject_path, original_project)
+            owned = _atomic_replace(
+                changelog_path, changelog.encode("utf-8"), expected=original_changelog
+            )
+            try:
+                _atomic_replace(
+                    pyproject_path, project.encode("utf-8"), expected=original_project
+                )
+            except (OSError, ReleaseError):
+                _restore_changelog(changelog_path, original_changelog, owned)
+                raise
+    except portalocker.exceptions.LockException as exc:
+        raise ReleaseError(
+            "Release preparation is busy or the lock is unavailable."
+        ) from exc
     except (OSError, UnicodeError) as exc:
         raise ReleaseError(f"Could not prepare release: {exc}") from exc
     return normalized_date

@@ -1019,6 +1019,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
     { name = "rich" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
     { name = "typer" },
     { name = "unidecode" },
 ]
@@ -1047,6 +1048,7 @@ requires-dist = [
     { name = "pydantic-settings" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "rich", specifier = ">=11.1.0" },
+    { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2" },
     { name = "typer", specifier = ">=0.4" },
     { name = "unidecode" },
 ]
