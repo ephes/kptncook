@@ -50,7 +50,8 @@ def test_save_todays_recipes_uses_repository_service(monkeypatch):
     monkeypatch.setattr(workflows, "repository_needs_sync", lambda _date: True)
     monkeypatch.setattr(workflows, "get_today_recipes", lambda: [recipe])
 
-    def fake_save_recipe_entries(recipes):
+    def fake_save_recipe_entries(recipes, *, expected):
+        assert expected == {}
         captured["recipes"] = recipes
         return len(recipes)
 
@@ -488,7 +489,7 @@ def test_backup_kptncook_favorites_resolves_and_saves_recipes(monkeypatch, minim
     monkeypatch.setattr(
         workflows,
         "_save_repository_entries",
-        lambda recipes: len(recipes),
+        lambda recipes, *, expected: len(recipes),
     )
 
     result = workflows.backup_kptncook_favorites()

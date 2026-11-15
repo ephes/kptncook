@@ -153,16 +153,18 @@ def load_recipe_from_repository_by_id(id_: str) -> RepositoryRecipesResult:
     )
 
 
-def _repository_id_map() -> dict[object, RecipeInDb]:
+def _repository_id_map() -> dict[str, RecipeInDb]:
     try:
         return list_repository_ids()
     except RepositoryServiceError as exc:
         raise _wrap_repository_error(exc) from exc
 
 
-def _save_repository_entries(recipes: list[RecipeInDb]) -> int:
+def _save_repository_entries(
+    recipes: list[RecipeInDb], *, expected: dict[str, RecipeInDb] | None = None
+) -> int:
     try:
-        return save_recipe_entries(recipes)
+        return save_recipe_entries(recipes, expected=expected)
     except RepositoryServiceError as exc:
         raise _wrap_repository_error(exc) from exc
 
@@ -205,8 +207,9 @@ def save_todays_recipes() -> int:
     try:
         if not repository_needs_sync(date.today()):
             return 0
+        expected = _repository_id_map()
         recipes = get_today_recipes()
-        return save_recipe_entries(recipes)
+        return save_recipe_entries(recipes, expected=expected)
     except RepositoryServiceError as exc:
         raise _wrap_repository_error(exc) from exc
 
@@ -508,6 +511,7 @@ def sync_with_mealie() -> int:
 
 def backup_kptncook_favorites() -> FavoritesBackupResult:
     _require_access_token()
+    expected = _repository_id_map()
     client = _kptncook_client()
     try:
         try:
@@ -538,7 +542,7 @@ def backup_kptncook_favorites() -> FavoritesBackupResult:
         if len(recipes) == 0:
             raise UserFacingError("Could not find any favorites")
 
-        saved_count = _save_repository_entries(recipes)
+        saved_count = _save_repository_entries(recipes, expected=expected)
         return FavoritesBackupResult(
             favorite_count=len(favorites),
             saved_count=saved_count,
@@ -705,6 +709,7 @@ def delete_repository_recipes(ids: list[str]) -> tuple[list[str], list[str]]:
 
 
 def search_recipe_by_id(id_: str) -> SearchResult:
+    expected = _repository_id_map()
     resolved_id = id_
     if resolved_id.startswith("https://share.kptncook.com/"):
         deadline = monotonic() + SHARE_RESOLUTION_SECONDS
@@ -761,7 +766,7 @@ def search_recipe_by_id(id_: str) -> SearchResult:
             raise UserFacingError("Could not find recipe")
 
         recipe = recipes[0]
-        _save_repository_entries([recipe])
+        _save_repository_entries([recipe], expected=expected)
         return SearchResult(id_type=id_type, id_value=id_value, recipe=recipe)
 
 

@@ -24,6 +24,8 @@ import portalocker
 
 from pydantic import BaseModel, RootModel, ValidationError
 
+from kptncook.durability import fsync_directory
+
 
 MAX_STORE_BYTES = 64 * 1024 * 1024
 STORE_LOCK_TIMEOUT_SECONDS = 30.0
@@ -120,6 +122,7 @@ class RecipeRepository:
         if snapshot is None:
             return
         temp_path: Path | None = None
+        published = False
         try:
             with io.BytesIO(snapshot.raw) as source:
                 with tempfile.NamedTemporaryFile(
@@ -135,8 +138,14 @@ class RecipeRepository:
                     os.fsync(target.fileno())
             self._check_snapshot(snapshot)
             os.replace(temp_path, self.backup_path)
+            published = True
             self._fsync_directory()
         except OSError as exc:
+            if published:
+                raise RepositoryError(
+                    "Repository backup was published; durability is uncertain. "
+                    "The primary is unchanged; inspect both files before retrying."
+                ) from exc
             raise RepositoryError(
                 f"Could not write repository backup {self.backup_path}: {exc}"
             ) from exc
@@ -175,16 +184,7 @@ class RecipeRepository:
         return by_id
 
     def _fsync_directory(self) -> None:
-        try:
-            directory_fd = os.open(self.path.parent, os.O_RDONLY)
-        except OSError:
-            return
-        try:
-            os.fsync(directory_fd)
-        except OSError:
-            pass
-        finally:
-            os.close(directory_fd)
+        fsync_directory(self.path.parent)
 
     @contextmanager
     def _write_lock(self) -> Iterator[None]:
@@ -265,6 +265,7 @@ class RecipeRepository:
                 "the repository and recovery backup are unchanged."
             )
         temp_path: Path | None = None
+        published = False
         try:
             with tempfile.NamedTemporaryFile(
                 "wb",
@@ -282,8 +283,15 @@ class RecipeRepository:
                 self.create_backup(snapshot=snapshot)
             self._check_snapshot(snapshot)
             os.replace(temp_path, self.path)
+            published = True
             self._fsync_directory()
         except OSError as exc:
+            if published:
+                raise RepositoryError(
+                    "Repository file was published; durability is uncertain. "
+                    "Reload and inspect the current data before retrying; "
+                    "do not restore the backup blindly."
+                ) from exc
             raise RepositoryError(
                 f"Could not write repository file {self.path}: {exc}"
             ) from exc
@@ -390,11 +398,23 @@ class RecipeRepository:
             locked.update(incoming)
             self._write_models(locked, snapshot=snapshot)
 
-    def add_list(self, recipes: list[RecipeInDb]):
+    def add_list(
+        self,
+        recipes: list[RecipeInDb],
+        *,
+        expected: dict[str, RecipeInDb] | None = None,
+    ):
         incoming = self._build_by_id(recipes, source="Incoming")
         with self._write_lock():
             models, snapshot = self._read_models()
             locked = self._build_by_id(models)
+            if expected is not None and any(
+                locked.get(oid) != expected.get(oid) for oid in incoming
+            ):
+                raise RepositoryError(
+                    "Repository refresh conflict: a fetched recipe changed locally. "
+                    "Fetch again before retrying; no recipes were saved."
+                )
             locked.update(incoming)
             self._write_models(locked, snapshot=snapshot)
 

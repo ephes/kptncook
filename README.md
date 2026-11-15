@@ -465,7 +465,16 @@ mutations leave main and backup bytes unchanged. Errors distinguish incoming fee
 batches from stored snapshots; a repeated daily/today feed is refused in full,
 including exact copies. Check the feed and retry rather than editing the local
 repository for an incoming-batch error. A single incoming record may
-still replace its existing unique identity, as before.
+still replace its existing unique identity. Network-to-store commands (today,
+favorites, ID lookup and browsing with `--save`) capture local records before
+fetching. Under the writer lock, the complete saved record for each incoming ID
+must still match that baseline (including absence). A concurrent insertion,
+edit or deletion of one of those IDs refuses the entire fetched batch with a
+refresh conflict before backup/publication. Fetch again to retry. Changes to
+unrelated IDs are retained and do not conflict; network requests never hold the
+writer lock. No remote response revision ordering is assumed. Direct library
+`add`/`add_list` calls remain explicit replacements; pass `expected=` to
+`add_list` or `save_recipe_entries` to bind a fetch to `list_by_id()` results.
 
 Repository mutations use the existing portable `portalocker` backend on supported
 POSIX and Windows systems. Every mutation must acquire the stable sibling
@@ -504,10 +513,15 @@ Backup copying never reopens an unchecked pathname or follows a substituted syml
 or FIFO. Direct library `create_backup()` calls use the same bounded regular-file
 admission. Advisory locks coordinate cooperating writers; external editors must
 not replace files during publication.
-If copying, syncing or replacing the backup fails, the write reports an error
-and leaves both the main file and the existing recovery snapshot intact.
-Temporary files are cleaned up on failure. The main file is also replaced
-atomically; a later main-write failure leaves the completed backup available.
+Backup and primary publication sync their containing directory where the OS
+supports it. Only unsupported directory-sync errors are tolerated; genuine I/O
+errors stop the write. Failure before backup replacement leaves both snapshots
+intact. Failure syncing an already replaced backup leaves the primary unchanged
+and reports uncertain backup durability. Failure syncing an already replaced
+primary reports that the new primary is published with uncertain durability;
+it is never rolled back or deleted. Inspect/reload the visible primary and
+backup before retrying; do not blindly restore the backup. Temporary files are
+cleaned up on failure; a later main-write failure retains the completed backup.
 
 ## Delete recipes
 

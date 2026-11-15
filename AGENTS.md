@@ -21,6 +21,10 @@
 ## Storage and export contracts
 - Store JSON must have unique object members at every nesting level.
 - Writer admission uses a stable advisory lock with a 30-second wait budget.
+- Fetch-to-store paths capture expected records before network I/O and reject
+  conflicting incoming IDs under the writer lock; unrelated IDs still merge.
+- Genuine directory-sync errors must distinguish unpublished and already
+  published outcomes; never undo visible data after uncertain durability.
 - Regressions use disposable local stores and synthetic recipes only.
 
 ## Documentation

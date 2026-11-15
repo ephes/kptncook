@@ -2,6 +2,11 @@ Unreleased
 ==========
 
 ### Fixes
+- Report real repository directory-sync failures with accurate publication
+  outcomes; block primary replacement on backup failure and preserve visible
+  data after a late failure with uncertain durability.
+- Fence network refresh publication against pre-fetch local records under the
+  writer lock; refuse entire conflicting batches while merging disjoint IDs.
 - Refuse duplicate members in local store JSON before model validation, including
   escaped keys, without exposing source values or changing recovery snapshots.
 - Bound repository writer lock admission to 30 seconds; report busy contention

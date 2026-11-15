@@ -15,7 +15,7 @@ from kptncook.config import SettingsError, get_settings, render_settings_error
 from kptncook.env import ENV_PATH, upsert_env_value
 from kptncook.markdown_exporter import DEFAULT_SERVINGS as DEFAULT_MARKDOWN_SERVINGS
 from kptncook.models import localized_fallback
-from kptncook.services.repository import InvalidStoredRecipe
+from kptncook.services.repository import InvalidStoredRecipe, RepositoryServiceError
 from kptncook.services.discovery import (
     DISCOVERY_LIST_TYPES_REQUIRE_ID,
     _extract_ingredient_id,
@@ -25,7 +25,7 @@ from kptncook.services.discovery import (
     normalize_ingredient_ids,
     normalize_tags,
 )
-from kptncook.services.repository import save_recipe_entries
+from kptncook.services.repository import list_repository_ids, save_recipe_entries
 from kptncook.services.workflows import (
     UserFacingError,
     backup_kptncook_favorites as backup_kptncook_favorites_workflow,
@@ -70,7 +70,7 @@ def _run_or_exit(func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
     except SettingsError as exc:
         render_settings_error(exc)
         sys.exit(1)
-    except UserFacingError as exc:
+    except (UserFacingError, RepositoryServiceError) as exc:
         _exit_with_error(str(exc))
 
 
@@ -174,6 +174,7 @@ def list_kptncook_dailies(
     """
     List daily recipes from the kptncook site.
     """
+    expected = _run_or_exit(list_repository_ids) if save else None
     recipes = _run_or_exit(
         list_dailies_workflow,
         recipe_filter=recipe_filter,
@@ -184,7 +185,7 @@ def list_kptncook_dailies(
         rprint("No recipes found.")
         return
     if save:
-        _run_or_exit(save_recipe_entries, recipes)
+        _run_or_exit(save_recipe_entries, recipes, expected=expected)
         rprint(f"Added {len(recipes)} recipes to local repository")
         return
     for recipe in recipes:
@@ -330,6 +331,7 @@ def list_discovery_list(
             "list-id is required when list-type is curated or automated"
         )
 
+    expected = _run_or_exit(list_repository_ids) if save else None
     recipes = _run_or_exit(
         get_discovery_list_recipes, list_type=list_type, list_id=list_id
     )
@@ -338,7 +340,7 @@ def list_discovery_list(
         return
 
     if save:
-        _run_or_exit(save_recipe_entries, recipes)
+        _run_or_exit(save_recipe_entries, recipes, expected=expected)
         rprint(f"Added {len(recipes)} recipes to local repository")
         return
 
@@ -393,13 +395,14 @@ def list_recipes_with_ingredients(
     if not ids:
         _exit_with_error("Please provide one or more non-empty --ingredient-id values.")
 
+    expected = _run_or_exit(list_repository_ids) if save else None
     recipes = _run_or_exit(get_recipes_with_ingredients, ids)
     if not recipes:
         rprint("No recipes found.")
         return
 
     if save:
-        _run_or_exit(save_recipe_entries, recipes)
+        _run_or_exit(save_recipe_entries, recipes, expected=expected)
         rprint(f"Added {len(recipes)} recipes to local repository")
         return
 
@@ -426,13 +429,14 @@ def list_onboarding_recipes(
     if not tag_list:
         _exit_with_error("Please provide one or more non-empty --tag values.")
 
+    expected = _run_or_exit(list_repository_ids) if save else None
     recipes = _run_or_exit(get_onboarding_recipes, tag_list)
     if not recipes:
         rprint("No onboarding recipes found.")
         return
 
     if save:
-        _run_or_exit(save_recipe_entries, recipes)
+        _run_or_exit(save_recipe_entries, recipes, expected=expected)
         rprint(f"Added {len(recipes)} recipes to local repository")
         return
 
