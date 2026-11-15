@@ -1,5 +1,6 @@
 import copy
 import logging
+from datetime import date
 from types import SimpleNamespace
 
 import httpx
@@ -616,26 +617,19 @@ def test_get_onboarding_recipes_resolves_items(monkeypatch, minimal):
 def test_delete_recipes_by_selection_deduplicates_ids_and_reports_missing(
     monkeypatch, minimal
 ):
-    warning = InvalidStoredRecipe(
-        position=3,
-        recipe_id="broken",
-        reason="ingredients: Field required",
-    )
     recipes = [
         _recipe(minimal, oid="recipe-1"),
         _recipe(minimal, oid="recipe-2"),
     ]
-    monkeypatch.setattr(
-        workflows,
-        "load_kptncook_recipes_from_repository",
-        lambda: RepositoryRecipesResult(recipes=recipes, invalid_entries=[warning]),
-    )
+    entries = {
+        "recipe-1": _recipe_in_db(minimal, oid="recipe-1"),
+        "recipe-2": _recipe_in_db(minimal, oid="recipe-2"),
+        "broken": RecipeInDb(date=date.today(), data={"_id": {"$oid": "broken"}}),
+    }
     monkeypatch.setattr(
         workflows,
         "_repository_id_map",
-        lambda: {
-            "recipe-1": _recipe_in_db(minimal, oid="recipe-1"),
-        },
+        lambda: entries,
     )
 
     result = workflows.delete_recipes_by_selection(
@@ -647,7 +641,9 @@ def test_delete_recipes_by_selection_deduplicates_ids_and_reports_missing(
     assert result.invalid_indices == [-1, 3]
     assert result.missing_ids == ["missing"]
     assert result.to_delete_ids == ["recipe-1"]
-    assert result.invalid_repository_entries == [warning]
+    assert result.expected == {"recipe-1": entries["recipe-1"]}
+    assert len(result.invalid_repository_entries) == 1
+    assert result.invalid_repository_entries[0].recipe_id == "broken"
 
 
 def test_export_recipes_to_paprika_accepts_parseable_repository_url(

@@ -57,7 +57,9 @@ def iter_ingredient_groups(
             seen_order.append(key)
         groups[key].append(ingredient)
     ordered_keys = [key for key in label_map if key in groups]
+    ordered_key_set = set(ordered_keys)
     for key in seen_order:
-        if key not in ordered_keys:
+        if key not in ordered_key_set:
             ordered_keys.append(key)
+            ordered_key_set.add(key)
     return [(_format_group_label(key, label_map), groups[key]) for key in ordered_keys]

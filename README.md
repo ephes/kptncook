@@ -558,6 +558,17 @@ $ kptncook delete-recipes --oid 635a68635100007500061cd7 --oid 635a6863510000750
 $ kptncook delete-recipes 0 --force
 ```
 
+The preview and selected store records come from one snapshot. After confirmation,
+the writer lock protects a comparison of each still-present selected record with
+that snapshot, including stored metadata. If any changed, the entire deletion is
+refused with a reload message; no selected recipes are deleted. Reload and select
+again before retrying. Unrelated recipe changes do not block deletion. Selected
+IDs already removed by another writer are reported as missing; remaining unchanged
+selections can still be deleted. `--force` skips the prompt and retains the same
+snapshot comparison. Library callers can pass the preview's `RecipeInDb` records
+as `expected={oid: record}` to `delete_by_ids`; omitting `expected` keeps the
+unconditional, idempotent ID-based API.
+
 ## Dailies
 
 Filter dailies by API fields such as recipeFilter (for example `veggie`) and
@@ -753,6 +764,23 @@ all exporters, set the toggle below. You can also customize the section labels.
 KPTNCOOK_GROUP_INGREDIENTS_BY_TYP=true
 KPTNCOOK_INGREDIENT_GROUP_LABELS="regular:You need,basic:Pantry"
 ```
+
+Configured groups appear in label-map order (the defaults are `regular`, then
+`basic`); remaining groups retain their first-seen order, as do ingredients within
+each group. Group ordering uses linear membership work even with many distinct
+upstream types. Mealie step references expand each distinct source ingredient ID
+once per step and retain first-occurrence reference order. Repeated IDs do not
+multiply expansion work or duplicate references; distinct rows sharing one source
+ID each retain their own reference.
+
+Grouping does not change quantities: each real ingredient row is scaled exactly
+once to the exported serving count. Section headings are presentation metadata,
+never food or step-reference targets (Tandoor headers carry zero amount and
+`no_amount`). Mealie links a step's source ID to every matching real row, including
+duplicate IDs in different groups. Tandoor retains the step's explicit ingredient
+names and quantities; Paprika and Markdown retain instruction text. The offline
+`tests/grouped_export_journey_test.py` checks these contracts together through the
+native Mealie ZIP import and Tandoor/Paprika/Markdown file exporters.
 
 ### Full Configuration Example
 

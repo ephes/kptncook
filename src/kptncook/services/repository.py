@@ -80,10 +80,14 @@ def list_repository_entries() -> list[RecipeInDb]:
         raise RepositoryServiceError(str(exc)) from exc
 
 
-def load_repository_recipes() -> RepositoryRecipesResult:
+def load_repository_recipes(
+    *, entries: list[RecipeInDb] | None = None
+) -> RepositoryRecipesResult:
     recipes: list[Recipe] = []
     invalid_entries: list[InvalidStoredRecipe] = []
-    for position, repo_recipe in enumerate(list_repository_entries(), start=1):
+    if entries is None:
+        entries = list_repository_entries()
+    for position, repo_recipe in enumerate(entries, start=1):
         try:
             recipes.append(Recipe.model_validate(repo_recipe.data))
         except ValidationError as exc:
@@ -109,9 +113,11 @@ def get_repository_recipe_by_oid(oid: str) -> list[Recipe]:
     return [recipe for recipe in result.recipes if recipe.id.oid == oid]
 
 
-def delete_recipe_ids(ids: list[str]) -> tuple[list[str], list[str]]:
+def delete_recipe_ids(
+    ids: list[str], *, expected: dict[str, RecipeInDb] | None = None
+) -> tuple[list[str], list[str]]:
     try:
-        return get_repository().delete_by_ids(ids)
+        return get_repository().delete_by_ids(ids, expected=expected)
     except RepositoryError as exc:
         raise RepositoryServiceError(str(exc)) from exc
 

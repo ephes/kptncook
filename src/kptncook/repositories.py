@@ -423,14 +423,25 @@ class RecipeRepository:
             locked.update(incoming)
             self._write_models(locked, snapshot=snapshot)
 
-    def delete_by_ids(self, ids: list[str]) -> tuple[list[str], list[str]]:
+    def delete_by_ids(
+        self, ids: list[str], *, expected: dict[str, RecipeInDb] | None = None
+    ) -> tuple[list[str], list[str]]:
         with self._write_lock():
             models, snapshot = self._read_models()
             locked = self._build_by_id(models)
+            requested_ids = list(dict.fromkeys(str(value) for value in ids))
+            if expected is not None and any(
+                oid in locked and locked[oid] != expected.get(oid)
+                for oid in requested_ids
+            ):
+                raise RepositoryError(
+                    "Repository deletion conflict: a selected recipe changed. "
+                    "Reload the selection before retrying; no recipes were deleted."
+                )
             key_map = {str(key): key for key in locked.keys()}
             deleted: list[str] = []
             missing: list[str] = []
-            for oid in dict.fromkeys(str(value) for value in ids):
+            for oid in requested_ids:
                 key = key_map.get(str(oid))
                 if key is None:
                     missing.append(str(oid))
