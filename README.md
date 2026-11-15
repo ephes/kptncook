@@ -388,8 +388,10 @@ invented.
 Raw HTML in source steps is not supported formatting: Markdown, Tandoor and
 Mealie escape source `&`, `<` and `>` before inserting trusted timer text or
 visible unresolved markers. Literal tags and angle-bracket instructions therefore
-remain visible and inert; existing Markdown syntax still follows the destination
-renderer. Paprika's plain-text directions retain literal source characters.
+remain visible and inert; other Markdown syntax still follows the destination
+renderer. Because escaping covers the whole step, `&`, `<` and `>` inside a
+source code span (and existing HTML entities such as `&amp;`) render as their
+escaped text, for example `` `a<b` `` shows as `a&lt;b`. Paprika's plain-text directions retain literal source characters.
 Check the source recipe for unresolved timing instructions before cooking.
 
 Markdown is final cookbook text, so its serving count is configurable:

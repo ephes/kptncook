@@ -4,6 +4,7 @@ Unreleased
 ### Fixes
 - Escape source HTML metacharacters in Markdown, Tandoor and Mealie step text
   before inserting timer representations; preserve plain-text Paprika directions.
+  Escaping covers whole steps, including source code spans (documented limitation).
 - Sync export directories after final links and Markdown asset directories before
   publishing their referring notes. Report uncertain durability after publication
   without deleting visible notes or their assets.

@@ -140,3 +140,15 @@ def test_export_directory_sync_orders_assets_before_note(minimal, monkeypatch, f
             encoding="utf-8"
         )
     assert not list(out.glob(".kptncook-*"))
+
+
+def test_markup_escaping_covers_source_code_spans_and_entities():
+    from kptncook.exporter_utils import expand_timer_placeholders
+
+    # Pinned limitation (README): escaping applies to the whole source step.
+    assert expand_timer_placeholders("use `a<b` & &amp;", [], markup=True) == (
+        "use `a&lt;b` &amp; &amp;amp;"
+    )
+    assert "a&amp;lt;b" in markdown.markdown(
+        expand_timer_placeholders("`a<b`", [], markup=True)
+    )
