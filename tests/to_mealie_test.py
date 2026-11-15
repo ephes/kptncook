@@ -1,6 +1,51 @@
+from uuid import uuid4
+
 from kptncook.config import settings
-from kptncook.mealie import kptncook_to_mealie
+from kptncook.mealie import kptncook_to_mealie, kptncook_to_mealie_steps
 from kptncook.models import Recipe
+
+
+def test_step_reference_expansion_visits_each_source_mapping_once(minimal):
+    visits = 0
+
+    class CountedReferences(list):
+        def __iter__(self):
+            nonlocal visits
+            for reference in super().__iter__():
+                visits += 1
+                yield reference
+
+    references = [uuid4() for _ in range(128)]
+    mapping = {
+        "first": CountedReferences(references),
+        "second": CountedReferences([references[-1], uuid4()]),
+    }
+    recipe = Recipe.model_validate(
+        {
+            **minimal,
+            "steps": [
+                {
+                    **minimal["steps"][0],
+                    "ingredients": [
+                        {"ingredientId": "second"},
+                        *[{"ingredientId": "first"}] * 5000,
+                        {"ingredient": {"_id": {"$oid": "second"}}},
+                        {"ingredientId": "missing"},
+                        {},
+                    ],
+                }
+            ],
+        }
+    )
+
+    steps = kptncook_to_mealie_steps(recipe.steps, "test-key", mapping)
+
+    assert visits <= 130
+    assert [ref.referenceId for ref in steps[0].ingredientReferences] == [
+        mapping["second"][0],
+        mapping["second"][1],
+        *references[:-1],
+    ]
 
 
 def test_parse_full_recipe(full_recipe):

@@ -2,6 +2,9 @@ Unreleased
 ==========
 
 ### Fixes
+- Keep ingredient grouping membership work linear while preserving configured and
+  first-seen group order. Expand repeated Mealie step ingredient IDs only once,
+  preserving every distinct row reference without repeated temporary lists.
 - Escape source HTML metacharacters in Markdown, Tandoor and Mealie step text
   before inserting timer representations; preserve plain-text Paprika directions.
   Escaping covers whole steps, including source code spans (documented limitation).

@@ -904,7 +904,9 @@ def kptncook_to_mealie_steps(
         except ImageOriginError:
             logger.warning("Skipping step image: not on an allowed image host")
             image = None
-        reference_ids: list[UUID4] = []
+        seen_ingredient_ids: set[str] = set()
+        seen_reference_ids: set[UUID4] = set()
+        ingredient_references = []
         if step.ingredients:
             for ingredient in step.ingredients:
                 if ingredient is None:
@@ -916,18 +918,18 @@ def kptncook_to_mealie_steps(
                     and ingredient.ingredient.id is not None
                 ):
                     ingredient_id = ingredient.ingredient.id.oid
-                if ingredient_id is None:
+                if ingredient_id is None or ingredient_id in seen_ingredient_ids:
                     continue
-                reference_ids.extend(
-                    ingredient_id_to_reference_ids.get(ingredient_id, [])
-                )
-        seen = set()
-        ingredient_references = []
-        for reference_id in reference_ids:
-            if reference_id in seen:
-                continue
-            seen.add(reference_id)
-            ingredient_references.append(IngredientReference(referenceId=reference_id))
+                seen_ingredient_ids.add(ingredient_id)
+                for reference_id in ingredient_id_to_reference_ids.get(
+                    ingredient_id, []
+                ):
+                    if reference_id in seen_reference_ids:
+                        continue
+                    seen_reference_ids.add(reference_id)
+                    ingredient_references.append(
+                        IngredientReference(referenceId=reference_id)
+                    )
         mealie_instructions.append(
             RecipeStep(
                 title=None,
