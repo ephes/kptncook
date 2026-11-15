@@ -449,6 +449,9 @@ Store reads accept regular files only (symlinks are refused) and are limited to
 64 MiB of UTF-8 JSON, including files that grow while being read. Invalid encoding,
 nonregular files and oversized stores stop reads and mutations without replacing
 the primary or recovery snapshot. A missing store remains an empty repository.
+Duplicate JSON object member names at every nesting level (including escaped
+spellings) are refused before model validation, with no member names or values
+in the diagnostic. Repeated array values are unaffected.
 Library deletion calls deduplicate requested IDs in encounter order, reporting
 each deleted or missing ID once and committing at most once.
 Identifier-based reads and mutations reject records whose `_id.$oid` is not a
@@ -467,7 +470,9 @@ still replace its existing unique identity, as before.
 Repository mutations use the existing portable `portalocker` backend on supported
 POSIX and Windows systems. Every mutation must acquire the stable sibling
 `kptncook.json.lock` before rereading and replacing data; lock failures refuse the
-write with a repository error. Use a local filesystem with working advisory locks,
+write with a repository error. Competing writers wait at most 30 seconds using
+a monotonic deadline, then report a busy repository without modifying data or
+backup. Retry after the current writer finishes. Use a local filesystem with working advisory locks,
 and retain lock files while writers may run. Lock admission opens without following
 symlinks or waiting on special files, requires a regular descriptor, and verifies
 that its inode still owns the stable name after acquiring the lock. A replaced

@@ -7,10 +7,12 @@ remote api, maybe mealie... hmm.
 
 import errno
 import io
+import json
 import os
 import shutil
 import stat
 import tempfile
+from time import monotonic, sleep
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
@@ -24,6 +26,16 @@ from pydantic import BaseModel, RootModel, ValidationError
 
 
 MAX_STORE_BYTES = 64 * 1024 * 1024
+STORE_LOCK_TIMEOUT_SECONDS = 30.0
+
+
+def _unique_members(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise RepositoryError("Repository JSON contains duplicate object members.")
+        result[key] = value
+    return result
 
 
 class RepositoryError(Exception):
@@ -176,39 +188,54 @@ class RecipeRepository:
 
     @contextmanager
     def _write_lock(self) -> Iterator[None]:
-        try:
-            self._ensure_parent_dir()
+        self._ensure_parent_dir()
+        opened: os.stat_result | None = None
+
+        def open_lock(path, flags):
+            nonlocal opened
             if self.lock_path.is_symlink():
                 raise RepositoryError("Repository lock must be a regular file.")
-            flags = (
-                os.O_RDWR
-                | os.O_CREAT
-                | getattr(os, "O_NONBLOCK", 0)
-                | getattr(os, "O_NOFOLLOW", 0)
-                | getattr(os, "O_BINARY", 0)
+            fd = os.open(
+                path,
+                flags | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
             )
-            fd = os.open(self.lock_path, flags, 0o600)
             try:
-                info = os.fstat(fd)
-                self._check_lock_identity(info)
-                lock_file = os.fdopen(fd, "a+", encoding="utf-8")
+                opened = os.fstat(fd)
+                self._check_lock_identity(opened)
+                return fd
             except BaseException:
                 os.close(fd)
                 raise
+
+        try:
+            fd = open_lock(self.lock_path, os.O_RDWR | os.O_CREAT)
         except OSError as exc:
             raise RepositoryError("Could not open repository lock safely.") from exc
-        with lock_file:
+        with os.fdopen(fd, "a+", encoding="utf-8") as lock_file:
+            deadline = monotonic() + STORE_LOCK_TIMEOUT_SECONDS
+            while True:
+                try:
+                    portalocker.lock(
+                        lock_file, portalocker.LOCK_EX | portalocker.LOCK_NB
+                    )
+                    break
+                except portalocker.exceptions.AlreadyLocked:
+                    remaining = deadline - monotonic()
+                    if remaining <= 0:
+                        raise RepositoryError(
+                            "Repository is busy; writer lock wait budget exceeded. "
+                            "Retry after the current writer finishes."
+                        ) from None
+                    sleep(min(0.05, remaining))
+                except portalocker.exceptions.LockException as exc:
+                    raise RepositoryError(
+                        "Could not lock the recipe repository; mutations require supported "
+                        "OS advisory locking. Use a local filesystem with locking support."
+                    ) from exc
             try:
-                portalocker.lock(lock_file, portalocker.LOCK_EX)
-            except portalocker.exceptions.LockException as exc:
-                raise RepositoryError(
-                    "Could not lock the recipe repository; mutations require supported "
-                    "OS advisory locking. Use a local filesystem with locking support."
-                ) from exc
-            try:
-                # A waiter may have acquired an inode whose name was replaced
-                # while another writer held it. It no longer coordinates writes.
-                self._check_lock_identity(info)
+                assert opened is not None
+                self._check_lock_identity(opened)
                 yield
             finally:
                 portalocker.unlock(lock_file)
@@ -332,7 +359,10 @@ class RecipeRepository:
         except UnicodeDecodeError as exc:
             raise RepositoryError("Repository contains invalid UTF-8 data.") from exc
         try:
-            return RecipeListInDb.model_validate_json(raw_data), snapshot
+            decoded = json.loads(raw_data, object_pairs_hook=_unique_members)
+            return RecipeListInDb.model_validate(decoded), snapshot
+        except (json.JSONDecodeError, RecursionError):
+            raise RepositoryError("Repository contains invalid JSON data.") from None
         except ValidationError as exc:
             raise RepositoryError(
                 f"Repository file {self.path} contains invalid data: "

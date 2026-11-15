@@ -18,6 +18,11 @@
 - Python 3.10+ with type hints for public interfaces.
 - Ruff handles formatting and linting; prefer minimal, focused changes.
 
+## Storage and export contracts
+- Store JSON must have unique object members at every nesting level.
+- Writer admission uses a stable advisory lock with a 30-second wait budget.
+- Regressions use disposable local stores and synthetic recipes only.
+
 ## Documentation
 - Update `CHANGELOG.md` for user-visible changes.
 - Release process: see `README.md#release-process`.

@@ -2,6 +2,10 @@ Unreleased
 ==========
 
 ### Fixes
+- Refuse duplicate members in local store JSON before model validation, including
+  escaped keys, without exposing source values or changing recovery snapshots.
+- Bound repository writer lock admission to 30 seconds; report busy contention
+  and retain stable lock identity checks and read-only access.
 - Update the notebook Tornado lock to 6.6.1 for CVE-2026-126347, keeping the
   frozen runtime/development dependency audit clean.
 - Refuse duplicate members in Mealie control JSON, including nested and escaped
