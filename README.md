@@ -842,7 +842,7 @@ $ just check
 This runs `just lint`, `just typecheck`, and `just test` in sequence. You can
 also run each step individually:
 
-The same three gates run in GitHub Actions for pushes and pull requests.
+The same three gates run in GitHub Actions when the workflow is started manually (`workflow_dispatch`).
 
 Update hook revisions:
 
