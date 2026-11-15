@@ -191,6 +191,11 @@ the complete recipe with those identity extras already present. Distinct
 KptnCook recipes with the same title can both be imported: Mealie assigns a
 unique name and slug, which subsequent updates preserve.
 
+Ingredient names are split at the first comma only: the food name precedes it,
+and the complete remaining preparation note retains subsequent commas and
+internal whitespace, with outer whitespace trimmed. Grouping and locale fallback
+remain unchanged.
+
 Step-media URL components are percent-encoded and the final HTML attribute is
 escaped, so server-returned filenames remain data. Existing instruction markup
 is preserved. Conversion DEBUG logs contain only recipe identity and counts;
@@ -1014,3 +1019,8 @@ and platform. This does not audit other interpreter/platform marker branches or
 separate build-backend/hook environments. Export errors and advisory findings
 both fail the command; it never updates the lock. CI has read-only repository
 permissions and a ten-minute audit timeout.
+
+The library `PaprikaExporter.save_recipes` helper builds its archive from exactly
+the requested IDs, including an empty archive for an empty request. Reusing its
+work directory never includes stale or unrelated `.paprikarecipe` files; those
+unrequested files are left untouched.

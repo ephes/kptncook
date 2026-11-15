@@ -2,6 +2,9 @@ Unreleased
 ==========
 
 ### Fixes
+- Keep complete comma-separated ingredient preparation notes in Mealie payloads.
+- Limit legacy Paprika helper archives to exactly the requested recipe members,
+  preserving unrelated files when reusing an export directory.
 - Report real repository directory-sync failures with accurate publication
   outcomes; block primary replacement on backup failure and preserve visible
   data after a late failure with uncertain durability.

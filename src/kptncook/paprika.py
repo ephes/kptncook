@@ -8,7 +8,6 @@ file format:
 """
 
 import base64
-import glob
 import gzip
 import json
 import logging
@@ -197,14 +196,13 @@ class PaprikaExporter:
     ) -> str:
         for identifier in export_data:
             validate_export_id(identifier)
+        entries = []
         for id, recipe_as_json in export_data.items():
             recipe_as_gz = os.path.join(directory, "recipe_" + id + ".paprikarecipe")
             with gzip.open(recipe_as_gz, "wb") as f:
                 f.write(recipe_as_json.encode("utf-8"))
+            entries.append((Path(recipe_as_gz).name, Path(recipe_as_gz)))
         filename_full_path = os.path.join(directory, filename)
-        gz_files = glob.glob(os.path.join(directory, "*.paprikarecipe"))
-        logger.debug("Paprika export files: %s", gz_files)
-        entries = [(Path(gz_file).name, Path(gz_file)) for gz_file in gz_files]
         write_zip(Path(filename_full_path), entries)
         return filename_full_path
 
