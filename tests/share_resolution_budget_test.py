@@ -39,7 +39,9 @@ def test_share_resolution_closes_body_without_reading(monkeypatch, status):
     )
     monkeypatch.setattr(workflows, "KptnCookClient", lambda: client)
     monkeypatch.setattr(
-        workflows, "_save_repository_entries", lambda rows: calls.append(rows)
+        workflows,
+        "_save_repository_entries",
+        lambda rows, *, expected: calls.append(rows),
     )
     with httpx.Client(transport=httpx.MockTransport(respond)) as http:
         monkeypatch.setattr(workflows.httpx, "get", http.get)

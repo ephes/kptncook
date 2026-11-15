@@ -18,6 +18,19 @@
 - Python 3.10+ with type hints for public interfaces.
 - Ruff handles formatting and linting; prefer minimal, focused changes.
 
+## Storage and export contracts
+- Store JSON must have unique object members at every nesting level.
+- Writer admission uses a stable advisory lock with a 30-second wait budget.
+- Fetch-to-store paths capture expected records before network I/O and reject
+  conflicting incoming IDs under the writer lock; unrelated IDs still merge.
+- Genuine directory-sync errors must distinguish unpublished and already
+  published outcomes; never undo visible data after uncertain durability.
+- Rendered step targets escape source HTML before inserting trusted timers.
+  Plain-text exports preserve source characters.
+- Sync final export directories, persist Markdown assets before their notes,
+  and preserve visible files after uncertain publication.
+- Regressions use disposable local stores and synthetic recipes only.
+
 ## Documentation
 - Update `CHANGELOG.md` for user-visible changes.
 - Release process: see `README.md#release-process`.

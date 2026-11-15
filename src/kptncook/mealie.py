@@ -863,8 +863,8 @@ def kptncook_to_mealie_ingredients(
             )
             note = None
             if "," in ingredient_title:
-                ingredient_title, note, *_ = (
-                    p.strip() for p in ingredient_title.split(",")
+                ingredient_title, note = (
+                    p.strip() for p in ingredient_title.split(",", 1)
                 )
             food = RecipeFood(name=ingredient_title)
             quantity = scale_quantity(ingredient.quantity, servings)

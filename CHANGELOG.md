@@ -2,6 +2,24 @@ Unreleased
 ==========
 
 ### Fixes
+- Escape source HTML metacharacters in Markdown, Tandoor and Mealie step text
+  before inserting timer representations; preserve plain-text Paprika directions.
+  Escaping covers whole steps, including source code spans (documented limitation).
+- Sync export directories after final links and Markdown asset directories before
+  publishing their referring notes. Report uncertain durability after publication
+  without deleting visible notes or their assets.
+- Keep complete comma-separated ingredient preparation notes in Mealie payloads.
+- Limit legacy Paprika helper archives to exactly the requested recipe members,
+  preserving unrelated files when reusing an export directory.
+- Report real repository directory-sync failures with accurate publication
+  outcomes; block primary replacement on backup failure and preserve visible
+  data after a late failure with uncertain durability.
+- Fence network refresh publication against pre-fetch local records under the
+  writer lock; refuse entire conflicting batches while merging disjoint IDs.
+- Refuse duplicate members in local store JSON before model validation, including
+  escaped keys, without exposing source values or changing recovery snapshots.
+- Bound repository writer lock admission to 30 seconds; report busy contention
+  and retain stable lock identity checks and read-only access.
 - Update the notebook Tornado lock to 6.6.1 for CVE-2026-126347, keeping the
   frozen runtime/development dependency audit clean.
 - Refuse duplicate members in Mealie control JSON, including nested and escaped

@@ -191,7 +191,11 @@ def test_add_recipe_uses_advisory_lock(tmpdir, monkeypatch):
 
     repo.add(recipe)
 
-    assert calls == [repositories_module.portalocker.LOCK_EX, "unlock"]
+    assert calls == [
+        repositories_module.portalocker.LOCK_EX
+        | repositories_module.portalocker.LOCK_NB,
+        "unlock",
+    ]
 
 
 @pytest.mark.parametrize("failure", ["copy", "fsync", "replace"])

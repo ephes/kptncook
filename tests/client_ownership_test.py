@@ -153,7 +153,7 @@ def test_favorites_always_closes_owned_client(monkeypatch, minimal, failure):
             raise RuntimeError("resolve")
         return [RecipeInDb(date="2026-11-07", data=minimal)]
 
-    def save(recipes):
+    def save(recipes, *, expected):
         if failure == "save":
             raise RuntimeError("save")
         return 1

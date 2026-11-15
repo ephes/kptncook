@@ -62,7 +62,9 @@ def test_workflows_close_once(monkeypatch, name, kwargs, method, payload, failur
         workflows, "parse_discovery_screen", lambda p: fail_or_return("processing", p)
     )
     monkeypatch.setattr(
-        workflows, "_save_repository_entries", lambda p: fail_or_return("processing", 1)
+        workflows,
+        "_save_repository_entries",
+        lambda p, *, expected: fail_or_return("processing", 1),
     )
     has_processing = name in {
         "get_discovery_screen",

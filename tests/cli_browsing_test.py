@@ -161,7 +161,7 @@ def test_selection_normalizes_and_saves_only_when_requested(
         save_workflow.assert_not_called()
         assert "Added" not in result.output
     elif save:
-        save_workflow.assert_called_once_with(recipes)
+        save_workflow.assert_called_once_with(recipes, expected={})
         assert "Added 2 recipes to local repository" in result.output
         assert "Synthetic soup" not in result.output
     else:
@@ -204,7 +204,7 @@ def test_selection_workflow_errors(mocker, selection, synthetic_recipes, fail_sa
     assert "Added" not in result.output
     workflow.assert_called_once_with(["first"])
     if fail_save:
-        save_workflow.assert_called_once_with(synthetic_recipes)
+        save_workflow.assert_called_once_with(synthetic_recipes, expected={})
     else:
         save_workflow.assert_not_called()
 

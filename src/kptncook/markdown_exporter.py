@@ -22,7 +22,10 @@ from pathlib import Path
 from pathvalidate import sanitize_filename
 
 from .config import get_settings
+from .durability import fsync_directory
+from .http_errors import UserFacingError
 from .exporter_utils import (
+    ExportPublicationUncertain,
     get_cover,
     move_to_free_target,
     replace_timers_in_step,
@@ -134,6 +137,12 @@ class MarkdownExporter:
 
         out_dir = get_settings().root / "export_md"
         out_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            fsync_directory(out_dir.parent)
+        except OSError as exc:
+            raise UserFacingError(
+                "Could not sync the Markdown export directory entry."
+            ) from exc
 
         for recipe in recipes:
             title = (
@@ -154,6 +163,14 @@ class MarkdownExporter:
                             asset.write(image_bytes)
                         assets = out_dir / "assets"
                         assets.mkdir(exist_ok=True)
+                        try:
+                            # Persist the assets directory's name before publishing
+                            # its contents and then the referring note.
+                            fsync_directory(out_dir)
+                        except OSError as exc:
+                            raise UserFacingError(
+                                "Could not sync the Markdown assets directory entry."
+                            ) from exc
                         asset_path = move_to_free_target(
                             staged_asset, assets, uuid.uuid4().hex, ".jpg"
                         )
@@ -168,6 +185,10 @@ class MarkdownExporter:
                     out_path = move_to_free_target(
                         staged_note, out_dir, base, ".md", recipe.id.oid
                     )
+                except ExportPublicationUncertain:
+                    # The asset or its referring note is already visible. Keep
+                    # both, even when the caller cannot claim durable success.
+                    raise
                 except BaseException:
                     if asset_path is not None:
                         asset_path.unlink(missing_ok=True)

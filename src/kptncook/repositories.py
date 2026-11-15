@@ -7,10 +7,12 @@ remote api, maybe mealie... hmm.
 
 import errno
 import io
+import json
 import os
 import shutil
 import stat
 import tempfile
+from time import monotonic, sleep
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
@@ -22,8 +24,20 @@ import portalocker
 
 from pydantic import BaseModel, RootModel, ValidationError
 
+from kptncook.durability import fsync_directory
+
 
 MAX_STORE_BYTES = 64 * 1024 * 1024
+STORE_LOCK_TIMEOUT_SECONDS = 30.0
+
+
+def _unique_members(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise RepositoryError("Repository JSON contains duplicate object members.")
+        result[key] = value
+    return result
 
 
 class RepositoryError(Exception):
@@ -108,6 +122,7 @@ class RecipeRepository:
         if snapshot is None:
             return
         temp_path: Path | None = None
+        published = False
         try:
             with io.BytesIO(snapshot.raw) as source:
                 with tempfile.NamedTemporaryFile(
@@ -123,8 +138,14 @@ class RecipeRepository:
                     os.fsync(target.fileno())
             self._check_snapshot(snapshot)
             os.replace(temp_path, self.backup_path)
+            published = True
             self._fsync_directory()
         except OSError as exc:
+            if published:
+                raise RepositoryError(
+                    "Repository backup was published; durability is uncertain. "
+                    "The primary is unchanged; inspect both files before retrying."
+                ) from exc
             raise RepositoryError(
                 f"Could not write repository backup {self.backup_path}: {exc}"
             ) from exc
@@ -163,52 +184,63 @@ class RecipeRepository:
         return by_id
 
     def _fsync_directory(self) -> None:
-        try:
-            directory_fd = os.open(self.path.parent, os.O_RDONLY)
-        except OSError:
-            return
-        try:
-            os.fsync(directory_fd)
-        except OSError:
-            pass
-        finally:
-            os.close(directory_fd)
+        fsync_directory(self.path.parent)
 
     @contextmanager
     def _write_lock(self) -> Iterator[None]:
-        try:
-            self._ensure_parent_dir()
+        self._ensure_parent_dir()
+        opened: os.stat_result | None = None
+
+        def open_lock(path, flags):
+            nonlocal opened
             if self.lock_path.is_symlink():
                 raise RepositoryError("Repository lock must be a regular file.")
-            flags = (
-                os.O_RDWR
-                | os.O_CREAT
-                | getattr(os, "O_NONBLOCK", 0)
-                | getattr(os, "O_NOFOLLOW", 0)
-                | getattr(os, "O_BINARY", 0)
+            fd = os.open(
+                path,
+                flags | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
             )
-            fd = os.open(self.lock_path, flags, 0o600)
             try:
-                info = os.fstat(fd)
-                self._check_lock_identity(info)
-                lock_file = os.fdopen(fd, "a+", encoding="utf-8")
+                opened = os.fstat(fd)
+                self._check_lock_identity(opened)
+                return fd
             except BaseException:
                 os.close(fd)
                 raise
+
+        try:
+            fd = open_lock(self.lock_path, os.O_RDWR | os.O_CREAT)
         except OSError as exc:
             raise RepositoryError("Could not open repository lock safely.") from exc
-        with lock_file:
+        with os.fdopen(fd, "a+", encoding="utf-8") as lock_file:
+            deadline = monotonic() + STORE_LOCK_TIMEOUT_SECONDS
+            while True:
+                try:
+                    portalocker.lock(
+                        lock_file, portalocker.LOCK_EX | portalocker.LOCK_NB
+                    )
+                    break
+                except portalocker.exceptions.AlreadyLocked:
+                    remaining = deadline - monotonic()
+                    if remaining <= 0:
+                        raise RepositoryError(
+                            "Repository is busy; writer lock wait budget exceeded. "
+                            "Retry after the current writer finishes."
+                        ) from None
+                    sleep(min(0.05, remaining))
+                except portalocker.exceptions.LockException as exc:
+                    raise RepositoryError(
+                        "Could not lock the recipe repository; mutations require supported "
+                        "OS advisory locking. Use a local filesystem with locking support."
+                    ) from exc
             try:
-                portalocker.lock(lock_file, portalocker.LOCK_EX)
-            except portalocker.exceptions.LockException as exc:
-                raise RepositoryError(
-                    "Could not lock the recipe repository; mutations require supported "
-                    "OS advisory locking. Use a local filesystem with locking support."
-                ) from exc
-            try:
-                # A waiter may have acquired an inode whose name was replaced
-                # while another writer held it. It no longer coordinates writes.
-                self._check_lock_identity(info)
+                if monotonic() >= deadline:
+                    raise RepositoryError(
+                        "Repository is busy; writer lock wait budget exceeded. "
+                        "Retry after the current writer finishes."
+                    )
+                assert opened is not None
+                self._check_lock_identity(opened)
                 yield
             finally:
                 portalocker.unlock(lock_file)
@@ -238,6 +270,7 @@ class RecipeRepository:
                 "the repository and recovery backup are unchanged."
             )
         temp_path: Path | None = None
+        published = False
         try:
             with tempfile.NamedTemporaryFile(
                 "wb",
@@ -255,8 +288,15 @@ class RecipeRepository:
                 self.create_backup(snapshot=snapshot)
             self._check_snapshot(snapshot)
             os.replace(temp_path, self.path)
+            published = True
             self._fsync_directory()
         except OSError as exc:
+            if published:
+                raise RepositoryError(
+                    "Repository file was published; durability is uncertain. "
+                    "Reload and inspect the current data before retrying; "
+                    "do not restore the backup blindly."
+                ) from exc
             raise RepositoryError(
                 f"Could not write repository file {self.path}: {exc}"
             ) from exc
@@ -332,7 +372,10 @@ class RecipeRepository:
         except UnicodeDecodeError as exc:
             raise RepositoryError("Repository contains invalid UTF-8 data.") from exc
         try:
-            return RecipeListInDb.model_validate_json(raw_data), snapshot
+            decoded = json.loads(raw_data, object_pairs_hook=_unique_members)
+            return RecipeListInDb.model_validate(decoded), snapshot
+        except (json.JSONDecodeError, RecursionError):
+            raise RepositoryError("Repository contains invalid JSON data.") from None
         except ValidationError as exc:
             raise RepositoryError(
                 f"Repository file {self.path} contains invalid data: "
@@ -360,11 +403,23 @@ class RecipeRepository:
             locked.update(incoming)
             self._write_models(locked, snapshot=snapshot)
 
-    def add_list(self, recipes: list[RecipeInDb]):
+    def add_list(
+        self,
+        recipes: list[RecipeInDb],
+        *,
+        expected: dict[str, RecipeInDb] | None = None,
+    ):
         incoming = self._build_by_id(recipes, source="Incoming")
         with self._write_lock():
             models, snapshot = self._read_models()
             locked = self._build_by_id(models)
+            if expected is not None and any(
+                locked.get(oid) != expected.get(oid) for oid in incoming
+            ):
+                raise RepositoryError(
+                    "Repository refresh conflict: a fetched recipe changed locally. "
+                    "Fetch again before retrying; no recipes were saved."
+                )
             locked.update(incoming)
             self._write_models(locked, snapshot=snapshot)
 

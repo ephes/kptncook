@@ -255,7 +255,8 @@ def test_discovery_list_save_command_smoke_uses_service_result(monkeypatch, mini
         lambda *, list_type, list_id: [recipe],
     )
 
-    def fake_save_recipe_entries(recipes):
+    def fake_save_recipe_entries(recipes, *, expected):
+        assert expected == {}
         captured["recipes"] = recipes
         return len(recipes)
 

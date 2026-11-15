@@ -191,9 +191,16 @@ the complete recipe with those identity extras already present. Distinct
 KptnCook recipes with the same title can both be imported: Mealie assigns a
 unique name and slug, which subsequent updates preserve.
 
+Ingredient names are split at the first comma only: the food name precedes it,
+and the complete remaining preparation note retains subsequent commas and
+internal whitespace, with outer whitespace trimmed. Grouping and locale fallback
+remain unchanged.
+
 Step-media URL components are percent-encoded and the final HTML attribute is
-escaped, so server-returned filenames remain data. Existing instruction markup
-is preserved. Conversion DEBUG logs contain only recipe identity and counts;
+escaped, so server-returned filenames remain data. Server-returned instruction
+markup is preserved during image enrichment; source step HTML is escaped as
+literal text before import. Conversion DEBUG logs contain only recipe identity
+and counts;
 cover and nested step image URLs (including API keys) are never logged there.
 With logging enabled, the request lines of httpx and httpcore's DEBUG trace
 show `[REDACTED]` in place of API keys, tokens, URL credentials and secret
@@ -378,6 +385,13 @@ literal `<timer>`, while the rendered Markdown, Tandoor and Mealie step texts
 write it as the code span `` `<timer>` `` so renderers show it instead of
 hiding it as an HTML tag. Later timers keep their positions; no duration is
 invented.
+Raw HTML in source steps is not supported formatting: Markdown, Tandoor and
+Mealie escape source `&`, `<` and `>` before inserting trusted timer text or
+visible unresolved markers. Literal tags and angle-bracket instructions therefore
+remain visible and inert; other Markdown syntax still follows the destination
+renderer. Because escaping covers the whole step, `&`, `<` and `>` inside a
+source code span (and existing HTML entities such as `&amp;`) render as their
+escaped text, for example `` `a<b` `` shows as `a&lt;b`. Paprika's plain-text directions retain literal source characters.
 Check the source recipe for unresolved timing instructions before cooking.
 
 Markdown is final cookbook text, so its serving count is configurable:
@@ -406,17 +420,28 @@ every collision still selects a new name. Long or localized titles stay complete
 inside the recipe JSON and Markdown's quoted `title` front matter.
 Archives and Markdown notes are fully written and flushed in sibling staging
 before atomic no-clobber publication. Markdown assets are published completely
-before the note that references them. The destination filesystem must support
+and their directory synced before the note that references them. Directory entries
+for newly created Markdown export/assets directories are synced before use;
+each final export directory is synced after its file is linked. Unsupported
+directory-sync operations retain the portability fallback; real I/O errors are
+reported. The destination filesystem must support
 hard links (FAT/exFAT and some network mounts do not); otherwise export stops
 with an error naming the directory and publishes no partial final file.
-Normal failures remove attempt-owned staging and assets. Forced termination may
-leave hidden `.kptncook-*` staging or complete unreferenced Markdown assets;
-final export names always contain complete files. This is atomic visibility,
-not a guarantee of survival after a power loss.
+Failures before note publication remove attempt-owned assets when safe. A failure
+or interruption during post-link directory sync reports the published path with
+uncertain durability, retaining all visible files and assets a visible note references.
+Inspect those files before retrying; a retry uses a free filename. Forced
+termination may leave hidden `.kptncook-*` staging or complete unreferenced assets.
+Final names contain complete files; power-loss durability depends on filesystem
+support for file/directory sync.
 Paprika serializes and compresses one recipe at a time, so cover/JSON memory
 does not grow with the number of exported recipes. Its small single-recipe and
 bulk serialization helpers remain available to library callers; the bulk helper
 still materializes its results when called directly.
+The library `PaprikaExporter.save_recipes` helper builds its archive from exactly
+the requested IDs, including an empty archive for an empty request. Reusing its
+work directory never includes stale or unrelated `.paprikarecipe` files; those
+unrequested files are left untouched.
 Paprika preserves quotes, backslashes, whitespace and Unicode in recipe text.
 All three local exporters preflight every recipe ID before writing any output:
 IDs must be portable single filename components of at most 128 bytes (no slash,
@@ -449,6 +474,9 @@ Store reads accept regular files only (symlinks are refused) and are limited to
 64 MiB of UTF-8 JSON, including files that grow while being read. Invalid encoding,
 nonregular files and oversized stores stop reads and mutations without replacing
 the primary or recovery snapshot. A missing store remains an empty repository.
+Duplicate JSON object member names at every nesting level (including escaped
+spellings) are refused before model validation, with no member names or values
+in the diagnostic. Repeated array values are unaffected.
 Library deletion calls deduplicate requested IDs in encounter order, reporting
 each deleted or missing ID once and committing at most once.
 Identifier-based reads and mutations reject records whose `_id.$oid` is not a
@@ -462,12 +490,23 @@ mutations leave main and backup bytes unchanged. Errors distinguish incoming fee
 batches from stored snapshots; a repeated daily/today feed is refused in full,
 including exact copies. Check the feed and retry rather than editing the local
 repository for an incoming-batch error. A single incoming record may
-still replace its existing unique identity, as before.
+still replace its existing unique identity. Network-to-store commands (today,
+favorites, ID lookup and browsing with `--save`) capture local records before
+fetching. Under the writer lock, the complete saved record for each incoming ID
+must still match that baseline (including absence). A concurrent insertion,
+edit or deletion of one of those IDs refuses the entire fetched batch with a
+refresh conflict before backup/publication. Fetch again to retry. Changes to
+unrelated IDs are retained and do not conflict; network requests never hold the
+writer lock. No remote response revision ordering is assumed. Direct library
+`add`/`add_list` calls remain explicit replacements; pass `expected=` to
+`add_list` or `save_recipe_entries` to bind a fetch to `list_by_id()` results.
 
 Repository mutations use the existing portable `portalocker` backend on supported
 POSIX and Windows systems. Every mutation must acquire the stable sibling
 `kptncook.json.lock` before rereading and replacing data; lock failures refuse the
-write with a repository error. Use a local filesystem with working advisory locks,
+write with a repository error. Competing writers wait at most 30 seconds using
+a monotonic deadline, then report a busy repository without modifying data or
+backup. Retry after the current writer finishes. Use a local filesystem with working advisory locks,
 and retain lock files while writers may run. Lock admission opens without following
 symlinks or waiting on special files, requires a regular descriptor, and verifies
 that its inode still owns the stable name after acquiring the lock. A replaced
@@ -499,10 +538,15 @@ Backup copying never reopens an unchecked pathname or follows a substituted syml
 or FIFO. Direct library `create_backup()` calls use the same bounded regular-file
 admission. Advisory locks coordinate cooperating writers; external editors must
 not replace files during publication.
-If copying, syncing or replacing the backup fails, the write reports an error
-and leaves both the main file and the existing recovery snapshot intact.
-Temporary files are cleaned up on failure. The main file is also replaced
-atomically; a later main-write failure leaves the completed backup available.
+Backup and primary publication sync their containing directory where the OS
+supports it. Only unsupported directory-sync errors are tolerated; genuine I/O
+errors stop the write. Failure before backup replacement leaves both snapshots
+intact. Failure syncing an already replaced backup leaves the primary unchanged
+and reports uncertain backup durability. Failure syncing an already replaced
+primary reports that the new primary is published with uncertain durability;
+it is never rolled back or deleted. Inspect/reload the visible primary and
+backup before retrying; do not blindly restore the backup. Temporary files are
+cleaned up on failure; a later main-write failure retains the completed backup.
 
 ## Delete recipes
 
@@ -828,6 +872,11 @@ format and optional recipe ID dispatch, warnings and failure exits. Assertions
 use a fixed console width and strip error styling to work on colored CI consoles.
 
 ## Disposable Mealie Integration Tests
+
+The default local suite includes `tests/mealie_local_export_test.py`, which
+imports through real loopback HTTP into a synthetic fake Mealie archive receiver
+without credentials. It verifies complete ingredient notes and literal step HTML
+in the final imported archive. It does not validate a real Mealie release.
 
 `tests/mealie_integration_test.py` exercises real HTTP against an externally
 provisioned **disposable** Mealie instance. It is skipped by default and requires

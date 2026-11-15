@@ -61,11 +61,13 @@ def repository_needs_sync(sync_date: date) -> bool:
         raise RepositoryServiceError(str(exc)) from exc
 
 
-def save_recipe_entries(recipes: list[RecipeInDb]) -> int:
+def save_recipe_entries(
+    recipes: list[RecipeInDb], *, expected: dict[str, RecipeInDb] | None = None
+) -> int:
     if not recipes:
         return 0
     try:
-        get_repository().add_list(recipes)
+        get_repository().add_list(recipes, expected=expected)
     except RepositoryError as exc:
         raise RepositoryServiceError(str(exc)) from exc
     return len(recipes)
@@ -114,7 +116,7 @@ def delete_recipe_ids(ids: list[str]) -> tuple[list[str], list[str]]:
         raise RepositoryServiceError(str(exc)) from exc
 
 
-def list_repository_ids() -> dict[object, RecipeInDb]:
+def list_repository_ids() -> dict[str, RecipeInDb]:
     try:
         return get_repository().list_by_id()
     except RepositoryError as exc:

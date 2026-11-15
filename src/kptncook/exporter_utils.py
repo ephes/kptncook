@@ -1,5 +1,6 @@
 import errno
 import itertools
+from html import escape
 import logging
 import os
 import tempfile
@@ -12,6 +13,7 @@ from collections.abc import Iterable
 from unidecode import unidecode
 from pathvalidate import validate_filename, ValidationError as FilenameValidationError
 
+from kptncook.durability import fsync_directory
 from kptncook.http_errors import UserFacingError
 from kptncook.models import Image, RecipeStep, StepTimer, localized_fallback
 
@@ -20,6 +22,9 @@ logger = logging.getLogger(__name__)
 TIMER_PLACEHOLDER = "<timer>"
 TIMER_PLACEHOLDER_PATTERN = re.compile(
     rf"{re.escape(TIMER_PLACEHOLDER)}(?P<punct>[.!?])?"
+)
+TIMER_MARKUP_PATTERN = re.compile(
+    rf"{re.escape(escape(TIMER_PLACEHOLDER))}(?P<punct>[.!?])?"
 )
 # Markdown/HTML-rendered targets would treat a bare ``<timer>`` as an unknown
 # tag and hide it; a code span keeps the unresolved marker visible.
@@ -44,6 +49,7 @@ def expand_timer_placeholders(
 
     With ``markup=True`` (Markdown/HTML-rendered targets) an unresolved
     placeholder is emitted as a code span so renderers keep it visible.
+    Source HTML metacharacters are escaped before trusted timer insertion.
     """
     if not text:
         return text
@@ -64,6 +70,8 @@ def expand_timer_placeholders(
             timer_text = timer_text[:-1]
         return f"{timer_text}{punctuation}"
 
+    if markup:
+        return TIMER_MARKUP_PATTERN.sub(replacer, escape(text, quote=False))
     return TIMER_PLACEHOLDER_PATTERN.sub(replacer, text)
 
 
@@ -115,7 +123,7 @@ def replace_timers_in_step(step, text: str) -> str:
             return f"≤{timer.max}m"
         return UNRESOLVED_TIMER_MARKUP
 
-    return re.sub(re.escape(TIMER_PLACEHOLDER), repl, text)
+    return re.sub(re.escape(escape(TIMER_PLACEHOLDER)), repl, escape(text, quote=False))
 
 
 def validate_export_id(identifier: str) -> None:
@@ -150,6 +158,17 @@ def _hard_links_unsupported(directory: Path, reason: str) -> UserFacingError:
         f"Could not publish the export in {directory}: the destination must "
         f"support hard links ({reason}). Choose a different export location."
     )
+
+
+class ExportPublicationUncertain(UserFacingError):
+    """A complete final file is visible, but its directory sync failed."""
+
+    def __init__(self, target: Path):
+        self.target = target
+        super().__init__(
+            f"Export published as {target}; durability is uncertain. "
+            "Inspect the visible files before retrying; no published files were removed."
+        )
 
 
 MAX_EXPORT_FILENAME_BYTES = 240
@@ -224,6 +243,10 @@ def move_to_free_target(
                 raise UserFacingError(
                     f"Could not publish the export as {target}: {exc.strerror or exc}."
                 ) from exc
+            try:
+                fsync_directory(directory)
+            except BaseException as exc:
+                raise ExportPublicationUncertain(target) from exc
             # Publication succeeded. Cleanup errors must not make callers undo
             # assets referenced by an already published Markdown note.
             try:
