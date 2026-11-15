@@ -197,8 +197,10 @@ internal whitespace, with outer whitespace trimmed. Grouping and locale fallback
 remain unchanged.
 
 Step-media URL components are percent-encoded and the final HTML attribute is
-escaped, so server-returned filenames remain data. Existing instruction markup
-is preserved. Conversion DEBUG logs contain only recipe identity and counts;
+escaped, so server-returned filenames remain data. Server-returned instruction
+markup is preserved during image enrichment; source step HTML is escaped as
+literal text before import. Conversion DEBUG logs contain only recipe identity
+and counts;
 cover and nested step image URLs (including API keys) are never logged there.
 With logging enabled, the request lines of httpx and httpcore's DEBUG trace
 show `[REDACTED]` in place of API keys, tokens, URL credentials and secret
@@ -383,6 +385,11 @@ literal `<timer>`, while the rendered Markdown, Tandoor and Mealie step texts
 write it as the code span `` `<timer>` `` so renderers show it instead of
 hiding it as an HTML tag. Later timers keep their positions; no duration is
 invented.
+Raw HTML in source steps is not supported formatting: Markdown, Tandoor and
+Mealie escape source `&`, `<` and `>` before inserting trusted timer text or
+visible unresolved markers. Literal tags and angle-bracket instructions therefore
+remain visible and inert; existing Markdown syntax still follows the destination
+renderer. Paprika's plain-text directions retain literal source characters.
 Check the source recipe for unresolved timing instructions before cooking.
 
 Markdown is final cookbook text, so its serving count is configurable:
@@ -411,17 +418,28 @@ every collision still selects a new name. Long or localized titles stay complete
 inside the recipe JSON and Markdown's quoted `title` front matter.
 Archives and Markdown notes are fully written and flushed in sibling staging
 before atomic no-clobber publication. Markdown assets are published completely
-before the note that references them. The destination filesystem must support
+and their directory synced before the note that references them. Directory entries
+for newly created Markdown export/assets directories are synced before use;
+each final export directory is synced after its file is linked. Unsupported
+directory-sync operations retain the portability fallback; real I/O errors are
+reported. The destination filesystem must support
 hard links (FAT/exFAT and some network mounts do not); otherwise export stops
 with an error naming the directory and publishes no partial final file.
-Normal failures remove attempt-owned staging and assets. Forced termination may
-leave hidden `.kptncook-*` staging or complete unreferenced Markdown assets;
-final export names always contain complete files. This is atomic visibility,
-not a guarantee of survival after a power loss.
+Failures before note publication remove attempt-owned assets when safe. A failure
+or interruption during post-link directory sync reports the published path with
+uncertain durability, retaining all visible files and assets a visible note references.
+Inspect those files before retrying; a retry uses a free filename. Forced
+termination may leave hidden `.kptncook-*` staging or complete unreferenced assets.
+Final names contain complete files; power-loss durability depends on filesystem
+support for file/directory sync.
 Paprika serializes and compresses one recipe at a time, so cover/JSON memory
 does not grow with the number of exported recipes. Its small single-recipe and
 bulk serialization helpers remain available to library callers; the bulk helper
 still materializes its results when called directly.
+The library `PaprikaExporter.save_recipes` helper builds its archive from exactly
+the requested IDs, including an empty archive for an empty request. Reusing its
+work directory never includes stale or unrelated `.paprikarecipe` files; those
+unrequested files are left untouched.
 Paprika preserves quotes, backslashes, whitespace and Unicode in recipe text.
 All three local exporters preflight every recipe ID before writing any output:
 IDs must be portable single filename components of at most 128 bytes (no slash,
@@ -853,6 +871,11 @@ use a fixed console width and strip error styling to work on colored CI consoles
 
 ## Disposable Mealie Integration Tests
 
+The default local suite includes `tests/mealie_local_export_test.py`, which
+imports through real loopback HTTP into a synthetic fake Mealie archive receiver
+without credentials. It verifies complete ingredient notes and literal step HTML
+in the final imported archive. It does not validate a real Mealie release.
+
 `tests/mealie_integration_test.py` exercises real HTTP against an externally
 provisioned **disposable** Mealie instance. It is skipped by default and requires
 all three variables below; never point it at your personal or production server.
@@ -1019,8 +1042,3 @@ and platform. This does not audit other interpreter/platform marker branches or
 separate build-backend/hook environments. Export errors and advisory findings
 both fail the command; it never updates the lock. CI has read-only repository
 permissions and a ten-minute audit timeout.
-
-The library `PaprikaExporter.save_recipes` helper builds its archive from exactly
-the requested IDs, including an empty archive for an empty request. Reusing its
-work directory never includes stale or unrelated `.paprikarecipe` files; those
-unrequested files are left untouched.

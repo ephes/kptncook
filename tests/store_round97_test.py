@@ -86,3 +86,15 @@ def test_writer_deadline_preserves_store_and_later_recovers(tmp_path):
     repo.add(entry())
     assert repo.list() == [entry()]
     assert repo.lock_path.stat().st_ino == inode
+
+
+def test_lock_acquired_after_deadline_does_not_admit_writer(tmp_path, monkeypatch):
+    repo = RecipeRepository(tmp_path)
+    repo.path.write_bytes(b"[]")
+    repo.backup_path.write_bytes(b"last good")
+    times = iter([0.0, 31.0])
+    monkeypatch.setattr(repositories, "monotonic", lambda: next(times))
+    with pytest.raises(RepositoryError, match="busy"):
+        repo.add(entry())
+    assert repo.path.read_bytes() == b"[]"
+    assert repo.backup_path.read_bytes() == b"last good"

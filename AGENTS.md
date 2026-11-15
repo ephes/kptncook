@@ -25,6 +25,10 @@
   conflicting incoming IDs under the writer lock; unrelated IDs still merge.
 - Genuine directory-sync errors must distinguish unpublished and already
   published outcomes; never undo visible data after uncertain durability.
+- Rendered step targets escape source HTML before inserting trusted timers.
+  Plain-text exports preserve source characters.
+- Sync final export directories, persist Markdown assets before their notes,
+  and preserve visible files after uncertain publication.
 - Regressions use disposable local stores and synthetic recipes only.
 
 ## Documentation

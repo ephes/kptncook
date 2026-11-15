@@ -234,6 +234,11 @@ class RecipeRepository:
                         "OS advisory locking. Use a local filesystem with locking support."
                     ) from exc
             try:
+                if monotonic() >= deadline:
+                    raise RepositoryError(
+                        "Repository is busy; writer lock wait budget exceeded. "
+                        "Retry after the current writer finishes."
+                    )
                 assert opened is not None
                 self._check_lock_identity(opened)
                 yield

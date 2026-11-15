@@ -2,6 +2,11 @@ Unreleased
 ==========
 
 ### Fixes
+- Escape source HTML metacharacters in Markdown, Tandoor and Mealie step text
+  before inserting timer representations; preserve plain-text Paprika directions.
+- Sync export directories after final links and Markdown asset directories before
+  publishing their referring notes. Report uncertain durability after publication
+  without deleting visible notes or their assets.
 - Keep complete comma-separated ingredient preparation notes in Mealie payloads.
 - Limit legacy Paprika helper archives to exactly the requested recipe members,
   preserving unrelated files when reusing an export directory.
