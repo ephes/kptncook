@@ -100,6 +100,7 @@ class DeleteSelectionResult:
     missing_ids: list[str]
     to_delete_ids: list[str]
     invalid_repository_entries: list[InvalidStoredRecipe]
+    expected: dict[str, RecipeInDb]
 
 
 @dataclass(frozen=True)
@@ -169,9 +170,11 @@ def _save_repository_entries(
         raise _wrap_repository_error(exc) from exc
 
 
-def _delete_repository_ids(ids: list[str]) -> tuple[list[str], list[str]]:
+def _delete_repository_ids(
+    ids: list[str], *, expected: dict[str, RecipeInDb] | None = None
+) -> tuple[list[str], list[str]]:
     try:
-        return delete_recipe_ids(ids)
+        return delete_recipe_ids(ids, expected=expected)
     except RepositoryServiceError as exc:
         raise _wrap_repository_error(exc) from exc
 
@@ -677,7 +680,9 @@ def delete_recipes_by_selection(
     indices: list[int],
     oids: list[str],
 ) -> DeleteSelectionResult:
-    repository_result = load_kptncook_recipes_from_repository()
+    # Render the preview and capture the comparison records from one read.
+    expected = _repository_id_map()
+    repository_result = load_repository_recipes(entries=list(expected.values()))
     recipes = repository_result.recipes
     index_ids: list[str] = []
     invalid_indices: list[int] = []
@@ -692,7 +697,7 @@ def delete_recipes_by_selection(
         if oid not in requested_ids:
             requested_ids.append(oid)
 
-    existing_ids = {str(key) for key in _repository_id_map().keys()}
+    existing_ids = set(expected)
     missing_ids = [oid for oid in requested_ids if str(oid) not in existing_ids]
     to_delete_ids = [oid for oid in requested_ids if str(oid) in existing_ids]
     return DeleteSelectionResult(
@@ -701,11 +706,14 @@ def delete_recipes_by_selection(
         missing_ids=missing_ids,
         to_delete_ids=to_delete_ids,
         invalid_repository_entries=repository_result.invalid_entries,
+        expected={oid: expected[oid] for oid in to_delete_ids},
     )
 
 
-def delete_repository_recipes(ids: list[str]) -> tuple[list[str], list[str]]:
-    return _delete_repository_ids(ids)
+def delete_repository_recipes(
+    ids: list[str], *, expected: dict[str, RecipeInDb] | None = None
+) -> tuple[list[str], list[str]]:
+    return _delete_repository_ids(ids, expected=expected)
 
 
 def search_recipe_by_id(id_: str) -> SearchResult:

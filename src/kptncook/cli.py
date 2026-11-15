@@ -497,7 +497,9 @@ def delete_recipes(
     if not force and not typer.confirm("Delete these recipes from local storage?"):
         _exit_with_error("Aborted.")
 
-    deleted, missing = _run_or_exit(delete_repository_recipes, result.to_delete_ids)
+    deleted, missing = _run_or_exit(
+        delete_repository_recipes, result.to_delete_ids, expected=result.expected
+    )
     if missing:
         rprint("Some recipes were not found: " + ", ".join(missing))
     rprint(f"Deleted {len(deleted)} recipes.")

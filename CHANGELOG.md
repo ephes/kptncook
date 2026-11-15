@@ -1,7 +1,15 @@
 Unreleased
 ==========
 
+### Tests
+- Add an offline composed export journey covering reordered ingredient groups,
+  localized labels, duplicate IDs, serving counts and step associations through
+  native Mealie ZIP import and Tandoor, Paprika and Markdown file exports.
+
 ### Fixes
+- Compare deletion selections with their previewed store records under the writer
+  lock. Refuse changed selections atomically, including with `--force`, while
+  preserving unrelated updates and idempotent missing-ID handling.
 - Keep ingredient grouping membership work linear while preserving configured and
   first-seen group order. Expand repeated Mealie step ingredient IDs only once,
   preserving every distinct row reference without repeated temporary lists.
