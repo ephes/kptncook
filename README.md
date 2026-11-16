@@ -149,6 +149,18 @@ are disabled even for injected HTTPX clients; requesting `follow_redirects=True`
 is refused. Follow an intended Location explicitly through the API client so
 it receives the same origin check.
 
+Every KptnCook JSON response rejects duplicate object members at any depth and
+nonfinite JSON constants before interpreting tokens, identities or discovery
+fields. Decoder errors contain no response fragments, member names or keyed URLs.
+
+Before recipe models are built, today's recipes, dailies, resolved search results
+and selected restored recipes must fit one shared batch envelope: 4,096 recipes,
+32 container levels, 262,144 visited values/keys and 8,388,608 text characters
+(including keys and ignored metadata). Cycles and overflow refuse the whole batch;
+no partial favorites backup or export is produced. Selected local lookups apply
+the envelope to matching records; full listings apply it to the complete set.
+These expanded-model limits are separate from the envelope-search limits below.
+
 Favorites and discovery-list envelope searches allow at most 16 dictionary
 levels and 4,096 work units per response (each visited value or supported-key
 probe costs one unit). Traversal is iterative, detects active dictionary cycles

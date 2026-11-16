@@ -7,6 +7,10 @@ Unreleased
   native Mealie ZIP import and Tandoor, Paprika and Markdown file exports.
 
 ### Fixes
+- Reject ambiguous source API JSON members and nonfinite constants before token,
+  recipe and discovery interpretation, with private fixed decoder diagnostics.
+- Bound recipe counts, nesting, aggregate value/key work and text before source
+  and restored recipe model construction; refuse whole batches on overflow.
 - Bound discovery-screen leaf lists to 4,096 combined raw entries and 262,144
   output text characters before summary construction; refuse the whole screen
   on overflow without partial results.

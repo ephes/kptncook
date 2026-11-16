@@ -11,6 +11,7 @@ from rich.markup import escape
 from rich.pretty import pprint
 from typer.main import get_command
 
+from kptncook.api import ResponseShapeError
 from kptncook.config import SettingsError, get_settings, render_settings_error
 from kptncook.env import ENV_PATH, upsert_env_value
 from kptncook.markdown_exporter import DEFAULT_SERVINGS as DEFAULT_MARKDOWN_SERVINGS
@@ -70,7 +71,7 @@ def _run_or_exit(func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
     except SettingsError as exc:
         render_settings_error(exc)
         sys.exit(1)
-    except (UserFacingError, RepositoryServiceError) as exc:
+    except (UserFacingError, RepositoryServiceError, ResponseShapeError) as exc:
         _exit_with_error(str(exc))
 
 
