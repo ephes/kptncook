@@ -7,6 +7,10 @@ Unreleased
   native Mealie ZIP import and Tandoor, Paprika and Markdown file exports.
 
 ### Fixes
+- Bind archive receipt slugs to fetched recipe slugs and valid server IDs before
+  media writes; preserve imported identity after mismatched step PATCH replies.
+- Retire cached organizer inventories after recipe creation failures so later
+  independent recipes refresh stale IDs, without replaying an ambiguous import.
 - Reject ambiguous source API JSON members and nonfinite constants before token,
   recipe and discovery interpretation, with private fixed decoder diagnostics.
 - Bound recipe counts, nesting, aggregate value/key work and text before source

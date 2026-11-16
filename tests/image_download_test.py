@@ -133,6 +133,7 @@ def test_bounded_image_preserves_recipe(
                 part = next(message.iter_parts())
                 with ZipFile(BytesIO(part.get_payload(decode=True))) as archive:
                     stored.update(json.loads(archive.read("recipe.json")))
+                stored["id"] = "11111111-1111-4111-8111-111111111111"
                 return httpx.Response(201, json="synthetic-stew")
             if request.method == "GET":
                 return httpx.Response(200, json={**stored, "slug": "synthetic-stew"})

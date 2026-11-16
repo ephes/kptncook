@@ -56,6 +56,30 @@ def _recipe_path(slug: str) -> str:
     return f"/recipes/{quote(slug, safe='-_')}"
 
 
+def _require_recipe_identity(
+    payload: object, slug: str, recipe_id: UUID4 | None = None
+) -> None:
+    if isinstance(payload, dict):
+        actual_slug = payload.get("slug")
+        if not isinstance(actual_slug, str):
+            raise ValueError("Invalid Mealie recipe slug")
+        _recipe_path(actual_slug)
+        try:
+            actual_id = TypeAdapter(UUID4).validate_python(payload.get("id"))
+        except ValidationError:
+            actual_id = None
+        if (
+            payload.get("slug") == slug
+            and actual_id is not None
+            and (recipe_id is None or actual_id == recipe_id)
+        ):
+            return
+    raise ValueError(
+        "Mealie recipe identity does not match requested slug/ID; "
+        "the import may have completed. Reconcile inventory before retrying."
+    )
+
+
 def _media_failure_reason(exc: BaseException) -> str:
     """A log-safe reason for an optional media failure (never the URL)."""
     if isinstance(exc, httpx.HTTPStatusError):
@@ -687,7 +711,9 @@ class MealieApiClient(BaseHttpClient):
         slug = decode_control_json(response)
         response = self.get(_recipe_path(slug))
         response.raise_for_status()
-        return decode_control_json(response)
+        stored = decode_control_json(response)
+        _require_recipe_identity(stored, slug)
+        return stored
 
     def _attach_step_images(
         self, recipe: Recipe, stored: dict[str, Any], source: RecipeWithImage
@@ -759,10 +785,23 @@ class MealieApiClient(BaseHttpClient):
                 json={"recipeInstructions": instructions},
             )
             response.raise_for_status()
-            return Recipe.model_validate(decode_control_json(response))
+            updated = decode_control_json(response)
+            _require_recipe_identity(updated, recipe.slug, recipe.id)
+            if updated.get("extras") != stored.get("extras"):
+                raise ValueError("Mealie step-image response changed recipe identity")
+            return Recipe.model_validate(updated)
         return recipe
 
     def create_recipe(self, recipe: RecipeWithImage) -> Recipe:
+        try:
+            return self._create_recipe(recipe)
+        except Exception:
+            # A stale remote organizer can poison all later recipes. Retire the
+            # inventory for the next independent recipe; never replay this import.
+            self._organizer_index.clear()
+            raise
+
+    def _create_recipe(self, recipe: RecipeWithImage) -> Recipe:
         self._get_archive_endpoint()
         recipe = recipe.model_copy(deep=True)
         self._check_recipe_organizers(recipe)

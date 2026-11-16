@@ -232,6 +232,11 @@ Mealie recipe slugs are admitted as single route components: nonempty Unicode
 letters/numbers, hyphens and underscores only, percent-encoded when building
 requests. Slash, backslash, dot segments, percent escapes, query/fragment
 separators and controls are refused before authenticated follow-up requests.
+An archive receipt must be a valid slug, and its detail reply must carry that
+exact slug and a valid server recipe UUID before any media request. Matching
+source extras alone do not establish route identity. Step-image PATCH replies
+must retain the imported slug, UUID and identity extras; a mismatched reply keeps
+the known core import result and emits a media warning without retry or deletion.
 Step photos are uploaded only when the imported instructions have exactly the
 same unique texts in the same order as the source. Missing, inserted, reordered
 or repeated texts omit all step photos with a bounded warning, retaining the
@@ -281,7 +286,10 @@ names for foods/units). Ambiguous or absent matches, generic conflicts, legacy
 Units, foods and tags are listed once per sync, not once per recipe. The lookup
 is built only from a complete inventory and then updated with organizers this
 sync created (or found through the conflict refresh above); each new sync,
-login or token change reads Mealie again. If several existing organizers with
+login or token change reads Mealie again. A recipe creation failure retires the
+cached organizer inventories: the next independent recipe rereads them, allowing
+remotely removed/recreated organizers to recover. The failed recipe/import is
+never automatically replayed. If several existing organizers with
 different IDs match one requested name (for example tags `Vegan` and `vegan`),
 that recipe fails before any unit, food, tag or recipe is created, naming the
 ambiguous organizer. Merge or rename the duplicates in Mealie, then sync again;

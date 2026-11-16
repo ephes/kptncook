@@ -325,3 +325,52 @@ def test_failed_conflict_refresh_still_replaces_cached_inventory():
         with pytest.raises(MealieOrganizerAmbiguityError, match="dessert"):
             client.create_recipe(_recipe(tags=["dessert"]))
     assert "archive" not in server.writes
+
+
+@pytest.mark.parametrize("failure", ["stale-id", "timeout"])
+def test_failed_recipe_retires_organizers_without_replay(failure):
+    old_id, new_id = str(uuid4()), str(uuid4())
+    server = FakeMealie({"foods": [{"id": old_id, "name": "Salt"}]})
+    original = server.handle
+    archive_calls = []
+
+    def handle(request):
+        if request.method == "POST" and request.url.path.endswith("/create/zip"):
+            archive_calls.append(request)
+            if len(archive_calls) == 2:
+                if failure == "timeout":
+                    original(
+                        request
+                    )  # The server committed before the receipt was lost.
+                    raise httpx.ReadTimeout("synthetic lost receipt", request=request)
+                return httpx.Response(422, json={"detail": "stale organizer"})
+        return original(request)
+
+    with httpx.Client(transport=httpx.MockTransport(handle)) as http:
+        client = MealieApiClient("https://mealie.example/api", client=http)
+
+        def recipe(number):
+            return _recipe(foods=["Salt"]).model_copy(
+                update={
+                    "extras": {
+                        "source": "kptncook",
+                        "kptncook_id": f"synthetic-{number}",
+                    }
+                }
+            )
+
+        client.create_recipe(recipe(1))
+        server.organizers["foods"] = [{"id": new_id, "name": "Salt"}]
+        with pytest.raises((httpx.HTTPStatusError, httpx.ReadTimeout)):
+            client.create_recipe(recipe(2))
+        assert len(archive_calls) == 2
+        client.create_recipe(recipe(3))
+    assert len(archive_calls) == 3
+    assert server.requests[("GET", "foods")] == 2
+    assert server.imported[0]["recipe_ingredient"][0]["food"]["id"] == old_id
+    assert server.imported[-1]["recipe_ingredient"][0]["food"]["id"] == new_id
+    assert [item["extras"]["kptncook_id"] for item in server.imported] == (
+        ["synthetic-1", "synthetic-2", "synthetic-3"]
+        if failure == "timeout"
+        else ["synthetic-1", "synthetic-3"]
+    )

@@ -138,6 +138,7 @@ def test_duplicate_enrichment_response_does_not_retry_or_leak(
 ):
     calls, patches = [], []
     stored = {
+        "id": "11111111-1111-4111-8111-111111111111",
         "name": "Invented",
         "slug": "invented",
         "recipeInstructions": [{"text": "Mix"}],
