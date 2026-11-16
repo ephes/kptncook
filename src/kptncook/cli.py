@@ -206,6 +206,9 @@ def sync_with_mealie() -> None:
         for failure in result.failed_recipes:
             detail = f"{failure.recipe_name} ({failure.recipe_id}): {failure.reason}"
             rprint(f"[red]- {escape(detail)}[/red]")
+    if result.cleanup_warning:
+        rprint(f"[yellow]{escape(result.cleanup_warning)}[/yellow]")
+    if result.failed_recipes or result.cleanup_warning:
         sys.exit(1)
 
 

@@ -7,6 +7,10 @@ Unreleased
   native Mealie ZIP import and Tandoor, Paprika and Markdown file exports.
 
 ### Fixes
+- Preserve completed Mealie sync counts and primary failures when closing the
+  client fails; report a separate cleanup warning without rollback or replay.
+- Deduplicate large delete selections with linear membership work, preserving
+  preview order, diagnostics and confirmed-record comparison.
 - Bind archive receipt slugs to fetched recipe slugs and valid server IDs before
   media writes; preserve imported identity after mismatched step PATCH replies.
 - Retire cached organizer inventories after recipe creation failures so later

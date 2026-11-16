@@ -7,7 +7,7 @@ import os
 import stat
 from collections.abc import Iterator, Sequence
 from contextlib import closing, contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
 from time import monotonic
@@ -91,6 +91,7 @@ class SyncWithMealieResult:
     created_count: int
     invalid_repository_entries: list[InvalidStoredRecipe]
     failed_recipes: list[MealieSyncFailure] = field(default_factory=list)
+    cleanup_warning: str | None = None
 
 
 @dataclass(frozen=True)
@@ -429,6 +430,7 @@ def _mealie_sync_lock() -> Iterator[None]:
 
 def sync_with_mealie_result() -> SyncWithMealieResult:
     client = get_mealie_client()
+    result: SyncWithMealieResult | None = None
     try:
         with _mealie_sync_lock():
             kptncook_recipes_from_mealie = get_kptncook_recipes_from_mealie(client)
@@ -465,13 +467,24 @@ def sync_with_mealie_result() -> SyncWithMealieResult:
                     failure.recipe_id,
                     failure.reason,
                 )
-            return SyncWithMealieResult(
+            result = SyncWithMealieResult(
                 created_count=created_count,
                 invalid_repository_entries=repository_result.invalid_entries,
                 failed_recipes=failed_recipes,
             )
     finally:
-        client.close()
+        try:
+            client.close()
+        except Exception as exc:
+            warning = (
+                f"Mealie client cleanup failed ({type(exc).__name__}). "
+                "Completed imports remain committed; unresolved outcomes remain unknown. "
+                "No automatic replay was attempted; the next sync checks stored identity."
+            )
+            logger.warning("%s", warning)
+            if result is not None:
+                result = replace(result, cleanup_warning=warning)
+    return result
 
 
 def _describe_mealie_error(exc: BaseException) -> str:
@@ -502,10 +515,14 @@ def sync_with_mealie() -> int:
         f"{failure.recipe_name} ({failure.recipe_id}): {failure.reason}"
         for failure in result.failed_recipes
     ]
+    problems = []
     if details:
+        problems.append(f"Failed to sync {len(details)} recipes: {'; '.join(details)}")
+    if result.cleanup_warning:
+        problems.append(result.cleanup_warning)
+    if problems:
         raise UserFacingError(
-            f"Created {result.created_count} recipes. "
-            f"Failed to sync {len(details)} recipes: {'; '.join(details)}"
+            f"Created {result.created_count} recipes. {'; '.join(problems)}"
         )
     return result.created_count
 
@@ -691,8 +708,10 @@ def delete_recipes_by_selection(
         index_ids.append(recipes[index].id.oid)
 
     requested_ids: list[str] = []
+    seen_ids: set[str] = set()
     for oid in index_ids + oids:
-        if oid not in requested_ids:
+        if oid not in seen_ids:
+            seen_ids.add(oid)
             requested_ids.append(oid)
 
     existing_ids = set(expected)

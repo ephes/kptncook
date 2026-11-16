@@ -261,6 +261,14 @@ The summary means:
   error). Other recipes are still synced, and the command exits with status 1.
   Name-collision errors are failures, not successful identity matches.
 
+Client cleanup is attempted once even after a failed or interrupted sync. A close
+failure preserves the primary error or the completed result's created/failed
+counts. A completed result carries a separate `cleanup_warning`; the CLI displays
+it alongside those counts and exits with status 1. The count-only library wrapper
+also reports the warning with completed counts. Cleanup failure does not undo
+imports or trigger replay; reconcile unknown outcomes through the next sync's
+identity inventory. Cleanup diagnostics omit exception messages and URLs.
+
 Cooperating sync processes on this machine hold one advisory lock across the
 complete inventory and create sequence. The lock covers all accounts on the same
 canonical Mealie API target (host casing, default ports and trailing slashes are
@@ -581,6 +589,9 @@ cleaned up on failure; a later main-write failure retains the completed backup.
 ## Delete recipes
 
 Use indices from `kptncook list-recipes` or pass one or more `--oid` values.
+Previews deduplicate IDs with linear membership work, retaining first-occurrence
+order across indexes followed by explicit OIDs. Repeated IDs do not change
+missing-ID or invalid-index reporting.
 
 ```shell
 $ kptncook delete-recipes 0 2
