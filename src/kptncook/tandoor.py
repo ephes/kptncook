@@ -18,6 +18,7 @@ from kptncook.exporter_utils import (
     asciify_string,
     bounded_export_filename,
     get_cover,
+    ingredient_name,
     get_step_text,
     move_to_free_target,
     write_zip,
@@ -212,28 +213,7 @@ class TandoorExporter:
         return {key: value for key, value in payload.items() if value is not None}
 
     def get_step_ingredient_name(self, ingredient: StepIngredient) -> str | None:
-        details = ingredient.ingredient
-        if details is None:
-            return None
-        if details.uncountable_title:
-            title = localized_fallback(
-                details.uncountable_title, language=get_settings().kptncook_lang
-            )
-            if title:
-                return title
-        if details.localized_title:
-            title = localized_fallback(
-                details.localized_title, language=get_settings().kptncook_lang
-            )
-            if title:
-                return title
-        if details.number_title:
-            title = localized_fallback(
-                details.number_title, language=get_settings().kptncook_lang
-            )
-            if title:
-                return title
-        return None
+        return ingredient_name(ingredient.ingredient, get_settings().kptncook_lang)
 
     def get_step_unit_payload(
         self, unit: StepIngredientUnit | None
@@ -281,16 +261,7 @@ class TandoorExporter:
         return {key: value for key, value in payload.items() if value is not None}
 
     def get_ingredient_name(self, ingredient: Ingredient) -> str | None:
-        details = ingredient.ingredient
-        if details.uncountable_title is not None:
-            title = localized_fallback(
-                details.uncountable_title, language=get_settings().kptncook_lang
-            )
-            if title:
-                return title
-        return localized_fallback(
-            details.localized_title, language=get_settings().kptncook_lang
-        )
+        return ingredient_name(ingredient.ingredient, get_settings().kptncook_lang)
 
     def get_unit_payload(self, measure: str | None) -> dict[str, str] | None:
         if measure is None:

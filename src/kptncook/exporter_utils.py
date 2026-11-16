@@ -1,5 +1,6 @@
 import errno
 import itertools
+from decimal import Decimal
 from html import escape
 import logging
 import os
@@ -15,7 +16,14 @@ from pathvalidate import validate_filename, ValidationError as FilenameValidatio
 
 from kptncook.durability import fsync_directory
 from kptncook.http_errors import UserFacingError
-from kptncook.models import Image, RecipeStep, StepTimer, localized_fallback
+from kptncook.models import (
+    Image,
+    IngredientDetails,
+    StepIngredientDetails,
+    RecipeStep,
+    StepTimer,
+    localized_fallback,
+)
 from kptncook.recipe_admission import MAX_RECIPES
 
 logger = logging.getLogger(__name__)
@@ -82,6 +90,28 @@ def get_step_text(
     """Get localized step text with timer placeholders expanded."""
     raw = localized_fallback(step.title, language) or ""
     return expand_timer_placeholders(raw, step.timers or [], markup=markup)
+
+
+def format_quantity(quantity: float) -> str:
+    """Keep every admitted decimal place without binary noise or exponents."""
+    text = format(Decimal(str(quantity)), "f")
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def ingredient_name(
+    details: IngredientDetails | StepIngredientDetails | None, language: str = "de"
+) -> str | None:
+    """Resolve nonempty food titles with the same precedence in every exporter."""
+    if details is not None:
+        for candidate in (
+            details.uncountable_title,
+            details.localized_title,
+            details.number_title,
+        ):
+            title = localized_fallback(candidate, language=language)
+            if title:
+                return title
+    return None
 
 
 ZipContent = bytes | str | Path

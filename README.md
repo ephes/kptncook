@@ -441,7 +441,12 @@ Markdown is final cookbook text, so its serving count is configurable:
 `kptncook export-recipes-to-markdown --servings 4` (or `-s 4`) scales standard
 recipes to four servings instead of two. Recipes with a fixed portion count
 keep that count. The `servings` front matter shows the count the quantities
-were scaled to.
+were scaled to. Paprika and Markdown retain all admitted scaled decimal places
+(up to six), including tiny nonzero kg/l quantities, without exponent notation.
+Zero quantities remain omitted from ingredient text. All three file exporters
+resolve food names from the first nonempty uncountable, localized or number
+title, using the language fallback within each candidate; literal food-name
+characters remain unchanged.
 
 Existing Markdown files, including manual notes, are never overwritten:
 repeated exports create new files. If a title is taken,

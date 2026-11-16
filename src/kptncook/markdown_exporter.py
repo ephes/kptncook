@@ -28,6 +28,8 @@ from .exporter_utils import (
     BatchExportError,
     ExportPublicationUncertain,
     get_cover,
+    format_quantity,
+    ingredient_name,
     move_to_free_target,
     replace_timers_in_step,
     validate_export_id,
@@ -375,16 +377,10 @@ class MarkdownExporter:
         parts: list[str] = []
         quantity = scale_quantity(ingredient.quantity, servings)
         if quantity:
-            parts.append("{0:g}".format(round(quantity, 2)))
+            parts.append(format_quantity(quantity))
         if ingredient.measure:
             parts.append(ingredient.measure)
-        ingredient_name = (
-            localized_fallback(
-                ingredient.ingredient.uncountable_title,
-                language=get_settings().kptncook_lang,
-            )
-            or ""
-        )
-        if ingredient_name:
-            parts.append(ingredient_name)
+        name = ingredient_name(ingredient.ingredient, get_settings().kptncook_lang)
+        if name:
+            parts.append(name)
         return " ".join(part for part in parts if part).strip()

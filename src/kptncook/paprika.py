@@ -25,6 +25,8 @@ from kptncook.exporter_utils import (
     asciify_string,
     bounded_export_filename,
     get_cover,
+    format_quantity,
+    ingredient_name,
     get_step_text,
     move_to_free_target,
     write_zip,
@@ -168,18 +170,12 @@ class PaprikaExporter:
         parts: list[str] = []
         quantity = scale_quantity(ingredient.quantity, servings)
         if quantity:
-            parts.append(f"{quantity:g}")
+            parts.append(format_quantity(quantity))
         if ingredient.measure:
             parts.append(ingredient.measure)
-        ingredient_name = (
-            localized_fallback(
-                ingredient.ingredient.uncountable_title,
-                language=get_settings().kptncook_lang,
-            )
-            or ""
-        )
-        if ingredient_name:
-            parts.append(ingredient_name)
+        name = ingredient_name(ingredient.ingredient, get_settings().kptncook_lang)
+        if name:
+            parts.append(name)
         return " ".join(part for part in parts if part).strip()
 
     def get_export_data(self, recipes: list[Recipe]) -> dict[str, str]:

@@ -7,6 +7,9 @@ Unreleased
   native Mealie ZIP import and Tandoor, Paprika and Markdown file exports.
 
 ### Fixes
+- Preserve small nonzero ingredient amounts and all admitted decimal places in
+  Markdown/Paprika, and share nonempty ingredient-title fallback across file
+  exporters so empty translations cannot hide a resolvable food name.
 - Retain Tandoor and Markdown partial-batch receipts in library errors and CLI
   diagnostics: completed notes/archives/assets, failed recipe, untouched count
   and separately identified durability-uncertain current publications.

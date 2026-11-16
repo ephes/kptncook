@@ -318,8 +318,17 @@ def test_finite_scaled_quantities_in_actual_export_payloads(
     assert "inf" not in paprika["ingredients"].lower()
     assert "inf" not in text.lower()
     if expected:
-        assert f"{expected:g}" in paprika["ingredients"]
-        assert f"{expected:g}" in text
+        assert float(paprika["ingredients"].split()[0]) == expected
+        assert (
+            float(
+                next(
+                    line
+                    for line in text.splitlines()
+                    if line.endswith("Synthetic flour")
+                ).split()[1]
+            )
+            == expected
+        )
     mealie = strict_json(
         kptncook_to_mealie(recipe, api_key="synthetic").model_dump_json()
     )
