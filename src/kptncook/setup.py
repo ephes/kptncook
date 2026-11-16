@@ -28,6 +28,7 @@ from kptncook.env import (
     read_env_values,
     ENV_BUSY_MESSAGE,
     ConfigurationBusyError,
+    ConfigurationPublishedError,
     scaffold_env_file,
     upsert_env_value,
 )
@@ -57,6 +58,9 @@ def _configuration_errors() -> Iterator[None]:
         yield
     except ConfigurationBusyError:
         rprint(f"[red]{ENV_BUSY_MESSAGE}.[/red]")
+        raise typer.Exit(1) from None
+    except ConfigurationPublishedError as exc:
+        rprint(f"[red]{exc}[/red]")
         raise typer.Exit(1) from None
     except OSError:
         rprint(

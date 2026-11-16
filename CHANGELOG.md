@@ -7,6 +7,9 @@ Unreleased
   native Mealie ZIP import and Tandoor, Paprika and Markdown file exports.
 
 ### Fixes
+- Sync the credential file's parent with the shared portability policy. Report
+  uncertain durability after publication in setup, token refresh and first-run
+  scaffolding, preserving complete private credentials without exposing values.
 - Keep settings diagnostics bounded and free of rejected credential values and
   validator context; hide inputs in validation exception formatting and avoid
   retaining raw validation errors in user-facing exception chains.
