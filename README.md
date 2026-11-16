@@ -159,7 +159,8 @@ and selected restored recipes must fit a recipe envelope. Each recipe may use 32
 container levels, 262,144 visited values/keys and 8,388,608 text characters
 (including keys and ignored metadata); a real recipe needs about 7,000 values/keys.
 A whole batch may hold 4,096 recipes, 33,554,432 values/keys and 67,108,864 text
-characters, so every store within the 64 MiB store limit still loads. Cycles and
+characters; the value/key and text totals cover any store within the 64 MiB
+store limit, while stores with more than 4,096 recipes are refused. Cycles and
 overflow refuse the whole batch; no partial favorites backup or export is
 produced. Selected local lookups apply the envelope to matching records; full
 listings apply it to the complete set. These expanded-model limits are separate

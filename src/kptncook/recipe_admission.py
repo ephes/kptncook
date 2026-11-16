@@ -10,9 +10,9 @@ MAX_RECIPE_DEPTH = 32
 # and 55,000 text characters, so these leave generous headroom for one recipe.
 MAX_RECIPE_WORK = 262144
 MAX_RECIPE_TEXT = 8 * 1024 * 1024
-# Whole-batch envelope, sized so every store admitted under MAX_STORE_BYTES
-# still loads: each JSON value/key needs at least two bytes and each text
-# character at least one byte.
+# Whole-batch value/key and text totals, sized to cover any store admitted
+# under MAX_STORE_BYTES: each JSON value/key needs at least two bytes and each
+# text character at least one byte. MAX_RECIPES still caps the recipe count.
 MAX_BATCH_WORK = MAX_STORE_BYTES // 2
 MAX_BATCH_TEXT = MAX_STORE_BYTES
 
