@@ -15,6 +15,8 @@ from pathlib import Path
 import portalocker
 from dotenv import dotenv_values, set_key
 
+from .durability import fsync_directory
+
 DEFAULT_API_KEY = "6q7QNKy-oIgk-IMuWisJ-jfN7s6"
 ENV_FILE_MODE = 0o600
 MAX_ENV_BYTES = 64 * 1024
@@ -24,6 +26,17 @@ ENV_BUSY_MESSAGE = "Configuration is busy; retry after the current writer finish
 
 class ConfigurationBusyError(OSError):
     """Another writer holds the configuration lock (message is value-free)."""
+
+
+class ConfigurationPublishedError(OSError):
+    """Complete credentials are visible, but their crash durability is uncertain."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Configuration was published; durability is uncertain. "
+            "Keep the visible file, check storage health and verify configuration "
+            "before retrying."
+        )
 
 
 def _default_env_dir() -> Path:
@@ -116,23 +129,11 @@ def _atomic_write_env(
         except OSError:
             pass
         raise
-    _fsync_directory(target.parent)
-
-
-def _fsync_directory(directory: Path) -> None:
-    """Best-effort fsync of a directory so a rename survives a crash."""
-    if os.name == "nt":
-        return
     try:
-        dir_fd = os.open(directory, os.O_RDONLY)
+        fsync_directory(target.parent)
     except OSError:
-        return
-    try:
-        os.fsync(dir_fd)
-    except OSError:
-        pass
-    finally:
-        os.close(dir_fd)
+        # Replacement has happened: do not roll back or remove visible secrets.
+        raise ConfigurationPublishedError() from None
 
 
 @contextmanager
@@ -196,13 +197,19 @@ def _locked_env_path(env_path: Path) -> Iterator[Path]:
 
 
 def scaffold_env_file(env_path: Path = ENV_PATH, *, report_busy: bool = False) -> bool:
-    """Create the starter file; ``report_busy`` re-raises lock contention."""
+    """Create the starter file; always report uncertain publication.
+
+    ``report_busy`` also re-raises lock contention. Other pre-publication I/O
+    failures return False, preserving the existing scaffold contract.
+    """
     try:
         with _locked_env_path(env_path) as target:
             if _read_env_content(target):
                 return False
             _atomic_write_env(target, ENV_TEMPLATE)
             _tighten_env_permissions(target)
+    except ConfigurationPublishedError:
+        raise
     except ConfigurationBusyError:
         if report_busy:
             raise
