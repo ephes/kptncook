@@ -81,13 +81,21 @@ def list_repository_entries() -> list[RecipeInDb]:
 
 
 def load_repository_recipes(
-    *, entries: list[RecipeInDb] | None = None
+    *,
+    entries: list[RecipeInDb] | None = None,
+    oid: str | None = None,
+    uid: str | None = None,
 ) -> RepositoryRecipesResult:
+    """Validate matching raw identities, keeping positions in the single snapshot."""
     recipes: list[Recipe] = []
     invalid_entries: list[InvalidStoredRecipe] = []
     if entries is None:
         entries = list_repository_entries()
     for position, repo_recipe in enumerate(entries, start=1):
+        if oid is not None and _extract_recipe_id(repo_recipe.data) != oid:
+            continue
+        if uid is not None and repo_recipe.data.get("uid") != uid:
+            continue
         try:
             recipes.append(Recipe.model_validate(repo_recipe.data))
         except ValidationError as exc:
@@ -108,9 +116,9 @@ def list_repository_recipes() -> list[Recipe]:
 
 
 def get_repository_recipe_by_oid(oid: str) -> list[Recipe]:
-    result = load_repository_recipes()
+    result = load_repository_recipes(oid=oid)
     _log_invalid_entries(result.invalid_entries)
-    return [recipe for recipe in result.recipes if recipe.id.oid == oid]
+    return result.recipes
 
 
 def delete_recipe_ids(

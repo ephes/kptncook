@@ -7,6 +7,13 @@ Unreleased
   native Mealie ZIP import and Tandoor, Paprika and Markdown file exports.
 
 ### Fixes
+- Bound discovery-screen leaf lists to 4,096 combined raw entries and 262,144
+  output text characters before summary construction; refuse the whole screen
+  on overflow without partial results.
+- Filter stored OID/UID identities before constructing full recipe models for
+  selected lookups and exports. Read one raw snapshot, retain matching invalid
+  record positions and duplicate-selection errors, and leave unrelated recipe
+  diagnostics to full listings/exports.
 - Compare deletion selections with their previewed store records under the writer
   lock. Refuse changed selections atomically, including with `--force`, while
   preserving unrelated updates and idempotent missing-ID handling.

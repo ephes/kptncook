@@ -652,12 +652,9 @@ def test_export_recipes_to_paprika_accepts_parseable_repository_url(
     recipe = Recipe.model_validate(minimal)
 
     monkeypatch.setattr(
-        workflows,
-        "load_kptncook_recipes_from_repository",
-        lambda: RepositoryRecipesResult(
-            recipes=[recipe],
-            invalid_entries=[],
-        ),
+        repository_service,
+        "list_repository_entries",
+        lambda: [RecipeInDb(date=date.today(), data=minimal)],
     )
     monkeypatch.setattr(
         workflows.PaprikaExporter,

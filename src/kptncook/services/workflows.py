@@ -133,11 +133,10 @@ def load_kptncook_recipes_from_repository() -> RepositoryRecipesResult:
 
 
 def load_recipe_from_repository_by_oid(oid: str) -> RepositoryRecipesResult:
-    result = load_kptncook_recipes_from_repository()
-    return RepositoryRecipesResult(
-        recipes=[recipe for recipe in result.recipes if recipe.id.oid == oid],
-        invalid_entries=result.invalid_entries,
-    )
+    try:
+        return load_repository_recipes(oid=oid)
+    except RepositoryServiceError as exc:
+        raise _wrap_repository_error(exc) from exc
 
 
 def load_recipe_from_repository_by_id(id_: str) -> RepositoryRecipesResult:
@@ -147,11 +146,10 @@ def load_recipe_from_repository_by_id(id_: str) -> RepositoryRecipesResult:
     id_type, id_value = parsed
     if id_type == "oid":
         return load_recipe_from_repository_by_oid(id_value)
-    result = load_kptncook_recipes_from_repository()
-    return RepositoryRecipesResult(
-        recipes=[recipe for recipe in result.recipes if recipe.uid == id_value],
-        invalid_entries=result.invalid_entries,
-    )
+    try:
+        return load_repository_recipes(uid=id_value)
+    except RepositoryServiceError as exc:
+        raise _wrap_repository_error(exc) from exc
 
 
 def _repository_id_map() -> dict[str, RecipeInDb]:

@@ -87,3 +87,52 @@ def test_screen_work_boundary(monkeypatch):
     monkeypatch.setattr(discovery, "MAX_SCREEN_WORK", 1)
     with pytest.raises(discovery.DiscoveryScreenError, match="work"):
         discovery._extract_nested_list({"lists": []}, ("lists",))
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"lists": [None] * 4097},
+        {"quickSearch": ["x"] * 4097},
+        {"lists": [{"id": "x"}] * 2048, "quickSearch": ["x"] * 2049},
+    ],
+)
+def test_screen_leaf_entry_budget_precedes_summary_construction(monkeypatch, payload):
+    built = []
+    original = discovery.DiscoveryListSummary
+
+    def summary(**kwargs):
+        built.append(kwargs)
+        return original(**kwargs)
+
+    monkeypatch.setattr(discovery, "DiscoveryListSummary", summary)
+    closed = screen_service(monkeypatch, payload)
+    with pytest.raises(workflows.UserFacingError, match="entry limit"):
+        workflows.get_discovery_screen()
+    assert built == []
+    assert closed == [True]
+
+
+@pytest.mark.parametrize("field", ["id", "title", "listType", "quickSearch"])
+def test_screen_output_text_budget_precedes_summary_construction(monkeypatch, field):
+    built = []
+    monkeypatch.setattr(
+        discovery, "DiscoveryListSummary", lambda **kw: built.append(kw)
+    )
+    payload = {"lists": [{"id": "a"}]}
+    if field == "quickSearch":
+        payload[field] = ["x" * 262144]
+    else:
+        payload["lists"].append({field: "x" * 262144})
+    with pytest.raises(discovery.DiscoveryScreenError, match="text limit"):
+        discovery.parse_discovery_screen(payload)
+    assert built == []
+
+
+def test_screen_leaf_and_text_exact_limits():
+    payload = {"lists": [{"id": "x"}] * 2048, "quickSearch": ["x" * 127] * 2048}
+    result = discovery.parse_discovery_screen(payload)
+    assert len(result.lists) == len(result.quick_search) == 2048
+    payload["quickSearch"][-1] += "x"
+    with pytest.raises(discovery.DiscoveryScreenError, match="text limit"):
+        discovery.parse_discovery_screen(payload)

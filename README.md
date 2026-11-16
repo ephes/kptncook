@@ -135,6 +135,11 @@ Local single-recipe exports to Paprika, Tandoor and Markdown accept either the
 stored short UID or OID (including parsed recipe URLs). A missing selector
 match or multiple matching recipes produces an error; selection never fetches
 from the network.
+Selected OID/UID lookups read one raw repository snapshot and validate full
+recipe models only for matching identities. Warnings concern malformed matching
+records and retain their original store positions; unrelated malformed recipes
+are reported by full listings/exports instead. The raw JSON store is still read
+and checked in full, including its duplicate-OID admission policy.
 
 Library API clients send requests only to their configured HTTP(S) origin
 (scheme, host and effective port), with no userinfo in the URL. Relative paths
@@ -155,6 +160,11 @@ to 16 dictionary levels and 4,096 visited-value/key-probe operations per list
 search (lists and quick search). Cycles, depth and work overflow produce a short
 malformed-screen error with no partial listing; localized text, key precedence
 and entry order are retained. Screen entry lists are leaves for these searches.
+Before constructing summaries, the complete screen must also fit 4,096 raw
+entries across the selected lists and quick-search leaves (including entries
+that would be ignored), and 262,144 characters across all displayed IDs, titles,
+list types and quick-search labels. Exceeding either limit refuses the whole
+screen with a short error; no truncated or partial listing is returned.
 
 Share URLs are resolved using only the response headers, without reading bodies
 or following redirects. Only 301/302 responses with a Location are accepted.
