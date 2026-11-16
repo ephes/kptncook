@@ -22,6 +22,12 @@ import httpx
 
 from kptncook.config import get_settings
 from kptncook.exporter_utils import (
+    BatchExportError,
+    BudgetedWriter,
+    ExportBudget,
+    ExportLimitError,
+    ExportPublicationUncertain,
+    validate_export_batch_size,
     asciify_string,
     bounded_export_filename,
     get_cover,
@@ -57,6 +63,7 @@ class GeneratedData:
 
 class PaprikaExporter:
     def export(self, recipes: list[Recipe]) -> str:
+        validate_export_batch_size(len(recipes))
         for recipe in recipes:
             recipe.validate_scaled_quantities()
             validate_export_id(recipe.id.oid)
@@ -64,25 +71,50 @@ class PaprikaExporter:
         # as get_export_data; serialized covers/JSON live for one recipe only.
         unique = {recipe.id.oid: recipe for recipe in recipes}
         filename = self.get_export_filename(export_data=unique, recipes=recipes)
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            entries = []
-            for identifier, recipe in unique.items():
-                path = Path(tmp_dir) / f"recipe_{identifier}.paprikarecipe"
-                with gzip.open(path, "wb") as output:
-                    output.write(self.get_recipe_as_json_string(recipe).encode("utf-8"))
-                entries.append((path.name, path))
-            filename_full_path = Path(tmp_dir) / filename
-            write_zip(filename_full_path, entries)
-            # never overwrite an existing export; pick a free name instead
-            disambiguator = recipes[0].id.oid if len(unique) == 1 else None
-            target = move_to_free_target(
-                source=filename_full_path,
-                directory=Path.cwd(),
-                stem=Path(filename).stem,
-                extension=Path(filename).suffix,
-                disambiguator=disambiguator,
-            )
-            return target.name
+        budget = ExportBudget()
+        index = -1
+        failed_recipe_id = "archive"
+        try:
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                entries = []
+                for index, (identifier, recipe) in enumerate(unique.items()):
+                    failed_recipe_id = identifier
+                    path = Path(tmp_dir) / f"recipe_{identifier}.paprikarecipe"
+                    data = self.get_recipe_as_json_string(recipe, budget=budget).encode(
+                        "utf-8"
+                    )
+                    budget.charge_output(len(data))
+                    with path.open("wb") as output:
+                        with gzip.GzipFile(
+                            filename=str(path),
+                            mode="wb",
+                            fileobj=BudgetedWriter(output, budget),
+                        ) as compressed:
+                            compressed.write(data)
+                    entries.append((path.name, path))
+                filename_full_path = Path(tmp_dir) / filename
+                failed_recipe_id = "archive"
+                write_zip(filename_full_path, entries, budget=budget)
+                # never overwrite an existing export; pick a free name instead
+                disambiguator = recipes[0].id.oid if len(unique) == 1 else None
+                target = move_to_free_target(
+                    source=filename_full_path,
+                    directory=Path.cwd(),
+                    stem=Path(filename).stem,
+                    extension=Path(filename).suffix,
+                    disambiguator=disambiguator,
+                    budget=budget,
+                )
+                return target.name
+        except (ExportLimitError, ExportPublicationUncertain) as exc:
+            # Paprika publishes one archive: staged recipes are not receipts.
+            raise BatchExportError(
+                (),
+                failed_recipe_id,
+                len(unique) - index - 1,
+                exc,
+                unpublished_count=len(unique),
+            ) from exc
 
     def get_export_filename(
         self, export_data: dict[str, Any], recipes: list[Recipe]
@@ -101,16 +133,26 @@ class PaprikaExporter:
         else:
             return "allrecipes.paprikarecipes"
 
-    def get_generated_data(self, recipe: Recipe) -> GeneratedData:
+    def get_generated_data(
+        self, recipe: Recipe, *, budget: ExportBudget | None = None
+    ) -> GeneratedData:
         """Just to make testing easier and only have one method to mock in tests."""
-        cover_filename, cover_img = self.get_cover_img_as_base64_string(recipe=recipe)
+        cover_filename, cover_img = self.get_cover_img_as_base64_string(
+            recipe=recipe, budget=budget
+        )
         dtnow = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         hash = secrets.token_hex(32)
         return GeneratedData(cover_filename, cover_img, dtnow, hash)
 
-    def get_recipe_as_json_string(self, recipe: Recipe) -> str:
+    def get_recipe_as_json_string(
+        self, recipe: Recipe, *, budget: ExportBudget | None = None
+    ) -> str:
         recipe.validate_scaled_quantities()
-        generated = self.get_generated_data(recipe=recipe)
+        generated = (
+            self.get_generated_data(recipe=recipe, budget=budget)
+            if budget
+            else self.get_generated_data(recipe=recipe)
+        )
         document = {
             "uid": str(recipe.id.oid),
             "name": localized_fallback(
@@ -203,7 +245,7 @@ class PaprikaExporter:
         return filename_full_path
 
     def get_cover_img_as_base64_string(
-        self, recipe: Recipe
+        self, recipe: Recipe, *, budget: ExportBudget | None = None
     ) -> tuple[str | None, str | None]:
         cover = get_cover(image_list=recipe.image_list)
         if cover is None:
@@ -212,7 +254,7 @@ class PaprikaExporter:
         if not isinstance(cover_url, str):
             return None, None
         try:
-            image_bytes = download_image(cover_url)
+            image_bytes = download_image(cover_url, budget=budget)
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 title = (

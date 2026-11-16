@@ -1,5 +1,7 @@
 import errno
+import io
 import itertools
+import secrets
 from decimal import Decimal
 from html import escape
 import logging
@@ -9,6 +11,7 @@ import re
 import shutil
 import zipfile
 from pathlib import Path
+from typing import Any
 from collections.abc import Iterable
 
 from unidecode import unidecode
@@ -202,6 +205,68 @@ class ExportPublicationUncertain(UserFacingError):
         )
 
 
+MAX_BATCH_ASSET_BYTES = 100 * 1024 * 1024
+MAX_BATCH_OUTPUT_BYTES = 256 * 1024 * 1024
+
+
+class ExportLimitError(UserFacingError):
+    """A batch exhausted its cumulative byte allowance."""
+
+
+class ExportBudget:
+    """Count downloaded assets and output work before retaining/writing bytes."""
+
+    def __init__(self) -> None:
+        self.asset_bytes = 0
+        self.output_bytes = 0
+
+    def charge_asset(self, amount: int) -> None:
+        if self.asset_bytes + amount > MAX_BATCH_ASSET_BYTES:
+            raise ExportLimitError(
+                "Batch asset byte allowance exceeded. Export a smaller selection."
+            )
+        self.asset_bytes += amount
+
+    def check_asset_capacity(self) -> None:
+        if self.asset_bytes >= MAX_BATCH_ASSET_BYTES:
+            self.charge_asset(1)
+
+    def charge_output(self, amount: int) -> None:
+        if self.output_bytes + amount > MAX_BATCH_OUTPUT_BYTES:
+            raise ExportLimitError(
+                "Batch output byte allowance exceeded. Export a smaller selection."
+            )
+        self.output_bytes += amount
+
+
+class BudgetedWriter(io.BufferedIOBase):
+    """Meter writes to an already-owned file; the caller closes that file."""
+
+    def __init__(self, raw: Any, budget: ExportBudget):
+        self.raw = raw
+        self.budget = budget
+
+    def write(self, data: Any) -> int:
+        self.budget.charge_output(len(data))
+        return self.raw.write(data)
+
+    def tell(self) -> int:
+        return self.raw.tell()
+
+    def seek(self, offset: int, whence: int = 0) -> int:
+        return self.raw.seek(offset, whence)
+
+    def seekable(self) -> bool:
+        return self.raw.seekable()
+
+    def writable(self) -> bool:
+        return True
+
+    def flush(self) -> None:
+        if not self.raw.closed:
+            self.raw.flush()
+
+
 def validate_export_batch_size(count: int) -> None:
     if count > MAX_RECIPES:
         raise UserFacingError(f"Export batch exceeds {MAX_RECIPES} recipes")
@@ -224,11 +289,15 @@ class BatchExportError(UserFacingError):
         *,
         completed_assets: Iterable[Path] = (),
         retained_assets: Iterable[Path] = (),
+        unpublished_count: int | None = None,
     ):
         self.completed_paths = tuple(completed_paths)
         self.completed_assets = tuple(completed_assets)
         self.failed_recipe_id = failed_recipe_id
         self.remaining_count = remaining_count
+        self.unpublished_count = (
+            remaining_count + 1 if unpublished_count is None else unpublished_count
+        )
         self.retained_assets = tuple(retained_assets)
         self.uncertain_paths = (
             (cause.target,) if isinstance(cause, ExportPublicationUncertain) else ()
@@ -247,6 +316,7 @@ class BatchExportError(UserFacingError):
             ("Export published; durability is uncertain", self.uncertain_paths),
         ):
             lines.extend(f"{label}: {path}" for path in paths)
+        lines.append(f"Unpublished recipes: {self.unpublished_count}.")
         lines.append(
             f"Untouched recipes: {remaining_count}. Inspect receipts before retrying."
         )
@@ -254,6 +324,8 @@ class BatchExportError(UserFacingError):
 
 
 MAX_EXPORT_FILENAME_BYTES = 240
+MAX_SEQUENTIAL_EXPORT_ATTEMPTS = 16
+MAX_RANDOM_EXPORT_ATTEMPTS = 4
 
 
 def bounded_export_filename(stem: str, extension: str, *, suffix: str = "") -> str:
@@ -274,13 +346,16 @@ def move_to_free_target(
     stem: str,
     extension: str,
     disambiguator: str | None = None,
+    *,
+    budget: ExportBudget | None = None,
 ) -> Path:
     """Move ``source`` into ``directory`` without overwriting an existing file.
 
     The first candidate is ``<stem><extension>``. If that name is taken, the
     ``disambiguator`` (for example a recipe id) is appended, then a counter:
     ``<stem>-<disambiguator><extension>``, ``<stem>-<disambiguator>-2<extension>``
-    and so on (``<stem>-2<extension>`` ... without a disambiguator). The target
+    for at most 16 sequential attempts, then four random 16-hex suffixes.
+    Exhaustion refuses publication with an actionable error. The target
     name is published by linking a flushed sibling staging file. Hard-link
     support is required: publication fails safely when unavailable. Existing
     files are never replaced and final names always contain complete data.
@@ -289,10 +364,20 @@ def move_to_free_target(
     """
     directory = Path(directory)
     base_suffix = f"-{disambiguator}" if disambiguator else ""
+    sequential = itertools.islice(
+        itertools.chain(
+            [""],
+            [base_suffix] if disambiguator else [],
+            (f"{base_suffix}-{counter}" for counter in itertools.count(2)),
+        ),
+        MAX_SEQUENTIAL_EXPORT_ATTEMPTS,
+    )
     suffixes = itertools.chain(
-        [""],
-        [base_suffix] if disambiguator else [],
-        (f"{base_suffix}-{counter}" for counter in itertools.count(2)),
+        sequential,
+        (
+            f"{base_suffix}-{secrets.token_hex(8)}"
+            for _ in range(MAX_RANDOM_EXPORT_ATTEMPTS)
+        ),
     )
     # Copy first: the source may be on a different filesystem. Only the sibling
     # staging inode is linked, so publication itself is atomic and no-clobber.
@@ -303,7 +388,9 @@ def move_to_free_target(
                 dir=directory, prefix=".kptncook-", suffix=".tmp", delete=False
             ) as staged:
                 staging_path = Path(staged.name)
-                shutil.copyfileobj(src, staged)
+                shutil.copyfileobj(
+                    src, BudgetedWriter(staged, budget) if budget else staged
+                )
                 staged.flush()
                 os.fsync(staged.fileno())
         for suffix in suffixes:
@@ -342,15 +429,38 @@ def move_to_free_target(
                 staging_path.unlink(missing_ok=True)
             except OSError:
                 logger.warning("Could not remove export staging file")
-    raise AssertionError("unreachable")  # pragma: no cover
+    raise UserFacingError(
+        f"Export filename collision limit reached in {directory}. "
+        "Move existing exports or choose a different export location before retrying."
+    )
 
 
-def write_zip(zip_path: Path, entries: Iterable[tuple[str, ZipContent]]) -> None:
-    with zipfile.ZipFile(
-        zip_path, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True
-    ) as zip_file:
-        for arcname, content in entries:
-            if isinstance(content, Path):
-                zip_file.write(content, arcname=arcname)
-            else:
-                zip_file.writestr(arcname, content)
+def write_zip(
+    zip_path: Path,
+    entries: Iterable[tuple[str, ZipContent]],
+    *,
+    budget: ExportBudget | None = None,
+) -> None:
+    with zip_path.open("wb") as output:
+        with zipfile.ZipFile(
+            BudgetedWriter(output, budget) if budget else output,
+            "w",
+            compression=zipfile.ZIP_DEFLATED,
+            allowZip64=True,
+        ) as zip_file:
+            for arcname, content in entries:
+                if budget:
+                    size = (
+                        content.stat().st_size
+                        if isinstance(content, Path)
+                        else len(
+                            content.encode("utf-8")
+                            if isinstance(content, str)
+                            else content
+                        )
+                    )
+                    budget.charge_output(size)
+                if isinstance(content, Path):
+                    zip_file.write(content, arcname=arcname)
+                else:
+                    zip_file.writestr(arcname, content)

@@ -69,7 +69,7 @@ def test_paprika_optional_cover_keeps_every_text_recipe(
         first["imageList"] = [cover] * (2 if mode == "ambiguous" else 1)
     requests = []
 
-    def download(url):
+    def download(url, **kwargs):
         requests.append(url)
         if mode == "404":
             response = httpx.Response(404, request=httpx.Request("GET", url))

@@ -70,11 +70,14 @@ def test_tandoor_batch_receipts_and_cli(recipes, tmp_path, monkeypatch, uncertai
 
 
 @pytest.mark.parametrize(
-    "failure", ["render", "asset", "note", "asset-sync", "note-sync"]
+    "failure",
+    ["render", "asset", "note", "asset-sync", "note-sync", "asset-parent-sync"],
 )
 def test_markdown_batch_receipts(recipes, monkeypatch, failure):
     exporter = MarkdownExporter()
-    monkeypatch.setattr(exporter, "_download_recipe_image", lambda recipe: b"synthetic")
+    monkeypatch.setattr(
+        exporter, "_download_recipe_image", lambda recipe, **kw: b"synthetic"
+    )
     out = get_settings().root / "export_md"
     render = exporter.render_recipe
     current = []
@@ -107,6 +110,13 @@ def test_markdown_batch_receipts(recipes, monkeypatch, failure):
 
     monkeypatch.setattr(os, "link", publish)
     monkeypatch.setattr("kptncook.exporter_utils.fsync_directory", sync)
+
+    def parent_sync(directory):
+        if failure == "asset-parent-sync" and (out / "Recipe 0.md").exists():
+            raise OSError("synthetic asset parent sync failure")
+        sync(directory)
+
+    monkeypatch.setattr("kptncook.markdown_exporter.fsync_directory", parent_sync)
     with pytest.raises(UserFacingError) as caught:
         exporter.export(recipes)
     error = caught.value

@@ -26,6 +26,7 @@ from .durability import fsync_directory
 from .http_errors import UserFacingError
 from .exporter_utils import (
     BatchExportError,
+    ExportBudget,
     ExportPublicationUncertain,
     get_cover,
     format_quantity,
@@ -138,6 +139,7 @@ class MarkdownExporter:
         for recipe in recipes:
             recipe.validate_scaled_quantities(self.servings_for(recipe))
             validate_export_id(recipe.id.oid)
+        budget = ExportBudget()
         written: list[Path] = []
         written_assets: list[Path] = []
 
@@ -160,7 +162,7 @@ class MarkdownExporter:
                     or "recipe"
                 )
                 base = sanitize_filename(title)
-                image_bytes = self._download_recipe_image(recipe)
+                image_bytes = self._download_recipe_image(recipe, budget=budget)
                 with tempfile.TemporaryDirectory(
                     dir=out_dir, prefix=".kptncook-"
                 ) as temp:
@@ -168,6 +170,7 @@ class MarkdownExporter:
                     try:
                         if image_bytes is not None:
                             staged_asset = staging / "image.jpg"
+                            budget.charge_output(len(image_bytes))
                             with staged_asset.open("xb") as asset:
                                 asset.write(image_bytes)
                             assets = out_dir / "assets"
@@ -181,7 +184,11 @@ class MarkdownExporter:
                                     "Could not sync the Markdown assets directory entry."
                                 ) from exc
                             asset_path = move_to_free_target(
-                                staged_asset, assets, uuid.uuid4().hex, ".jpg"
+                                staged_asset,
+                                assets,
+                                uuid.uuid4().hex,
+                                ".jpg",
+                                budget=budget,
                             )
                         image_path = (
                             asset_path.relative_to(out_dir).as_posix()
@@ -190,9 +197,15 @@ class MarkdownExporter:
                         )
                         content = self.render_recipe(recipe, image_path=image_path)
                         staged_note = staging / "note.md"
+                        budget.charge_output(len(content.encode("utf-8")))
                         staged_note.write_text(content, encoding="utf-8")
                         out_path = move_to_free_target(
-                            staged_note, out_dir, base, ".md", recipe.id.oid
+                            staged_note,
+                            out_dir,
+                            base,
+                            ".md",
+                            recipe.id.oid,
+                            budget=budget,
                         )
                     except ExportPublicationUncertain:
                         # The asset or its referring note is already visible. Keep
@@ -219,7 +232,9 @@ class MarkdownExporter:
                 ) from exc
         return written
 
-    def _download_recipe_image(self, recipe: Recipe) -> bytes | None:
+    def _download_recipe_image(
+        self, recipe: Recipe, *, budget: ExportBudget | None = None
+    ) -> bytes | None:
         image = recipe.steps[-1].image if recipe.steps else get_cover(recipe.image_list)
         if image is None:
             return None
@@ -229,7 +244,7 @@ class MarkdownExporter:
             logger.warning("Skipping Markdown image: not on an allowed image host")
             return None
         try:
-            return download_image(image.url)
+            return download_image(image.url, budget=budget)
         except httpx.HTTPError:
             logger.warning(
                 "Skipping Markdown image: download failed or exceeded limits"

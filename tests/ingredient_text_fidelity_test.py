@@ -72,7 +72,7 @@ def test_all_file_exporters_share_food_title_fallback(
     get_settings().kptncook_lang = lang
     minimal["ingredients"] = [
         ingredient(
-            0.001,
+            1,
             uncountableTitle=uncountable,
             localizedTitle=localized,
             numberTitle=number,
@@ -80,9 +80,9 @@ def test_all_file_exporters_share_food_title_fallback(
     ]
     recipe = Recipe.model_validate(minimal)
     expected = expected or {"de": "Mehl", "en": "Flour", "fr": "Farine"}[lang]
-    assert f"- 0.002 kg {expected}\n" in MarkdownExporter().render_recipe(recipe)
+    assert f"- 2 kg {expected}\n" in MarkdownExporter().render_recipe(recipe)
     assert (
         PaprikaExporter().get_ingredients_text(recipe.ingredients, 2)
-        == f"0.002 kg {expected}\n"
+        == f"2 kg {expected}\n"
     )
     assert TandoorExporter().get_ingredients(recipe)[0]["food"]["name"] == expected

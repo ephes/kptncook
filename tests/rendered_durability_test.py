@@ -89,7 +89,7 @@ def test_export_directory_sync_orders_assets_before_note(minimal, monkeypatch, f
     old_asset.write_bytes(b"old image")
     old_note.write_bytes(b"old note")
     monkeypatch.setattr(
-        "kptncook.markdown_exporter.download_image", lambda url: b"new image"
+        "kptncook.markdown_exporter.download_image", lambda url, **kw: b"new image"
     )
     sync, link = os.fsync, os.link
     events = []

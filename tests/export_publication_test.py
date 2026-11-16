@@ -89,7 +89,8 @@ def test_markdown_note_absent_until_asset_complete(minimal, monkeypatch):
 
     monkeypatch.setattr(Path, "open", observe)
     monkeypatch.setattr(
-        "kptncook.markdown_exporter.download_image", lambda url: b"synthetic image"
+        "kptncook.markdown_exporter.download_image",
+        lambda url, **kw: b"synthetic image",
     )
     [note] = MarkdownExporter().export([Recipe.model_validate(minimal)])
     assert observed
@@ -108,16 +109,18 @@ def test_paprika_releases_each_serialized_recipe(minimal, tmp_path, monkeypatch)
     monkeypatch.setattr(
         exporter,
         "get_generated_data",
-        lambda recipe: GeneratedData("cover.jpg", photo, "2026-01-01", "synthetic"),
+        lambda recipe, **kw: GeneratedData(
+            "cover.jpg", photo, "2026-01-01", "synthetic"
+        ),
     )
 
     class TrackedJSON(str):
         pass
 
-    def serialize(recipe):
+    def serialize(recipe, **kwargs):
         gc.collect()
         assert not any(ref() is not None for ref in live)
-        value = TrackedJSON(original_serialize(recipe))
+        value = TrackedJSON(original_serialize(recipe, **kwargs))
         live.append(weakref.ref(value))
         return value
 
@@ -143,7 +146,7 @@ def test_paprika_mid_batch_failure_publishes_nothing(minimal, tmp_path, monkeypa
     monkeypatch.chdir(tmp_path)
     calls = []
 
-    def serialize(recipe):
+    def serialize(recipe, **kwargs):
         calls.append(recipe.id.oid)
         if len(calls) == 2:
             raise OSError("synthetic failure")
@@ -152,7 +155,7 @@ def test_paprika_mid_batch_failure_publishes_nothing(minimal, tmp_path, monkeypa
     monkeypatch.setattr(
         PaprikaExporter,
         "get_recipe_as_json_string",
-        lambda self, recipe: serialize(recipe),
+        lambda self, recipe, **kw: serialize(recipe, **kw),
     )
     recipes = [
         Recipe.model_validate(dict(minimal, _id={"$oid": f"{i:024x}"}))
@@ -185,7 +188,7 @@ def test_failed_note_publication_removes_only_owned_asset(minimal, monkeypatch):
 
     monkeypatch.setattr(os, "link", fail_note)
     monkeypatch.setattr(
-        "kptncook.markdown_exporter.download_image", lambda url: b"synthetic"
+        "kptncook.markdown_exporter.download_image", lambda url, **kw: b"synthetic"
     )
     with pytest.raises(UserFacingError, match="synthetic publication failure"):
         MarkdownExporter().export([Recipe.model_validate(minimal)])

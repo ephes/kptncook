@@ -464,8 +464,13 @@ The command output lists the names that were actually written.
 Title-derived names are limited to 240 UTF-8 bytes, including extension and any
 recipe ID/counter suffix. The display title stem is shortened on character
 boundaries after transliteration, when applicable; suffixes remain intact and
-every collision still selects a new name. Long or localized titles stay complete
+collision attempts retain that byte limit. Long or localized titles stay complete
 inside the recipe JSON and Markdown's quoted `title` front matter.
+Each publication tries at most 16 sequential names, then four names with a random
+16-hex identity suffix (20 link attempts total). If all collide, export stops with
+an error asking you to move existing exports or choose another location. Existing
+files remain unchanged; publication and directory-sync rules also cover fallback
+names.
 Archives and Markdown notes are fully written and flushed in sibling staging
 before atomic no-clobber publication. Markdown assets are published completely
 and their directory synced before the note that references them. Directory entries
@@ -494,6 +499,25 @@ Paprika serializes and compresses one recipe at a time, so cover/JSON memory
 does not grow with the number of exported recipes. Its small single-recipe and
 bulk serialization helpers remain available to library callers; the bulk helper
 still materializes its results when called directly.
+Each `export()` batch has a cumulative 100 MiB asset allowance and a 256 MiB
+output-work allowance, in addition to the 10 MiB per-image limit and 4,096-recipe
+count ceiling. Downloads charge each received chunk before retaining it, including
+chunks from failed/oversized optional images; at most one transport chunk can be
+received to detect overflow. Exhaustion stops the batch rather than omitting more
+covers. Output charges data fed into compression, actual gzip/ZIP writes, staged
+Markdown notes/assets and sibling publication copies before each write. Header
+rewrites count again; hard links add no data bytes. These are cumulative work
+ceilings, not final archive-size estimates; temporary copies consume allowance
+even when later deleted. Allowances reset for each export call.
+A limit error preserves earlier completed Tandoor/Markdown files and reports the
+same partial-batch receipts above. Paprika publishes one archive for the whole
+batch: staged recipes are not completed exports, and a limit refusal before its
+final link leaves all recipes unpublished. `BatchExportError.unpublished_count`
+reports recipes without a completed export (including any uncertain current
+publication), separately from the untouched count; final Paprika assembly errors
+use `archive` as the failing identity. Split large batches into smaller selections
+and inspect receipts before retrying. Direct rendering/serialization helpers do
+not constitute a file-export batch; their existing return types are unchanged.
 The library `PaprikaExporter.save_recipes` helper builds its archive from exactly
 the requested IDs, including an empty archive for an empty request. Reusing its
 work directory never includes stale or unrelated `.paprikarecipe` files; those

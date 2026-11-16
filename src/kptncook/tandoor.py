@@ -15,6 +15,7 @@ import httpx
 from kptncook.config import get_settings
 from kptncook.exporter_utils import (
     BatchExportError,
+    ExportBudget,
     asciify_string,
     bounded_export_filename,
     get_cover,
@@ -47,10 +48,11 @@ class TandoorExporter:
         for recipe in recipes:
             recipe.validate_scaled_quantities()
             validate_export_id(recipe.id.oid)
+        budget = ExportBudget()
         filenames = []
         for index, recipe in enumerate(recipes):
             try:
-                filenames.append(self.export_recipe(recipe=recipe))
+                filenames.append(self.export_recipe(recipe=recipe, budget=budget))
             except Exception as exc:
                 raise BatchExportError(
                     (Path.cwd() / name for name in filenames),
@@ -60,11 +62,14 @@ class TandoorExporter:
                 ) from exc
         return filenames
 
-    def export_recipe(self, recipe: Recipe) -> str:
+    def export_recipe(
+        self, recipe: Recipe, *, budget: ExportBudget | None = None
+    ) -> str:
+        budget = budget or ExportBudget()
         validate_export_id(recipe.id.oid)
         filename = self.get_export_filename(recipe=recipe)
         payload = self.get_recipe_payload(recipe=recipe)
-        image_bytes = self.get_cover_image_bytes(recipe=recipe)
+        image_bytes = self.get_cover_image_bytes(recipe=recipe, budget=budget)
         with tempfile.TemporaryDirectory() as tmp_dir:
             zip_path = Path(tmp_dir) / filename
             entries: list[tuple[str, ZipContent]] = [
@@ -75,13 +80,14 @@ class TandoorExporter:
             ]
             if image_bytes is not None:
                 entries.append(("image.jpg", image_bytes))
-            write_zip(zip_path, entries)
+            write_zip(zip_path, entries, budget=budget)
             target = move_to_free_target(
                 zip_path,
                 Path.cwd(),
                 stem=Path(filename).stem,
                 extension=".zip",
                 disambiguator=recipe.id.oid,
+                budget=budget,
             )
         return target.name
 
@@ -99,7 +105,9 @@ class TandoorExporter:
         )
         return bounded_export_filename(asciify_string(title), ".zip")
 
-    def get_cover_image_bytes(self, recipe: Recipe) -> bytes | None:
+    def get_cover_image_bytes(
+        self, recipe: Recipe, *, budget: ExportBudget | None = None
+    ) -> bytes | None:
         cover = get_cover(image_list=recipe.image_list)
         if cover is None:
             return None
@@ -107,7 +115,7 @@ class TandoorExporter:
         if cover_url is None:
             return None
         try:
-            return download_image(cover_url, follow_redirects=True)
+            return download_image(cover_url, follow_redirects=True, budget=budget)
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 logger.info(

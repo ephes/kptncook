@@ -7,6 +7,12 @@ Unreleased
   native Mealie ZIP import and Tandoor, Paprika and Markdown file exports.
 
 ### Fixes
+- Bound file publication to 16 sequential and four random no-clobber names, with
+  an actionable refusal after 20 collisions and unchanged durability receipts.
+- Limit each file-export batch to 100 MiB of received assets and 256 MiB of
+  cumulative output work, charging before retention/writes and preserving
+  completed exports on refusal. Paprika reports all staged recipes as unpublished
+  until its single archive completes; no partial final archive is exposed.
 - Preserve small nonzero ingredient amounts and all admitted decimal places in
   Markdown/Paprika, and share nonempty ingredient-title fallback across file
   exporters so empty translations cannot hide a resolvable food name.
