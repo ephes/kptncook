@@ -13,8 +13,9 @@ from kptncook.markdown_exporter import MarkdownExporter
 from kptncook.mealie import kptncook_to_mealie
 from kptncook.models import Image, Recipe
 from kptncook.paprika import GeneratedData, PaprikaExporter
+from kptncook.repositories import RecipeInDb
+from kptncook.services import repository as repository_service
 from kptncook.services import workflows
-from kptncook.services.repository import RepositoryRecipesResult
 from kptncook.tandoor import TandoorExporter
 
 
@@ -85,9 +86,9 @@ def test_local_exports_resolve_both_identifiers(
 ):
     recipe = synthetic_recipe
     monkeypatch.setattr(
-        workflows,
-        "load_kptncook_recipes_from_repository",
-        lambda: RepositoryRecipesResult([recipe], []),
+        repository_service,
+        "list_repository_entries",
+        lambda: [RecipeInDb(date=date.today(), data=recipe.model_dump(by_alias=True))],
     )
     value = recipe.uid if selector.startswith("uid") else recipe.id.oid
     if selector.endswith("url"):
@@ -107,9 +108,16 @@ def test_local_uid_export_keeps_selection_errors(
     monkeypatch, synthetic_recipe, kind, count
 ):
     monkeypatch.setattr(
-        workflows,
-        "load_kptncook_recipes_from_repository",
-        lambda: RepositoryRecipesResult([synthetic_recipe] * count, []),
+        repository_service,
+        "list_repository_entries",
+        lambda: (
+            [
+                RecipeInDb(
+                    date=date.today(), data=synthetic_recipe.model_dump(by_alias=True)
+                )
+            ]
+            * count
+        ),
     )
     message = "Recipe not found" if count == 0 else "More than one recipe"
     with pytest.raises(workflows.UserFacingError, match=message):

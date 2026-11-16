@@ -20,6 +20,8 @@ class DiscoveryScreenData:
 
 MAX_SCREEN_DEPTH = 16
 MAX_SCREEN_WORK = 4096
+MAX_SCREEN_ENTRIES = 4096
+MAX_SCREEN_TEXT_CHARS = 262144
 
 
 class DiscoveryScreenError(ValueError):
@@ -100,11 +102,10 @@ def _coerce_discovery_list_id(value: object) -> str | None:
     return str(value)
 
 
-def _extract_discovery_list_entries(payload: object) -> list[dict[str, Any]]:
-    candidates = _extract_nested_list(
+def _extract_discovery_list_entries(payload: object) -> list[Any]:
+    return _extract_nested_list(
         payload, ("lists", "discoveryLists", "discoveryList", "items", "sections")
     )
-    return [item for item in candidates if isinstance(item, dict)]
 
 
 def _extract_discovery_list_id(entry: dict[str, Any]) -> str | None:
@@ -237,25 +238,44 @@ def normalize_ingredient_ids(ingredient_ids: list[str]) -> list[str]:
 
 
 def parse_discovery_screen(payload: object) -> DiscoveryScreenData:
-    list_summaries: list[DiscoveryListSummary] = []
-    for entry in _extract_discovery_list_entries(payload):
+    entries = _extract_discovery_list_entries(payload)
+    quick_entries = _extract_quick_search_entries(payload)
+    # Count raw leaves, including ignored entries, before iterating either list.
+    if len(entries) + len(quick_entries) > MAX_SCREEN_ENTRIES:
+        raise DiscoveryScreenError("Malformed discovery screen: entry limit exceeded")
+
+    text_chars = 0
+
+    def admit_text(*values: str | None) -> None:
+        nonlocal text_chars
+        text_chars += sum(len(value) for value in values if value is not None)
+        if text_chars > MAX_SCREEN_TEXT_CHARS:
+            raise DiscoveryScreenError(
+                "Malformed discovery screen: text limit exceeded"
+            )
+
+    admitted: list[tuple[str | None, str | None, str | None]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
         list_id = _extract_discovery_list_id(entry)
         title = _extract_discovery_list_title(entry)
         list_type = _extract_discovery_list_type(entry)
         if list_id is None and title is None and list_type is None:
             continue
-        list_summaries.append(
-            DiscoveryListSummary(
-                list_id=list_id,
-                title=title,
-                list_type=list_type,
-            )
-        )
+        admit_text(list_id, title, list_type)
+        admitted.append((list_id, title, list_type))
 
     quick_search: list[str] = []
-    for entry in _extract_quick_search_entries(payload):
+    for entry in quick_entries:
         label = _format_quick_search_entry(entry)
         if label is not None:
+            admit_text(label)
             quick_search.append(label)
 
+    # Construct summaries only after the complete screen has passed admission.
+    list_summaries = [
+        DiscoveryListSummary(list_id=list_id, title=title, list_type=list_type)
+        for list_id, title, list_type in admitted
+    ]
     return DiscoveryScreenData(lists=list_summaries, quick_search=quick_search)
