@@ -82,4 +82,4 @@ def test_malformed_source_screen_has_short_cli_error(monkeypatch):
         monkeypatch.setattr(workflows, "_kptncook_client", lambda: client)
         result = CliRunner().invoke(app, ["discovery-screen"])
     assert result.exit_code == 1
-    assert "unreadable recipe list response" in result.output
+    assert "KptnCook returned an unreadable response." in result.output

@@ -138,9 +138,7 @@ def _decode_source_json(response: httpx.Response) -> Any:
             object_pairs_hook=_unique_object, parse_constant=_reject_constant
         )
     except (ValueError, RecursionError):
-        raise ResponseShapeError(
-            "KptnCook returned an unreadable recipe list response."
-        ) from None
+        raise ResponseShapeError("KptnCook returned an unreadable response.") from None
 
 
 def _admit_recipe_results(payload: Any) -> list[Any]:

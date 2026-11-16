@@ -2,14 +2,23 @@
 
 from collections.abc import Iterator, Sequence
 
+from kptncook.repositories import MAX_STORE_BYTES
+
 MAX_RECIPES = 4096
 MAX_RECIPE_DEPTH = 32
+# Per-recipe envelope: a real KptnCook recipe needs roughly 7,000 values/keys
+# and 55,000 text characters, so these leave generous headroom for one recipe.
 MAX_RECIPE_WORK = 262144
 MAX_RECIPE_TEXT = 8 * 1024 * 1024
+# Whole-batch envelope, sized so every store admitted under MAX_STORE_BYTES
+# still loads: each JSON value/key needs at least two bytes and each text
+# character at least one byte.
+MAX_BATCH_WORK = MAX_STORE_BYTES // 2
+MAX_BATCH_TEXT = MAX_STORE_BYTES
 
 
 class RecipeAdmissionError(ValueError):
-    """A whole recipe batch exceeds the supported model work envelope."""
+    """A recipe batch exceeds the supported model work envelope."""
 
 
 def admit_recipes(recipes: Sequence[object]) -> None:
@@ -19,7 +28,7 @@ def admit_recipes(recipes: Sequence[object]) -> None:
     # charging shared acyclic objects each time they would be hydrated.
     stack: list[tuple[Iterator[object], int, int | None]] = [(iter(recipes), 0, None)]
     active: set[int] = set()
-    work = text = 0
+    work = text = recipe_work = recipe_text = 0
     while stack:
         children, depth, owner = stack[-1]
         try:
@@ -29,12 +38,17 @@ def admit_recipes(recipes: Sequence[object]) -> None:
             if owner is not None:
                 active.remove(owner)
             continue
+        if depth == 0:
+            # Each top-level item starts its own per-recipe envelope.
+            recipe_work = recipe_text = 0
         work += 1
-        if work > MAX_RECIPE_WORK:
+        recipe_work += 1
+        if recipe_work > MAX_RECIPE_WORK or work > MAX_BATCH_WORK:
             raise RecipeAdmissionError("Recipe model work exceeds the value/key limit")
         if isinstance(node, str):
             text += len(node)
-            if text > MAX_RECIPE_TEXT:
+            recipe_text += len(node)
+            if recipe_text > MAX_RECIPE_TEXT or text > MAX_BATCH_TEXT:
                 raise RecipeAdmissionError("Recipe model work exceeds the text limit")
         elif isinstance(node, (dict, list, tuple)):
             if depth >= MAX_RECIPE_DEPTH or id(node) in active:

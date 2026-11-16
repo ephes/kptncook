@@ -17,8 +17,9 @@ Unreleased
   independent recipes refresh stale IDs, without replaying an ambiguous import.
 - Reject ambiguous source API JSON members and nonfinite constants before token,
   recipe and discovery interpretation, with private fixed decoder diagnostics.
-- Bound recipe counts, nesting, aggregate value/key work and text before source
-  and restored recipe model construction; refuse whole batches on overflow.
+- Bound recipe counts, per-recipe nesting, value/key work and text, and batch
+  totals sized to the 64 MiB store limit before source and restored recipe model
+  construction; refuse whole batches on overflow.
 - Bound discovery-screen leaf lists to 4,096 combined raw entries and 262,144
   output text characters before summary construction; refuse the whole screen
   on overflow without partial results.
