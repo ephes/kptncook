@@ -733,6 +733,11 @@ Configuration is validated lazily. If you run a command before configuring the
 API key, kptncook will scaffold the `.env` file when that command first needs
 settings and then exit; just re-run the command after updating the file. `help`
 and other non-config commands do not force `.env` validation up front.
+Invalid settings produce at most 16 field diagnostics with safe error codes and
+format guidance; rejected values, URLs and validator context are never printed.
+Correct the named setting in your shell or `.env` and re-run the command.
+Direct `Settings` validation also hides inputs in normal exception formatting;
+Pydantic's programmatic `errors()` data remains sensitive and should not be logged.
 
 Then set environment variables in the `~/.kptncook/.env` file (or directly in your shell). You'll need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie, set `MEALIE_API_TOKEN` or `MEALIE_USERNAME`/`MEALIE_PASSWORD`.
 

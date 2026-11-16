@@ -17,11 +17,54 @@ from .env import ENV_PATH, scaffold_env_file
 
 _MISSING_DEFAULT = object()
 _settings_cache: Settings | None = None
+_SAFE_VALIDATION_MESSAGES = {
+    "missing": "Required setting is missing",
+    "string_type": "Expected text",
+    "url_parsing": "Expected a valid HTTP(S) URL",
+    "url_type": "Expected a URL string",
+    "url_scheme": "Expected an HTTP(S) URL",
+    "bool_parsing": "Expected a boolean",
+    "float_parsing": "Expected a number",
+    "finite_number": "Expected a finite number",
+    "greater_than": "Number is below the allowed range",
+    "less_than_equal": "Number exceeds the allowed range",
+}
+
+
+def _safe_validation_diagnostics(error: ValidationError) -> tuple[str, ...]:
+    # Locations, messages and context can all contain rejected credentials.
+    # Only known top-level setting names and our own text may reach output.
+    fields = {name: name.upper() for name in Settings.model_fields}
+    fields["KPTNCOOK_HOME"] = "KPTNCOOK_HOME"
+    fields["root"] = "KPTNCOOK_HOME"
+    diagnostics = []
+    errors = error.errors(include_input=False, include_context=False, include_url=False)
+    for err in errors[:16]:
+        loc = err.get("loc") or ()
+        field = (
+            fields.get(loc[0], "configuration")
+            if loc and isinstance(loc[0], str)
+            else "configuration"
+        )
+        code = err["type"]
+        if code not in _SAFE_VALIDATION_MESSAGES:
+            code = "invalid_value"
+        message = _SAFE_VALIDATION_MESSAGES.get(
+            code, "Invalid setting; check its format"
+        )
+        diagnostics.append(f"{field}: {message} ({code})")
+    if len(errors) > 16:
+        diagnostics.append(
+            "Additional invalid settings omitted; correct these and retry."
+        )
+    return tuple(diagnostics)
 
 
 def _missing_required_fields(error: ValidationError) -> set[str]:
     missing: set[str] = set()
-    for err in error.errors():
+    for err in error.errors(
+        include_input=False, include_context=False, include_url=False
+    ):
         loc = err.get("loc") or ()
         if not loc:
             continue
@@ -46,7 +89,7 @@ class SettingsError(Exception):
         scaffolded: bool,
     ) -> None:
         super().__init__("Invalid kptncook configuration")
-        self.validation_error = validation_error
+        self.diagnostics = _safe_validation_diagnostics(validation_error)
         self.missing_fields = missing_fields
         self.env_path = env_path
         self.scaffolded = scaffolded
@@ -65,11 +108,14 @@ def render_settings_error(error: SettingsError) -> None:
         return
 
     rprint("[red]Invalid configuration.[/red]")
-    rprint(str(error.validation_error))
+    for diagnostic in error.diagnostics:
+        rprint(diagnostic)
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=ENV_PATH, extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=ENV_PATH, extra="ignore", hide_input_in_errors=True
+    )
     root: DirectoryPath = Field(
         Path.home() / ".kptncook", validation_alias="KPTNCOOK_HOME"
     )  # type: ignore
@@ -134,15 +180,19 @@ def get_settings() -> Settings:
         scaffolded = False
         if "kptncook_api_key" in missing_fields:
             scaffolded = scaffold_env_file(ENV_PATH)
-        raise SettingsError(
+        error = SettingsError(
             exc,
             missing_fields=missing_fields,
             env_path=ENV_PATH,
             scaffolded=scaffolded,
-        ) from exc
-    settings._apply_overrides(loaded)
-    _settings_cache = loaded
-    return loaded
+        )
+    else:
+        settings._apply_overrides(loaded)
+        _settings_cache = loaded
+        return loaded
+    # Raise outside the handler so the raw validation error is not retained as
+    # a cause or context by the user-facing exception.
+    raise error from None
 
 
 def clear_settings_cache() -> None:
