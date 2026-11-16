@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from kptncook.config import get_settings
 from kptncook.models import Recipe
+from kptncook.recipe_admission import admit_recipes, RecipeAdmissionError
 from kptncook.repositories import (
     RecipeInDb,
     RecipeRepository,
@@ -91,11 +92,17 @@ def load_repository_recipes(
     invalid_entries: list[InvalidStoredRecipe] = []
     if entries is None:
         entries = list_repository_entries()
-    for position, repo_recipe in enumerate(entries, start=1):
-        if oid is not None and _extract_recipe_id(repo_recipe.data) != oid:
-            continue
-        if uid is not None and repo_recipe.data.get("uid") != uid:
-            continue
+    selected = [
+        (position, entry)
+        for position, entry in enumerate(entries, start=1)
+        if (oid is None or _extract_recipe_id(entry.data) == oid)
+        and (uid is None or entry.data.get("uid") == uid)
+    ]
+    try:
+        admit_recipes([entry.data for _, entry in selected])
+    except RecipeAdmissionError as exc:
+        raise RepositoryServiceError(str(exc)) from None
+    for position, repo_recipe in selected:
         try:
             recipes.append(Recipe.model_validate(repo_recipe.data))
         except ValidationError as exc:

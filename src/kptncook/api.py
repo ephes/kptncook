@@ -9,8 +9,10 @@ import httpx
 
 from .auth import InvalidTokenError, validate_token
 from .config import get_settings
+from .control_json import _unique_object
 from .http_client import BaseHttpClient, DEFAULT_REQUEST_TIMEOUT
 from .repositories import RecipeInDb
+from .recipe_admission import admit_recipes, RecipeAdmissionError
 from .services.discovery import (
     normalize_discovery_list_id,
     normalize_discovery_list_type,
@@ -124,6 +126,29 @@ def _extract_dailies_payload(payload: object) -> list[dict[str, Any]]:
 
 class ResponseShapeError(ValueError):
     """A recipe response envelope was refused with a fixed, value-free message."""
+
+
+def _reject_constant(value: str) -> None:
+    raise ValueError("Nonfinite JSON constant")
+
+
+def _decode_source_json(response: httpx.Response) -> Any:
+    try:
+        return response.json(
+            object_pairs_hook=_unique_object, parse_constant=_reject_constant
+        )
+    except (ValueError, RecursionError):
+        raise ResponseShapeError("KptnCook returned an unreadable response.") from None
+
+
+def _admit_recipe_results(payload: Any) -> list[Any]:
+    if not isinstance(payload, list):
+        raise ResponseShapeError("Invalid recipe response list")
+    try:
+        admit_recipes(payload)
+    except RecipeAdmissionError as exc:
+        raise ResponseShapeError(str(exc)) from None
+    return payload
 
 
 MAX_RESPONSE_WRAPPER_DEPTH = 16
@@ -284,7 +309,7 @@ class KptnCookClient(BaseHttpClient):
         response.raise_for_status()
         recipes = []
         today = date.today()
-        for data in response.json():
+        for data in _admit_recipe_results(_decode_source_json(response)):
             recipes.append(RecipeInDb(date=today, data=data))
         return recipes
 
@@ -321,7 +346,8 @@ class KptnCookClient(BaseHttpClient):
             params["isSubscribed"] = "false"
         response = self.get("/dailies", params=params)
         response.raise_for_status()
-        payload = _extract_dailies_payload(response.json())
+        payload = _extract_dailies_payload(_decode_source_json(response))
+        _admit_recipe_results(payload)
         today = date.today()
         return [RecipeInDb(date=today, data=data) for data in payload]
 
@@ -338,7 +364,7 @@ class KptnCookClient(BaseHttpClient):
         )
         response.raise_for_status()
         try:
-            token_data = response.json()
+            token_data = _decode_source_json(response)
             return validate_token(
                 token_data.get("accessToken") if isinstance(token_data, dict) else None
             )
@@ -352,21 +378,12 @@ class KptnCookClient(BaseHttpClient):
         params = self._standard_query_params()
         response = self.get("/accounts/me/favorites", params=params)
         response.raise_for_status()
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            raise ValueError("Favorites response was not valid JSON") from exc
+        payload = _decode_source_json(response)
         favorites, found, invalid = _extract_favorites_payload(payload)
         if found and not invalid:
             return favorites
         if invalid:
             raise ValueError("Favorites response did not contain a list of favorites.")
-        if isinstance(payload, dict):
-            available_keys = ", ".join(sorted(payload.keys()))
-            raise ValueError(
-                "Favorites response missing favorites list. "
-                f"Response keys: {available_keys}"
-            )
         raise ValueError("Favorites response missing favorites list.")
 
     def get_by_ids(self, ids: list[RecipeIdentifier]) -> list[RecipeInDb]:
@@ -393,10 +410,13 @@ class KptnCookClient(BaseHttpClient):
             timeout=RECIPE_RESOLUTION_TIMEOUT,
         )
         response.raise_for_status()
-        results = response.json()
+        results = _decode_source_json(response)
         if results is None:
             results = []
-        return [RecipeInDb(date=date.today(), data=data) for data in results]
+        return [
+            RecipeInDb(date=date.today(), data=data)
+            for data in _admit_recipe_results(results)
+        ]
 
     def get_discovery_screen(
         self,
@@ -415,7 +435,7 @@ class KptnCookClient(BaseHttpClient):
         params["v"] = str(version)
         response = self.get("discovery/screen", params=params)
         response.raise_for_status()
-        return response.json()
+        return _decode_source_json(response)
 
     def get_discovery_list(
         self,
@@ -442,7 +462,7 @@ class KptnCookClient(BaseHttpClient):
             path = f"discovery/list/{list_type}/{quote(list_id, safe='')}"
         response = self.get(path, params=params)
         response.raise_for_status()
-        return _extract_discovery_list_payload(response.json())
+        return _extract_discovery_list_payload(_decode_source_json(response))
 
     def get_onboarding_recipes(
         self,
@@ -466,7 +486,7 @@ class KptnCookClient(BaseHttpClient):
             json={"tags": tags},
         )
         response.raise_for_status()
-        return _extract_discovery_list_payload(response.json())
+        return _extract_discovery_list_payload(_decode_source_json(response))
 
     def list_popular_ingredients(
         self,
@@ -482,7 +502,7 @@ class KptnCookClient(BaseHttpClient):
         params = self._standard_query_params(lang=lang, store=store)
         response = self.get("ingredients/popular", params=params)
         response.raise_for_status()
-        payload = response.json()
+        payload = _decode_source_json(response)
         if isinstance(payload, list):
             return [item for item in payload if isinstance(item, dict)]
         if isinstance(payload, dict):
@@ -514,7 +534,7 @@ class KptnCookClient(BaseHttpClient):
             json={"ingredientIds": ingredient_ids},
         )
         response.raise_for_status()
-        return _extract_discovery_list_payload(response.json())
+        return _extract_discovery_list_payload(_decode_source_json(response))
 
 
 def looks_like_uid(token: str) -> bool:

@@ -316,6 +316,7 @@ def test_failed_cover_download_logs_neither_url_nor_key(
             return httpx.Response(
                 200,
                 json={
+                    "id": "11111111-1111-4111-8111-111111111111",
                     "slug": "cover-test",
                     "extras": {"source": "kptncook", "kptncook_id": "id"},
                 },

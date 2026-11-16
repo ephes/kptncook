@@ -113,4 +113,4 @@ def test_undecodable_recipe_list_is_user_facing_without_details(monkeypatch, bod
     monkeypatch.setattr(KptnCookClient, "get", lambda self, path, **kw: bad)
     with pytest.raises(UserFacingError) as caught:
         workflows.get_discovery_list_recipes(list_type="latest", list_id=None)
-    assert str(caught.value) == "KptnCook returned an unreadable recipe list response."
+    assert str(caught.value) == "KptnCook returned an unreadable response."

@@ -7,6 +7,19 @@ Unreleased
   native Mealie ZIP import and Tandoor, Paprika and Markdown file exports.
 
 ### Fixes
+- Preserve completed Mealie sync counts and primary failures when closing the
+  client fails; report a separate cleanup warning without rollback or replay.
+- Deduplicate large delete selections with linear membership work, preserving
+  preview order, diagnostics and confirmed-record comparison.
+- Bind archive receipt slugs to fetched recipe slugs and valid server IDs before
+  media writes; preserve imported identity after mismatched step PATCH replies.
+- Retire cached organizer inventories after recipe creation failures so later
+  independent recipes refresh stale IDs, without replaying an ambiguous import.
+- Reject ambiguous source API JSON members and nonfinite constants before token,
+  recipe and discovery interpretation, with private fixed decoder diagnostics.
+- Bound recipe counts, per-recipe nesting, value/key work and text, and batch
+  totals sized to the 64 MiB store limit before source and restored recipe model
+  construction; refuse whole batches on overflow.
 - Bound discovery-screen leaf lists to 4,096 combined raw entries and 262,144
   output text characters before summary construction; refuse the whole screen
   on overflow without partial results.

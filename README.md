@@ -149,6 +149,23 @@ are disabled even for injected HTTPX clients; requesting `follow_redirects=True`
 is refused. Follow an intended Location explicitly through the API client so
 it receives the same origin check.
 
+Every KptnCook JSON response rejects duplicate object members at any depth and
+nonfinite JSON constants before interpreting tokens, identities or discovery
+fields. Decoder errors report only "KptnCook returned an unreadable response."
+and contain no response fragments, member names or keyed URLs.
+
+Before recipe models are built, today's recipes, dailies, resolved search results
+and selected restored recipes must fit a recipe envelope. Each recipe may use 32
+container levels, 262,144 visited values/keys and 8,388,608 text characters
+(including keys and ignored metadata); a real recipe needs about 7,000 values/keys.
+A whole batch may hold 4,096 recipes, 33,554,432 values/keys and 67,108,864 text
+characters; the value/key and text totals cover any store within the 64 MiB
+store limit, while stores with more than 4,096 recipes are refused. Cycles and
+overflow refuse the whole batch; no partial favorites backup or export is
+produced. Selected local lookups apply the envelope to matching records; full
+listings apply it to the complete set. These expanded-model limits are separate
+from the envelope-search limits below.
+
 Favorites and discovery-list envelope searches allow at most 16 dictionary
 levels and 4,096 work units per response (each visited value or supported-key
 probe costs one unit). Traversal is iterative, detects active dictionary cycles
@@ -220,6 +237,11 @@ Mealie recipe slugs are admitted as single route components: nonempty Unicode
 letters/numbers, hyphens and underscores only, percent-encoded when building
 requests. Slash, backslash, dot segments, percent escapes, query/fragment
 separators and controls are refused before authenticated follow-up requests.
+An archive receipt must be a valid slug, and its detail reply must carry that
+exact slug and a valid server recipe UUID before any media request. Matching
+source extras alone do not establish route identity. Step-image PATCH replies
+must retain the imported slug, UUID and identity extras; a mismatched reply keeps
+the known core import result and emits a media warning without retry or deletion.
 Step photos are uploaded only when the imported instructions have exactly the
 same unique texts in the same order as the source. Missing, inserted, reordered
 or repeated texts omit all step photos with a bounded warning, retaining the
@@ -243,6 +265,14 @@ The summary means:
   the reason (HTTP status, connection error, timeout or local processing
   error). Other recipes are still synced, and the command exits with status 1.
   Name-collision errors are failures, not successful identity matches.
+
+Client cleanup is attempted once even after a failed or interrupted sync. A close
+failure preserves the primary error or the completed result's created/failed
+counts. A completed result carries a separate `cleanup_warning`; the CLI displays
+it alongside those counts and exits with status 1. The count-only library wrapper
+also reports the warning with completed counts. Cleanup failure does not undo
+imports or trigger replay; reconcile unknown outcomes through the next sync's
+identity inventory. Cleanup diagnostics omit exception messages and URLs.
 
 Cooperating sync processes on this machine hold one advisory lock across the
 complete inventory and create sequence. The lock covers all accounts on the same
@@ -269,7 +299,10 @@ names for foods/units). Ambiguous or absent matches, generic conflicts, legacy
 Units, foods and tags are listed once per sync, not once per recipe. The lookup
 is built only from a complete inventory and then updated with organizers this
 sync created (or found through the conflict refresh above); each new sync,
-login or token change reads Mealie again. If several existing organizers with
+login or token change reads Mealie again. A recipe creation failure retires the
+cached organizer inventories: the next independent recipe rereads them, allowing
+remotely removed/recreated organizers to recover. The failed recipe/import is
+never automatically replayed. If several existing organizers with
 different IDs match one requested name (for example tags `Vegan` and `vegan`),
 that recipe fails before any unit, food, tag or recipe is created, naming the
 ambiguous organizer. Merge or rename the duplicates in Mealie, then sync again;
@@ -561,6 +594,9 @@ cleaned up on failure; a later main-write failure retains the completed backup.
 ## Delete recipes
 
 Use indices from `kptncook list-recipes` or pass one or more `--oid` values.
+Previews deduplicate IDs with linear membership work, retaining first-occurrence
+order across indexes followed by explicit OIDs. Repeated IDs do not change
+missing-ID or invalid-index reporting.
 
 ```shell
 $ kptncook delete-recipes 0 2

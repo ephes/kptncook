@@ -78,7 +78,7 @@ def test_wrapper_refusal_prevents_backup_and_resolution(monkeypatch, kind):
             def raise_for_status(self):
                 pass
 
-            def json(self):
+            def json(self, **kwargs):
                 return payload
 
         monkeypatch.setattr(client, "get", lambda *a, **kw: Reply())
