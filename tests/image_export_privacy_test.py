@@ -8,6 +8,7 @@ import pytest
 import yaml
 
 from kptncook.config import get_settings
+from kptncook.exporter_utils import BatchExportError
 from kptncook.markdown_exporter import MarkdownExporter
 from kptncook.models import Image, Recipe
 
@@ -138,7 +139,7 @@ def test_failed_asset_write_cleans_only_owned_output(minimal, monkeypatch):
         return handle
 
     monkeypatch.setattr(Path, "open", open_asset)
-    with pytest.raises(OSError, match="Synthetic write failure"):
+    with pytest.raises(BatchExportError, match="OSError"):
         MarkdownExporter().export([Recipe.model_validate(minimal)])
     assert attempted
     assert not list(output.glob("*.md"))

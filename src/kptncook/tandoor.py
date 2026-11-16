@@ -14,6 +14,7 @@ import httpx
 
 from kptncook.config import get_settings
 from kptncook.exporter_utils import (
+    BatchExportError,
     asciify_string,
     bounded_export_filename,
     get_cover,
@@ -21,6 +22,7 @@ from kptncook.exporter_utils import (
     move_to_free_target,
     write_zip,
     validate_export_id,
+    validate_export_batch_size,
     ZipContent,
 )
 from kptncook.image_download import download_image
@@ -40,12 +42,21 @@ logger = logging.getLogger(__name__)
 
 class TandoorExporter:
     def export(self, recipes: list[Recipe]) -> list[str]:
+        validate_export_batch_size(len(recipes))
         for recipe in recipes:
             recipe.validate_scaled_quantities()
             validate_export_id(recipe.id.oid)
         filenames = []
-        for recipe in recipes:
-            filenames.append(self.export_recipe(recipe=recipe))
+        for index, recipe in enumerate(recipes):
+            try:
+                filenames.append(self.export_recipe(recipe=recipe))
+            except Exception as exc:
+                raise BatchExportError(
+                    (Path.cwd() / name for name in filenames),
+                    recipe.id.oid,
+                    len(recipes) - index - 1,
+                    exc,
+                ) from exc
         return filenames
 
     def export_recipe(self, recipe: Recipe) -> str:

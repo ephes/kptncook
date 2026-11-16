@@ -7,6 +7,9 @@ Unreleased
   native Mealie ZIP import and Tandoor, Paprika and Markdown file exports.
 
 ### Fixes
+- Retain Tandoor and Markdown partial-batch receipts in library errors and CLI
+  diagnostics: completed notes/archives/assets, failed recipe, untouched count
+  and separately identified durability-uncertain current publications.
 - Sync the credential file's parent with the shared portability policy. Report
   uncertain durability after publication in setup, token refresh and first-run
   scaffolding, preserving complete private credentials without exposing values.

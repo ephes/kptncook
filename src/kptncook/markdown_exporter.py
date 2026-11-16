@@ -25,11 +25,13 @@ from .config import get_settings
 from .durability import fsync_directory
 from .http_errors import UserFacingError
 from .exporter_utils import (
+    BatchExportError,
     ExportPublicationUncertain,
     get_cover,
     move_to_free_target,
     replace_timers_in_step,
     validate_export_id,
+    validate_export_batch_size,
 )
 from .image_download import download_image
 from .image_origin import ImageOriginError
@@ -130,10 +132,12 @@ class MarkdownExporter:
 
     def export(self, recipes: Iterable[Recipe]) -> list[Path]:
         recipes = list(recipes)
+        validate_export_batch_size(len(recipes))
         for recipe in recipes:
             recipe.validate_scaled_quantities(self.servings_for(recipe))
             validate_export_id(recipe.id.oid)
         written: list[Path] = []
+        written_assets: list[Path] = []
 
         out_dir = get_settings().root / "export_md"
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -144,56 +148,73 @@ class MarkdownExporter:
                 "Could not sync the Markdown export directory entry."
             ) from exc
 
-        for recipe in recipes:
-            title = (
-                localized_fallback(
-                    recipe.localized_title, language=get_settings().kptncook_lang
-                )
-                or "recipe"
-            )
-            base = sanitize_filename(title)
-            image_bytes = self._download_recipe_image(recipe)
+        for index, recipe in enumerate(recipes):
             asset_path: Path | None = None
-            with tempfile.TemporaryDirectory(dir=out_dir, prefix=".kptncook-") as temp:
-                staging = Path(temp)
-                try:
-                    if image_bytes is not None:
-                        staged_asset = staging / "image.jpg"
-                        with staged_asset.open("xb") as asset:
-                            asset.write(image_bytes)
-                        assets = out_dir / "assets"
-                        assets.mkdir(exist_ok=True)
-                        try:
-                            # Persist the assets directory's name before publishing
-                            # its contents and then the referring note.
-                            fsync_directory(out_dir)
-                        except OSError as exc:
-                            raise UserFacingError(
-                                "Could not sync the Markdown assets directory entry."
-                            ) from exc
-                        asset_path = move_to_free_target(
-                            staged_asset, assets, uuid.uuid4().hex, ".jpg"
+            try:
+                title = (
+                    localized_fallback(
+                        recipe.localized_title, language=get_settings().kptncook_lang
+                    )
+                    or "recipe"
+                )
+                base = sanitize_filename(title)
+                image_bytes = self._download_recipe_image(recipe)
+                with tempfile.TemporaryDirectory(
+                    dir=out_dir, prefix=".kptncook-"
+                ) as temp:
+                    staging = Path(temp)
+                    try:
+                        if image_bytes is not None:
+                            staged_asset = staging / "image.jpg"
+                            with staged_asset.open("xb") as asset:
+                                asset.write(image_bytes)
+                            assets = out_dir / "assets"
+                            assets.mkdir(exist_ok=True)
+                            try:
+                                # Persist the assets directory's name before publishing
+                                # its contents and then the referring note.
+                                fsync_directory(out_dir)
+                            except OSError as exc:
+                                raise UserFacingError(
+                                    "Could not sync the Markdown assets directory entry."
+                                ) from exc
+                            asset_path = move_to_free_target(
+                                staged_asset, assets, uuid.uuid4().hex, ".jpg"
+                            )
+                        image_path = (
+                            asset_path.relative_to(out_dir).as_posix()
+                            if asset_path
+                            else None
                         )
-                    image_path = (
-                        asset_path.relative_to(out_dir).as_posix()
-                        if asset_path
-                        else None
-                    )
-                    content = self.render_recipe(recipe, image_path=image_path)
-                    staged_note = staging / "note.md"
-                    staged_note.write_text(content, encoding="utf-8")
-                    out_path = move_to_free_target(
-                        staged_note, out_dir, base, ".md", recipe.id.oid
-                    )
-                except ExportPublicationUncertain:
-                    # The asset or its referring note is already visible. Keep
-                    # both, even when the caller cannot claim durable success.
-                    raise
-                except BaseException:
-                    if asset_path is not None:
-                        asset_path.unlink(missing_ok=True)
-                    raise
-            written.append(out_path)
+                        content = self.render_recipe(recipe, image_path=image_path)
+                        staged_note = staging / "note.md"
+                        staged_note.write_text(content, encoding="utf-8")
+                        out_path = move_to_free_target(
+                            staged_note, out_dir, base, ".md", recipe.id.oid
+                        )
+                    except ExportPublicationUncertain:
+                        # The asset or its referring note is already visible. Keep
+                        # both, even when the caller cannot claim durable success.
+                        raise
+                    except BaseException:
+                        if asset_path is not None:
+                            asset_path.unlink(missing_ok=True)
+                        raise
+                written.append(out_path)
+                if asset_path is not None:
+                    written_assets.append(asset_path)
+            except Exception as exc:
+                raise BatchExportError(
+                    written,
+                    recipe.id.oid,
+                    len(recipes) - index - 1,
+                    exc,
+                    completed_assets=written_assets,
+                    retained_assets=(asset_path,)
+                    if asset_path is not None
+                    and isinstance(exc, ExportPublicationUncertain)
+                    else (),
+                ) from exc
         return written
 
     def _download_recipe_image(self, recipe: Recipe) -> bytes | None:

@@ -473,6 +473,14 @@ with an error naming the directory and publishes no partial final file.
 Failures before note publication remove attempt-owned assets when safe. A failure
 or interruption during post-link directory sync reports the published path with
 uncertain durability, retaining all visible files and assets a visible note references.
+Tandoor and Markdown stop at the first failed recipe. Their CLI errors list
+completed exports and Markdown assets, the failing recipe ID, and the count of
+untouched recipes. Visible current files with uncertain durability and retained
+current assets are listed separately; earlier completed exports are never removed.
+Library callers receive `BatchExportError` with `completed_paths`,
+`completed_assets`, `failed_recipe_id`, `remaining_count`, `uncertain_paths` and
+`retained_assets`; successful return types are unchanged. Counts exclude the
+failing recipe. These receipts are bounded by the 4,096-recipe batch admission.
 Inspect those files before retrying; a retry uses a free filename. Forced
 termination may leave hidden `.kptncook-*` staging or complete unreferenced assets.
 Final names contain complete files; power-loss durability depends on filesystem

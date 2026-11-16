@@ -16,6 +16,7 @@ from pathvalidate import validate_filename, ValidationError as FilenameValidatio
 from kptncook.durability import fsync_directory
 from kptncook.http_errors import UserFacingError
 from kptncook.models import Image, RecipeStep, StepTimer, localized_fallback
+from kptncook.recipe_admission import MAX_RECIPES
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +170,57 @@ class ExportPublicationUncertain(UserFacingError):
             f"Export published as {target}; durability is uncertain. "
             "Inspect the visible files before retrying; no published files were removed."
         )
+
+
+def validate_export_batch_size(count: int) -> None:
+    if count > MAX_RECIPES:
+        raise UserFacingError(f"Export batch exceeds {MAX_RECIPES} recipes")
+
+
+class BatchExportError(UserFacingError):
+    """An aborted batch, with receipts separated by publication state.
+
+    Paths are bounded by the admitted batch (at most 4,096 recipes). Successful
+    exporter return types remain unchanged. Never infer completion from a file
+    merely being visible: post-link directory sync can still have failed.
+    """
+
+    def __init__(
+        self,
+        completed_paths: Iterable[Path],
+        failed_recipe_id: str,
+        remaining_count: int,
+        cause: Exception,
+        *,
+        completed_assets: Iterable[Path] = (),
+        retained_assets: Iterable[Path] = (),
+    ):
+        self.completed_paths = tuple(completed_paths)
+        self.completed_assets = tuple(completed_assets)
+        self.failed_recipe_id = failed_recipe_id
+        self.remaining_count = remaining_count
+        self.retained_assets = tuple(retained_assets)
+        self.uncertain_paths = (
+            (cause.target,) if isinstance(cause, ExportPublicationUncertain) else ()
+        )
+        reason = (
+            str(cause)
+            if isinstance(cause, UserFacingError)
+            and not isinstance(cause, ExportPublicationUncertain)
+            else type(cause).__name__
+        )
+        lines = [f"Export stopped at recipe {failed_recipe_id}: {reason}."]
+        for label, paths in (
+            ("Completed export", self.completed_paths),
+            ("Completed asset", self.completed_assets),
+            ("Retained current asset", self.retained_assets),
+            ("Export published; durability is uncertain", self.uncertain_paths),
+        ):
+            lines.extend(f"{label}: {path}" for path in paths)
+        lines.append(
+            f"Untouched recipes: {remaining_count}. Inspect receipts before retrying."
+        )
+        super().__init__("\n".join(lines))
 
 
 MAX_EXPORT_FILENAME_BYTES = 240
