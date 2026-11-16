@@ -176,22 +176,21 @@ def get_settings() -> Settings:
     try:
         loaded = Settings()  # type: ignore
     except ValidationError as exc:
-        missing_fields = _missing_required_fields(exc)
-        scaffolded = False
-        if "kptncook_api_key" in missing_fields:
-            scaffolded = scaffold_env_file(ENV_PATH)
+        # Keep only value-free data from the raw error. Anything raised while
+        # the handler is active (including scaffold I/O failures) would retain
+        # the raw validation error, with its rejected inputs, as context.
         error = SettingsError(
             exc,
-            missing_fields=missing_fields,
+            missing_fields=_missing_required_fields(exc),
             env_path=ENV_PATH,
-            scaffolded=scaffolded,
+            scaffolded=False,
         )
     else:
         settings._apply_overrides(loaded)
         _settings_cache = loaded
         return loaded
-    # Raise outside the handler so the raw validation error is not retained as
-    # a cause or context by the user-facing exception.
+    if "kptncook_api_key" in error.missing_fields:
+        error.scaffolded = scaffold_env_file(ENV_PATH)
     raise error from None
 
 

@@ -81,3 +81,33 @@ def test_missing_api_key_keeps_setup_guidance(monkeypatch, tmp_path, capsys):
     output = capsys.readouterr().out
     assert "KPTNCOOK_API_KEY=your-api-key-here" in output
     assert "kptncook setup" in output
+
+
+def test_scaffold_publication_failure_does_not_retain_validation_error(
+    monkeypatch, tmp_path
+):
+    from kptncook import env
+
+    monkeypatch.delenv("KPTNCOOK_API_KEY")
+    monkeypatch.setenv("MEALIE_URL", BAD_URL)
+    monkeypatch.setattr(config, "ENV_PATH", tmp_path / ".env")
+
+    def fail_sync(directory):
+        raise OSError("synthetic directory sync failure")
+
+    monkeypatch.setattr(env, "fsync_directory", fail_sync)
+    with pytest.raises(env.ConfigurationPublishedError) as caught:
+        config.get_settings()
+    chained = []
+    current: BaseException | None = caught.value
+    while current is not None:
+        chained.append(current)
+        current = current.__cause__ or current.__context__
+    assert not any(isinstance(item, ValidationError) for item in chained)
+    assert SENTINEL not in "".join(traceback.format_exception(caught.value))
+    frame_locals = []
+    tb = caught.value.__traceback__
+    while tb is not None:
+        frame_locals.extend(tb.tb_frame.f_locals.values())
+        tb = tb.tb_next
+    assert not any(isinstance(value, ValidationError) for value in frame_locals)
