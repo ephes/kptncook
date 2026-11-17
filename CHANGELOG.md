@@ -1,6 +1,14 @@
 Unreleased
 ==========
 
+### Security
+- Report failed KptnCook requests in `kptncook-today`, `save-todays-recipes` and
+  `sync` as short status/category errors instead of tracebacks that printed the
+  request URL with the `kptnkey`; the CLI boundary also turns any other
+  unhandled HTTP error into a value-free message. Disable traceback locals for
+  both Typer apps, since Typer up to at least 0.16 shows them by default, and
+  require `typer >= 0.6`, the first release that accepts that setting.
+
 0.0.41 - 2026-11-17
 ===================
 

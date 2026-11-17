@@ -38,7 +38,8 @@ from kptncook.password_manager import get_credentials
 DEFAULT_API_URL = "https://mobile.kptncook.com"
 __all__ = ["ENV_PATH", "ENV_TEMPLATE", "cli", "setup"]
 
-cli = typer.Typer()
+# Never render traceback locals: they hold the password and tokens here.
+cli = typer.Typer(pretty_exceptions_show_locals=False)
 
 
 def _fetch_access_token(api_key: str, username: str, password: str) -> str:
