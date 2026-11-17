@@ -8,6 +8,7 @@ import pytest
 import yaml
 
 from kptncook.config import get_settings
+from kptncook.exporter_utils import BatchExportError
 from kptncook.markdown_exporter import MarkdownExporter
 from kptncook.models import Image, Recipe
 
@@ -61,7 +62,7 @@ def test_markdown_images_are_local_private_and_optional(
     recipe = Recipe.model_validate(minimal)
     requests = []
 
-    def download(url):
+    def download(url, **kwargs):
         requests.append(url)
         assert dict(parse_qsl(urlsplit(url).query))["kptnkey"] == key
         if failure == "404":
@@ -106,7 +107,7 @@ def test_render_without_assets_has_no_remote_image(minimal):
 
 def test_failed_asset_write_cleans_only_owned_output(minimal, monkeypatch):
     monkeypatch.setattr(
-        "kptncook.markdown_exporter.download_image", lambda url: b"image"
+        "kptncook.markdown_exporter.download_image", lambda url, **kw: b"image"
     )
     output = get_settings().root / "export_md"
     assets = output / "assets"
@@ -138,7 +139,7 @@ def test_failed_asset_write_cleans_only_owned_output(minimal, monkeypatch):
         return handle
 
     monkeypatch.setattr(Path, "open", open_asset)
-    with pytest.raises(OSError, match="Synthetic write failure"):
+    with pytest.raises(BatchExportError, match="OSError"):
         MarkdownExporter().export([Recipe.model_validate(minimal)])
     assert attempted
     assert not list(output.glob("*.md"))

@@ -41,6 +41,7 @@ def test_export_recipe_writes_zip_with_image(
     httpx_get.assert_called_once_with(
         "https://example.com/cover.jpg",
         follow_redirects=True,
+        budget=mocker.ANY,
     )
 
 

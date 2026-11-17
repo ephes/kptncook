@@ -14,13 +14,17 @@ import httpx
 
 from kptncook.config import get_settings
 from kptncook.exporter_utils import (
+    BatchExportError,
+    ExportBudget,
     asciify_string,
     bounded_export_filename,
     get_cover,
+    ingredient_name,
     get_step_text,
     move_to_free_target,
     write_zip,
     validate_export_id,
+    validate_export_batch_size,
     ZipContent,
 )
 from kptncook.image_download import download_image
@@ -40,19 +44,32 @@ logger = logging.getLogger(__name__)
 
 class TandoorExporter:
     def export(self, recipes: list[Recipe]) -> list[str]:
+        validate_export_batch_size(len(recipes))
         for recipe in recipes:
             recipe.validate_scaled_quantities()
             validate_export_id(recipe.id.oid)
+        budget = ExportBudget()
         filenames = []
-        for recipe in recipes:
-            filenames.append(self.export_recipe(recipe=recipe))
+        for index, recipe in enumerate(recipes):
+            try:
+                filenames.append(self.export_recipe(recipe=recipe, budget=budget))
+            except Exception as exc:
+                raise BatchExportError(
+                    (Path.cwd() / name for name in filenames),
+                    recipe.id.oid,
+                    len(recipes) - index - 1,
+                    exc,
+                ) from exc
         return filenames
 
-    def export_recipe(self, recipe: Recipe) -> str:
+    def export_recipe(
+        self, recipe: Recipe, *, budget: ExportBudget | None = None
+    ) -> str:
+        budget = budget or ExportBudget()
         validate_export_id(recipe.id.oid)
         filename = self.get_export_filename(recipe=recipe)
         payload = self.get_recipe_payload(recipe=recipe)
-        image_bytes = self.get_cover_image_bytes(recipe=recipe)
+        image_bytes = self.get_cover_image_bytes(recipe=recipe, budget=budget)
         with tempfile.TemporaryDirectory() as tmp_dir:
             zip_path = Path(tmp_dir) / filename
             entries: list[tuple[str, ZipContent]] = [
@@ -63,13 +80,14 @@ class TandoorExporter:
             ]
             if image_bytes is not None:
                 entries.append(("image.jpg", image_bytes))
-            write_zip(zip_path, entries)
+            write_zip(zip_path, entries, budget=budget)
             target = move_to_free_target(
                 zip_path,
                 Path.cwd(),
                 stem=Path(filename).stem,
                 extension=".zip",
                 disambiguator=recipe.id.oid,
+                budget=budget,
             )
         return target.name
 
@@ -87,7 +105,9 @@ class TandoorExporter:
         )
         return bounded_export_filename(asciify_string(title), ".zip")
 
-    def get_cover_image_bytes(self, recipe: Recipe) -> bytes | None:
+    def get_cover_image_bytes(
+        self, recipe: Recipe, *, budget: ExportBudget | None = None
+    ) -> bytes | None:
         cover = get_cover(image_list=recipe.image_list)
         if cover is None:
             return None
@@ -95,7 +115,7 @@ class TandoorExporter:
         if cover_url is None:
             return None
         try:
-            return download_image(cover_url, follow_redirects=True)
+            return download_image(cover_url, follow_redirects=True, budget=budget)
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
                 logger.info(
@@ -201,28 +221,7 @@ class TandoorExporter:
         return {key: value for key, value in payload.items() if value is not None}
 
     def get_step_ingredient_name(self, ingredient: StepIngredient) -> str | None:
-        details = ingredient.ingredient
-        if details is None:
-            return None
-        if details.uncountable_title:
-            title = localized_fallback(
-                details.uncountable_title, language=get_settings().kptncook_lang
-            )
-            if title:
-                return title
-        if details.localized_title:
-            title = localized_fallback(
-                details.localized_title, language=get_settings().kptncook_lang
-            )
-            if title:
-                return title
-        if details.number_title:
-            title = localized_fallback(
-                details.number_title, language=get_settings().kptncook_lang
-            )
-            if title:
-                return title
-        return None
+        return ingredient_name(ingredient.ingredient, get_settings().kptncook_lang)
 
     def get_step_unit_payload(
         self, unit: StepIngredientUnit | None
@@ -270,16 +269,7 @@ class TandoorExporter:
         return {key: value for key, value in payload.items() if value is not None}
 
     def get_ingredient_name(self, ingredient: Ingredient) -> str | None:
-        details = ingredient.ingredient
-        if details.uncountable_title is not None:
-            title = localized_fallback(
-                details.uncountable_title, language=get_settings().kptncook_lang
-            )
-            if title:
-                return title
-        return localized_fallback(
-            details.localized_title, language=get_settings().kptncook_lang
-        )
+        return ingredient_name(ingredient.ingredient, get_settings().kptncook_lang)
 
     def get_unit_payload(self, measure: str | None) -> dict[str, str] | None:
         if measure is None:

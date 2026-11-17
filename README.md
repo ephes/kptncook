@@ -441,7 +441,12 @@ Markdown is final cookbook text, so its serving count is configurable:
 `kptncook export-recipes-to-markdown --servings 4` (or `-s 4`) scales standard
 recipes to four servings instead of two. Recipes with a fixed portion count
 keep that count. The `servings` front matter shows the count the quantities
-were scaled to.
+were scaled to. Paprika and Markdown retain all admitted scaled decimal places
+(up to six), including tiny nonzero kg/l quantities, without exponent notation.
+Zero quantities remain omitted from ingredient text. All three file exporters
+resolve food names from the first nonempty uncountable, localized or number
+title, using the language fallback within each candidate; literal food-name
+characters remain unchanged.
 
 Existing Markdown files, including manual notes, are never overwritten:
 repeated exports create new files. If a title is taken,
@@ -459,8 +464,13 @@ The command output lists the names that were actually written.
 Title-derived names are limited to 240 UTF-8 bytes, including extension and any
 recipe ID/counter suffix. The display title stem is shortened on character
 boundaries after transliteration, when applicable; suffixes remain intact and
-every collision still selects a new name. Long or localized titles stay complete
+collision attempts retain that byte limit. Long or localized titles stay complete
 inside the recipe JSON and Markdown's quoted `title` front matter.
+Each publication tries at most 16 sequential names, then four names with a random
+16-hex identity suffix (20 link attempts total). If all collide, export stops with
+an error asking you to move existing exports or choose another location. Existing
+files remain unchanged; publication and directory-sync rules also cover fallback
+names.
 Archives and Markdown notes are fully written and flushed in sibling staging
 before atomic no-clobber publication. Markdown assets are published completely
 and their directory synced before the note that references them. Directory entries
@@ -473,6 +483,14 @@ with an error naming the directory and publishes no partial final file.
 Failures before note publication remove attempt-owned assets when safe. A failure
 or interruption during post-link directory sync reports the published path with
 uncertain durability, retaining all visible files and assets a visible note references.
+Tandoor and Markdown stop at the first failed recipe. Their CLI errors list
+completed exports and Markdown assets, the failing recipe ID, and the count of
+untouched recipes. Visible current files with uncertain durability and retained
+current assets are listed separately; earlier completed exports are never removed.
+Library callers receive `BatchExportError` with `completed_paths`,
+`completed_assets`, `failed_recipe_id`, `remaining_count`, `uncertain_paths` and
+`retained_assets`; successful return types are unchanged. Counts exclude the
+failing recipe. These receipts are bounded by the 4,096-recipe batch admission.
 Inspect those files before retrying; a retry uses a free filename. Forced
 termination may leave hidden `.kptncook-*` staging or complete unreferenced assets.
 Final names contain complete files; power-loss durability depends on filesystem
@@ -481,6 +499,25 @@ Paprika serializes and compresses one recipe at a time, so cover/JSON memory
 does not grow with the number of exported recipes. Its small single-recipe and
 bulk serialization helpers remain available to library callers; the bulk helper
 still materializes its results when called directly.
+Each `export()` batch has a cumulative 100 MiB asset allowance and a 256 MiB
+output-work allowance, in addition to the 10 MiB per-image limit and 4,096-recipe
+count ceiling. Downloads charge each received chunk before retaining it, including
+chunks from failed/oversized optional images; at most one transport chunk can be
+received to detect overflow. Exhaustion stops the batch rather than omitting more
+covers. Output charges data fed into compression, actual gzip/ZIP writes, staged
+Markdown notes/assets and sibling publication copies before each write. Header
+rewrites count again; hard links add no data bytes. These are cumulative work
+ceilings, not final archive-size estimates; temporary copies consume allowance
+even when later deleted. Allowances reset for each export call.
+A limit error preserves earlier completed Tandoor/Markdown files and reports the
+same partial-batch receipts above. Paprika publishes one archive for the whole
+batch: staged recipes are not completed exports, and a limit refusal before its
+final link leaves all recipes unpublished. `BatchExportError.unpublished_count`
+reports recipes without a completed export (including any uncertain current
+publication), separately from the untouched count; final Paprika assembly errors
+use `archive` as the failing identity. Split large batches into smaller selections
+and inspect receipts before retrying. Direct rendering/serialization helpers do
+not constitute a file-export batch; their existing return types are unchanged.
 The library `PaprikaExporter.save_recipes` helper builds its archive from exactly
 the requested IDs, including an empty archive for an empty request. Reusing its
 work directory never includes stale or unrelated `.paprikarecipe` files; those
