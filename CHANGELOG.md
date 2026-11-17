@@ -1,6 +1,9 @@
 Unreleased
 ==========
 
+0.0.42 - 2026-11-17
+===================
+
 ### Security
 - Report failed KptnCook requests in `kptncook-today`, `save-todays-recipes` and
   `sync` as short status/category errors instead of tracebacks that printed the
