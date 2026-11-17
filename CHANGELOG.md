@@ -1,6 +1,9 @@
 Unreleased
 ==========
 
+0.0.41 - 2026-11-17
+===================
+
 ### Tests
 - Add an offline composed export journey covering reordered ingredient groups,
   localized labels, duplicate IDs, serving counts and step associations through
