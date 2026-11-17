@@ -202,7 +202,17 @@ def _recipe_list_shape_error(exc: ValueError) -> UserFacingError:
 
 def get_today_recipes() -> list[RecipeInDb]:
     with closing(_kptncook_client()) as client:
-        return client.list_today()
+        try:
+            return client.list_today()
+        except httpx.HTTPStatusError as exc:
+            # The exception text names the request URL, which carries the kptnkey.
+            raise UserFacingError(
+                format_http_status_error(
+                    exc.response, action="fetching today's recipes"
+                )
+            ) from None
+        except httpx.HTTPError as exc:
+            raise UserFacingError(format_request_error(exc)) from None
 
 
 def save_todays_recipes() -> int:

@@ -5,6 +5,7 @@ from collections.abc import Callable
 from typing import NoReturn, Optional, ParamSpec, TypeVar
 
 import click
+import httpx
 import typer
 from rich import print as rprint
 from rich.markup import escape
@@ -14,6 +15,7 @@ from typer.main import get_command
 from kptncook.api import ResponseShapeError
 from kptncook.config import SettingsError, get_settings, render_settings_error
 from kptncook.env import ENV_PATH, ConfigurationPublishedError, upsert_env_value
+from kptncook.http_errors import format_http_status_error, format_request_error
 from kptncook.markdown_exporter import DEFAULT_SERVINGS as DEFAULT_MARKDOWN_SERVINGS
 from kptncook.models import localized_fallback
 from kptncook.services.repository import InvalidStoredRecipe, RepositoryServiceError
@@ -50,7 +52,9 @@ from kptncook.services.workflows import (
 )
 from kptncook.setup import setup as setup_command
 
-app = typer.Typer()
+# Typer releases up to at least 0.16 render frame locals in tracebacks by
+# default; locals can hold credentials, tokens and keyed URLs.
+app = typer.Typer(pretty_exceptions_show_locals=False)
 
 # Expose the standalone `kptncook-setup` entry point as a subcommand so guided
 # setup is reachable through the Docker entrypoint (`docker run ... kptncook
@@ -75,6 +79,14 @@ def _run_or_exit(func: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
         _exit_with_error(str(exc))
     except (UserFacingError, RepositoryServiceError, ResponseShapeError) as exc:
         _exit_with_error(str(exc))
+    except httpx.HTTPStatusError as exc:
+        # Last line of defense: httpx names the request URL (with the kptnkey)
+        # in its exception text, so report only the status.
+        _exit_with_error(
+            format_http_status_error(exc.response, action="contacting the server")
+        )
+    except httpx.HTTPError as exc:
+        _exit_with_error(format_request_error(exc))
 
 
 def _print_repository_warnings(invalid_entries: list[InvalidStoredRecipe]) -> None:

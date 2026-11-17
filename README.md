@@ -231,7 +231,11 @@ and counts;
 cover and nested step image URLs (including API keys) are never logged there.
 With logging enabled, the request lines of httpx and httpcore's DEBUG trace
 show `[REDACTED]` in place of API keys, tokens, URL credentials and secret
-header values.
+header values. A failed KptnCook request (for example an HTTP 500 during
+`kptncook-today`, `save-todays-recipes` or `sync`) ends with a short
+`HTTP <status> while ...` or `Request failed: <category>` error, never with a
+traceback naming the keyed request URL, and tracebacks never show local
+variables on any supported Typer release (`typer >= 0.6`).
 
 Mealie recipe slugs are admitted as single route components: nonempty Unicode
 letters/numbers, hyphens and underscores only, percent-encoded when building
