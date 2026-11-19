@@ -7,6 +7,8 @@ Unreleased
 - Stop consuming a Markdown recipe iterable as soon as it exceeds the batch
   count limit, before creating export directories or downloading images.
 - Use the recipe cover in Markdown exports when the final step has no image URL.
+- Sync the Markdown asset directory after rolling back an asset for a failed
+  note and warn about uncertain cleanup while preserving the note failure.
 
 0.0.42 - 2026-11-17
 ===================

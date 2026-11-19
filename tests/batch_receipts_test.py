@@ -8,6 +8,7 @@ import pytest
 from typer.testing import CliRunner
 
 from kptncook.config import get_settings
+from kptncook.exporter_utils import BatchExportError
 from kptncook.http_errors import UserFacingError
 from kptncook.markdown_exporter import MarkdownExporter
 from kptncook.models import Recipe
@@ -138,3 +139,47 @@ def test_markdown_batch_receipts(recipes, monkeypatch, failure):
         assert list((out / "assets").iterdir()) == [asset_targets[0]]
     assert not (out / "Recipe 2.md").exists()
     assert not list(out.glob(".kptncook-*"))
+
+
+@pytest.mark.parametrize("fail_rollback_sync", [False, True])
+def test_markdown_syncs_asset_removal_after_note_failure(
+    recipes, monkeypatch, caplog, fail_rollback_sync
+):
+    exporter = MarkdownExporter()
+    monkeypatch.setattr(
+        exporter, "_download_recipe_image", lambda recipe, **kw: b"synthetic"
+    )
+    out = get_settings().root / "export_md"
+    assets = out / "assets"
+    synced = []
+    note_error = OSError("synthetic note staging failure")
+
+    def sync(directory):
+        if directory == assets:
+            synced.append(list(assets.glob("*.jpg")))
+            if fail_rollback_sync and len(synced) == 2:
+                raise OSError("synthetic asset rollback sync failure")
+
+    write_text = Path.write_text
+
+    def fail_note(path, *args, **kwargs):
+        if path.name != "note.md":
+            return write_text(path, *args, **kwargs)
+        assert len(synced) == 1
+        assert len(synced[0]) == 1
+        assert synced[0][0].is_file()
+        raise note_error
+
+    monkeypatch.setattr("kptncook.exporter_utils.fsync_directory", sync)
+    monkeypatch.setattr("kptncook.markdown_exporter.fsync_directory", sync)
+    monkeypatch.setattr(Path, "write_text", fail_note)
+    with pytest.raises(BatchExportError) as caught:
+        exporter.export(recipes[:1])
+    assert caught.value.__cause__ is note_error
+    assert len(synced) == 2
+    assert synced[1] == []
+    assert list(out.iterdir()) == [assets]
+    assert list(assets.iterdir()) == []
+    assert ("Markdown asset cleanup is uncertain" in caplog.text) == fail_rollback_sync
+    if fail_rollback_sync:
+        assert str(synced[0][0]) in caplog.text

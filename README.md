@@ -486,9 +486,12 @@ directory-sync operations retain the portability fallback; real I/O errors are
 reported. The destination filesystem must support
 hard links (FAT/exFAT and some network mounts do not); otherwise export stops
 with an error naming the directory and publishes no partial final file.
-Failures before note publication remove attempt-owned assets when safe. A failure
-or interruption during post-link directory sync reports the published path with
-uncertain durability, retaining all visible files and assets a visible note references.
+Failures before note publication remove attempt-owned assets when safe and sync
+the asset directory after removal. If either operation raises an I/O error,
+the export logs uncertain asset cleanup and reports the original note failure.
+A failure or interruption during post-link directory sync reports the published
+path with uncertain durability, retaining all visible files and assets a
+visible note references.
 Tandoor and Markdown stop at the first failed recipe. Their CLI errors list
 completed exports and Markdown assets, the failing recipe ID, and the count of
 untouched recipes. Visible current files with uncertain durability and retained

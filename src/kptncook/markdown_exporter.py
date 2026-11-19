@@ -214,7 +214,14 @@ class MarkdownExporter:
                         raise
                     except BaseException:
                         if asset_path is not None:
-                            asset_path.unlink(missing_ok=True)
+                            try:
+                                asset_path.unlink(missing_ok=True)
+                                fsync_directory(asset_path.parent)
+                            except OSError:
+                                logger.warning(
+                                    "Markdown asset cleanup is uncertain for %s",
+                                    asset_path,
+                                )
                         raise
                 written.append(out_path)
                 if asset_path is not None:
