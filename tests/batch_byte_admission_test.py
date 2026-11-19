@@ -1,5 +1,7 @@
 """Real offline download and publication paths share cumulative allowances."""
 
+import zipfile
+
 import httpx
 import pytest
 
@@ -174,3 +176,29 @@ def test_cumulative_output_retains_first_receipt(batch, tmp_path, monkeypatch, k
     assert error.retained_assets == ()
     directory = out if kind == "tandoor" else out / "export_md"
     assert list(directory.iterdir()) == list(error.completed_paths)
+
+
+def test_paprika_charges_archive_member_growth(batch, tmp_path, monkeypatch):
+    out = tmp_path / "published"
+    out.mkdir()
+    monkeypatch.chdir(out)
+    scratch = tmp_path / "temporary"
+    scratch.mkdir()
+    monkeypatch.setattr("tempfile.tempdir", str(scratch))
+    monkeypatch.setattr(exporter_utils, "MAX_BATCH_OUTPUT_BYTES", 8 * 1024)
+    batch[0].image_list = []
+    from_file = zipfile.ZipInfo.from_file
+
+    def grow_after_stat(path, *args, **kwargs):
+        info = from_file(path, *args, **kwargs)
+        with path.open("ab") as source:
+            source.write(b"x" * (100 * 1024))
+        return info
+
+    monkeypatch.setattr(zipfile.ZipInfo, "from_file", grow_after_stat)
+    with pytest.raises(UserFacingError, match="output.*allowance") as caught:
+        PaprikaExporter().export(batch[:1])
+    assert caught.value.failed_recipe_id == "archive"
+    assert caught.value.unpublished_count == 1
+    assert list(out.iterdir()) == []
+    assert list(scratch.iterdir()) == []

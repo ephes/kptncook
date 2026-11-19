@@ -508,11 +508,13 @@ output-work allowance, in addition to the 10 MiB per-image limit and 4,096-recip
 count ceiling. Downloads charge each received chunk before retaining it, including
 chunks from failed/oversized optional images; at most one transport chunk can be
 received to detect overflow. Exhaustion stops the batch rather than omitting more
-covers. Output charges data fed into compression, actual gzip/ZIP writes, staged
-Markdown notes/assets and sibling publication copies before each write. Header
-rewrites count again; hard links add no data bytes. These are cumulative work
-ceilings, not final archive-size estimates; temporary copies consume allowance
-even when later deleted. Allowances reset for each export call.
+covers. ZIP members read from disk are charged for each chunk before compression,
+including bytes added after the source's initial stat. Output also charges other
+data fed into compression, actual gzip/ZIP writes, staged Markdown notes/assets
+and sibling publication copies before each write. Header rewrites count again;
+hard links add no data bytes. These are cumulative work ceilings, not final
+archive-size estimates; temporary copies consume allowance even when later
+deleted. Allowances reset for each export call.
 A limit error preserves earlier completed Tandoor/Markdown files and reports the
 same partial-batch receipts above. Paprika publishes one archive for the whole
 batch: staged recipes are not completed exports, and a limit refusal before its

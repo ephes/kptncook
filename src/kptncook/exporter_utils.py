@@ -449,18 +449,28 @@ def write_zip(
             allowZip64=True,
         ) as zip_file:
             for arcname, content in entries:
-                if budget:
-                    size = (
-                        content.stat().st_size
-                        if isinstance(content, Path)
-                        else len(
+                if isinstance(content, Path):
+                    if budget is None:
+                        zip_file.write(content, arcname=arcname)
+                        continue
+                    member = zipfile.ZipInfo.from_file(content, arcname)
+                    if member.is_dir():
+                        zip_file.writestr(member, b"")
+                        continue
+                    member.compress_type = zip_file.compression
+                    with (
+                        content.open("rb") as source,
+                        zip_file.open(member, "w") as dest,
+                    ):
+                        while chunk := source.read(64 * 1024):
+                            budget.charge_output(len(chunk))
+                            dest.write(chunk)
+                else:
+                    if budget is not None:
+                        size = len(
                             content.encode("utf-8")
                             if isinstance(content, str)
                             else content
                         )
-                    )
-                    budget.charge_output(size)
-                if isinstance(content, Path):
-                    zip_file.write(content, arcname=arcname)
-                else:
+                        budget.charge_output(size)
                     zip_file.writestr(arcname, content)

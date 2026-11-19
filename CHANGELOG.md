@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+### Fixes
+- Charge actual path-backed ZIP member bytes before compression and discard the
+  staged archive when a growing file exhausts the output-work allowance.
+
 0.0.42 - 2026-11-17
 ===================
 
