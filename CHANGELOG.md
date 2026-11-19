@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Apply explicit wrapper timeouts to borrowed HTTPX clients while preserving
+  per-request overrides and inherited timeouts when the wrapper has no policy.
 - Resolve missing recipe query defaults from one settings snapshot per request.
 - Read the configured API key immediately before guided login and refuse to save
   the resulting access token if the key changes before publication.

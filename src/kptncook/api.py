@@ -10,7 +10,7 @@ import httpx
 from .auth import InvalidTokenError, validate_token
 from .config import get_settings
 from .control_json import _unique_object
-from .http_client import BaseHttpClient, DEFAULT_REQUEST_TIMEOUT
+from .http_client import BaseHttpClient
 from .repositories import RecipeInDb
 from .recipe_admission import admit_recipes, RecipeAdmissionError
 from .services.discovery import (
@@ -263,12 +263,7 @@ class KptnCookClient(BaseHttpClient):
         }
         if access_token is not None:
             headers["Token"] = validate_token(access_token)
-        super().__init__(
-            str(base_url),
-            headers=headers,
-            timeout=DEFAULT_REQUEST_TIMEOUT,
-            client=client,
-        )
+        super().__init__(str(base_url), headers=headers, client=client)
         self.api_key = api_key
 
     @property

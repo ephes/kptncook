@@ -375,10 +375,13 @@ close them or use a context manager. Failed authentication closes the new client
 Sync, favorites backup, login, today/dailies, discovery, onboarding, ingredient
 queries and recipe search close their own clients on success and every failure;
 closing a wrapper around a borrowed HTTPX client keeps that shared client usable.
-Request headers with the same exact key override wrapper defaults, and explicit
-timeouts override the
-HTTPX client's timeout. `tests/client_ownership_test.py` checks these on real
-HTTPX requests with a synthetic transport, including exceptional context exits.
+Request headers with the same exact key override wrapper defaults. An explicit
+per-request timeout takes precedence over an explicit `BaseHttpClient`
+timeout, which takes precedence over the borrowed HTTPX client's timeout.
+Without either override, a borrowed client keeps its configured timeout and an
+owned client uses 10 seconds for connect and 30 seconds for read, write and
+pool waits. `tests/client_ownership_test.py` checks these on real HTTPX requests
+with a synthetic transport, including exceptional context exits.
 
 ### Export metadata
 

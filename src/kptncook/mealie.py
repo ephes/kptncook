@@ -265,9 +265,7 @@ class MealieApiClient(BaseHttpClient):
                 "Mealie inventory timeout must be finite, positive and at most 86400 seconds"
             )
         self.inventory_timeout = float(inventory_timeout)
-        super().__init__(
-            str(base_url), headers={}, timeout=DEFAULT_REQUEST_TIMEOUT, client=client
-        )
+        super().__init__(str(base_url), client=client)
         self._archive_endpoint: str | None = None
         # Organizer (units/foods/tags) lookup state for one sync on this client:
         # endpoint -> normalized name -> distinct existing items. Filled from a

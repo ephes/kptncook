@@ -3,7 +3,9 @@
 import httpx
 import pytest
 
-from kptncook.http_client import BaseHttpClient
+from kptncook.api import KptnCookClient
+from kptncook.http_client import BaseHttpClient, DEFAULT_REQUEST_TIMEOUT
+from kptncook.mealie import MealieApiClient
 from kptncook.services import workflows
 from kptncook.config import settings
 from kptncook.models import Recipe
@@ -39,6 +41,44 @@ def test_request_wire_contract():
     )
     assert str(requests[2].url) == "https://api.example/absolute"
     assert requests[2].extensions["timeout"] == dict(connect=3, read=9, write=9, pool=9)
+
+
+def test_explicit_wrapper_timeout_overrides_borrowed_client_default():
+    requests = []
+    transport = httpx.MockTransport(lambda r: requests.append(r) or httpx.Response(200))
+    with httpx.Client(transport=transport, timeout=None) as http:
+        inherited = BaseHttpClient("https://api.example", client=http)
+        explicit = BaseHttpClient(
+            "https://api.example", client=http, timeout=DEFAULT_REQUEST_TIMEOUT
+        )
+        inherited.get("/inherited")
+        explicit.get("/explicit")
+        explicit.get("/per-request", timeout=2.5)
+        explicit.get("/unbounded", timeout=None)
+        inherited.get("/still-inherited")
+
+    unbounded = dict(connect=None, read=None, write=None, pool=None)
+    assert [request.extensions["timeout"] for request in requests] == [
+        unbounded,
+        dict(connect=10, read=30, write=30, pool=30),
+        dict(connect=2.5, read=2.5, write=2.5, pool=2.5),
+        unbounded,
+        unbounded,
+    ]
+
+
+def test_api_clients_inherit_timeout_of_borrowed_pool():
+    requests = []
+    transport = httpx.MockTransport(lambda r: requests.append(r) or httpx.Response(200))
+    with httpx.Client(transport=transport, timeout=7) as http:
+        KptnCookClient("https://api.example", "synthetic-key", client=http).get(
+            "/items"
+        )
+        MealieApiClient("https://api.example", client=http).get("/items")
+
+    assert [request.extensions["timeout"] for request in requests] == [
+        dict(connect=7, read=7, write=7, pool=7),
+    ] * 2
 
 
 @pytest.mark.parametrize("owned", [True, False])

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum
 from typing import Any
 
 import httpx
@@ -12,19 +13,34 @@ log_redaction.install()
 DEFAULT_REQUEST_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 
 
+class _TimeoutDefault(Enum):
+    UNSPECIFIED = "unspecified"
+
+
 class BaseHttpClient:
     def __init__(
         self,
         base_url: str,
         *,
         headers: dict[str, str] | None = None,
-        timeout: httpx.Timeout | float = DEFAULT_REQUEST_TIMEOUT,
+        timeout: httpx.Timeout
+        | float
+        | None
+        | _TimeoutDefault = _TimeoutDefault.UNSPECIFIED,
         client: httpx.Client | None = None,
     ) -> None:
         self.base_url = str(base_url)
         self.headers = dict(headers or {})
         self._timeout = timeout
-        self._client = client or httpx.Client(timeout=timeout)
+        self._client = (
+            client
+            if client is not None
+            else httpx.Client(
+                timeout=DEFAULT_REQUEST_TIMEOUT
+                if timeout is _TimeoutDefault.UNSPECIFIED
+                else timeout
+            )
+        )
         self._owns_client = client is None
 
     def close(self) -> None:
@@ -80,6 +96,8 @@ class BaseHttpClient:
         request_kwargs["headers"] = merged_headers
         if timeout is not httpx.USE_CLIENT_DEFAULT:
             request_kwargs["timeout"] = timeout
+        elif self._timeout is not _TimeoutDefault.UNSPECIFIED:
+            request_kwargs["timeout"] = self._timeout
         return self._client.request(method, self.to_url(path), **request_kwargs)
 
     def get(self, path: str, **kwargs: Any) -> httpx.Response:
