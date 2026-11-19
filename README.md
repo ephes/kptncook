@@ -414,9 +414,11 @@ recipe into an `export_md` directory under the KptnCook home, with YAML front
 matter (full title, servings, prep/cook time, link, image, tags) followed by ingredients
 and instructions. Images are downloaded into its sibling `assets/` directory
 with random filenames and relative references; copy that directory along with
-the notes. Authentication keys and signed image URLs appear only in download
-requests, never in the generated Markdown or asset filenames. Failed image
-downloads omit image metadata/body markup while retaining the recipe text.
+the notes. Markdown uses the final step image when it has a URL and otherwise
+uses the recipe cover if exactly one is available. The selected URL must pass
+the image-origin check. Authentication keys and signed image URLs appear only in
+download requests, never in the generated Markdown or asset filenames. Failed
+image downloads omit image metadata/body markup while retaining the recipe text.
 Library `render_recipe()` performs no image I/O and omits images unless passed
 an explicit local `image_path`. Image authentication preserves existing query
 pairs/fragments and replaces any old `kptnkey` value.

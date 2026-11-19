@@ -236,7 +236,9 @@ class MarkdownExporter:
     def _download_recipe_image(
         self, recipe: Recipe, *, budget: ExportBudget | None = None
     ) -> bytes | None:
-        image = recipe.steps[-1].image if recipe.steps else get_cover(recipe.image_list)
+        image = recipe.steps[-1].image if recipe.steps else None
+        if image is None or not image.url:
+            image = get_cover(recipe.image_list)
         if image is None:
             return None
         try:

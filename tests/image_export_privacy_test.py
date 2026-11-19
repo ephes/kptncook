@@ -99,6 +99,49 @@ def test_markdown_images_are_local_private_and_optional(
     assert "###" in text
 
 
+@pytest.mark.parametrize(
+    ("step_url", "chosen_path"),
+    [
+        ("", "/cover"),
+        ("https://example.test/step", "/step"),
+        ("https://off-list.invalid/step", None),
+    ],
+)
+def test_markdown_selects_cover_only_when_final_step_image_is_missing(
+    minimal, monkeypatch, step_url, chosen_path
+):
+    minimal["steps"].append(
+        {
+            "title": {"de": "Serve"},
+            "image": {"name": "step.jpg", "url": step_url, "type": "step"},
+        }
+    )
+    minimal["imageList"] = [
+        {"name": "cover.jpg", "url": "https://example.test/cover", "type": "cover"}
+    ]
+    recipe = Recipe.model_validate(minimal)
+    downloaded = []
+
+    def download(url, **kwargs):
+        downloaded.append(urlsplit(url).path)
+        return b"synthetic image"
+
+    monkeypatch.setattr("kptncook.markdown_exporter.download_image", download)
+    [note] = MarkdownExporter().export([recipe])
+    text = note.read_text(encoding="utf-8")
+    front = yaml.safe_load(text.split("---", 2)[1])
+    if chosen_path is None:
+        assert downloaded == []
+        assert "image" not in front
+        assert list(note.parent.rglob("*.jpg")) == []
+    else:
+        assert downloaded == [chosen_path]
+        asset = note.parent / front["image"]
+        assert list(note.parent.rglob("*.jpg")) == [asset]
+        assert asset.read_bytes() == b"synthetic image"
+        assert f"]({front['image']})" in text
+
+
 def test_render_without_assets_has_no_remote_image(minimal):
     text = MarkdownExporter().render_recipe(Recipe.model_validate(minimal))
     assert "kptnkey" not in text
