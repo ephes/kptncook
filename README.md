@@ -505,10 +505,13 @@ bulk serialization helpers remain available to library callers; the bulk helper
 still materializes its results when called directly.
 Each `export()` batch has a cumulative 100 MiB asset allowance and a 256 MiB
 output-work allowance, in addition to the 10 MiB per-image limit and 4,096-recipe
-count ceiling. Downloads charge each received chunk before retaining it, including
-chunks from failed/oversized optional images; at most one transport chunk can be
-received to detect overflow. Exhaustion stops the batch rather than omitting more
-covers. ZIP members read from disk are charged for each chunk before compression,
+count ceiling. Markdown inspects at most 4,097 recipes from an iterable and
+refuses an oversized batch before creating export directories or downloading
+images. Downloads charge each received chunk before retaining it, including
+chunks from failed or oversized optional images. The downloader may receive one
+extra chunk to detect overflow. Exhausting the allowance stops the batch.
+
+ZIP members read from disk are charged for each chunk before compression,
 including bytes added after the source's initial stat. Output also charges other
 data fed into compression, actual gzip/ZIP writes, staged Markdown notes/assets
 and sibling publication copies before each write. Header rewrites count again;

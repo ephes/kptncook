@@ -4,6 +4,8 @@ Unreleased
 ### Fixes
 - Charge actual path-backed ZIP member bytes before compression and discard the
   staged archive when a growing file exhausts the output-work allowance.
+- Stop consuming a Markdown recipe iterable as soon as it exceeds the batch
+  count limit, before creating export directories or downloading images.
 
 0.0.42 - 2026-11-17
 ===================

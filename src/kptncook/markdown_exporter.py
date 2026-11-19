@@ -17,10 +17,12 @@ import tempfile
 import httpx
 from collections.abc import Iterable
 from datetime import date
+from itertools import islice
 from pathlib import Path
 
 from pathvalidate import sanitize_filename
 
+from . import exporter_utils
 from .config import get_settings
 from .durability import fsync_directory
 from .http_errors import UserFacingError
@@ -34,7 +36,6 @@ from .exporter_utils import (
     move_to_free_target,
     replace_timers_in_step,
     validate_export_id,
-    validate_export_batch_size,
 )
 from .image_download import download_image
 from .image_origin import ImageOriginError
@@ -134,8 +135,8 @@ class MarkdownExporter:
         return recipe.servings_or(self.servings)
 
     def export(self, recipes: Iterable[Recipe]) -> list[Path]:
-        recipes = list(recipes)
-        validate_export_batch_size(len(recipes))
+        recipes = list(islice(recipes, exporter_utils.MAX_RECIPES + 1))
+        exporter_utils.validate_export_batch_size(len(recipes))
         for recipe in recipes:
             recipe.validate_scaled_quantities(self.servings_for(recipe))
             validate_export_id(recipe.id.oid)

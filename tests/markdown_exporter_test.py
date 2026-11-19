@@ -1,6 +1,8 @@
 import pytest
 
+from kptncook import exporter_utils
 from kptncook.config import get_settings, settings
+from kptncook.http_errors import UserFacingError
 from kptncook.markdown_exporter import MarkdownExporter
 from kptncook.models import Recipe
 
@@ -257,3 +259,31 @@ def offline_images(monkeypatch):
         raise httpx.ConnectError("Synthetic unavailable image")
 
     monkeypatch.setattr("kptncook.markdown_exporter.download_image", unavailable)
+
+
+def test_export_bounds_recipe_iterables(exporter, monkeypatch):
+    monkeypatch.setattr(exporter_utils, "MAX_RECIPES", 2)
+    downloads = []
+
+    def record_download(recipe, **kwargs):
+        downloads.append(recipe.id.oid)
+
+    monkeypatch.setattr(exporter, "_download_recipe_image", record_download)
+    yielded = []
+
+    def produce(count):
+        for index in range(count):
+            yielded.append(index)
+            yield build_recipe(
+                _id={"$oid": str(index)}, localizedTitle={"de": f"Recipe {index}"}
+            )
+
+    with pytest.raises(UserFacingError, match="Export batch exceeds 2 recipes"):
+        exporter.export(produce(5))
+    assert yielded == [0, 1, 2]
+    assert downloads == []
+    assert not (get_settings().root / "export_md").exists()
+
+    paths = exporter.export(produce(2))
+    assert [path.name for path in paths] == ["Recipe 0.md", "Recipe 1.md"]
+    assert downloads == ["0", "1"]
