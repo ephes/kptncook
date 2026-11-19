@@ -672,6 +672,10 @@ Filter dailies by API fields such as recipeFilter (for example `veggie`) and
 zone (timezone offset like `+02:00`). Add `--save` to store the daily recipes
 in the local repository.
 
+Recipe API requests that use language, store and preference defaults read all
+missing values from a single settings snapshot. Library calls that supply all
+three explicitly skip the settings lookup for those query parameters.
+
 By default, no subscription status is sent. `--not-subscribed` sends
 `isSubscribed=false`, as the free KptnCook app does; in a comparison on
 2026-10-27 this changed only the retailer data in the response, which no

@@ -282,15 +282,14 @@ class KptnCookClient(BaseHttpClient):
         store: str | None = None,
         preferences: str | None = None,
     ) -> dict[str, str]:
-        if lang is None:
+        if lang is None or store is None or preferences is None:
             current_settings = get_settings()
-            lang = current_settings.kptncook_lang
-        if store is None:
-            current_settings = get_settings()
-            store = current_settings.kptncook_store
-        if preferences is None:
-            current_settings = get_settings()
-            preferences = current_settings.kptncook_preferences
+            if lang is None:
+                lang = current_settings.kptncook_lang
+            if store is None:
+                store = current_settings.kptncook_store
+            if preferences is None:
+                preferences = current_settings.kptncook_preferences
         params = {"kptnkey": str(self.api_key)}
         if lang is not None:
             params["lang"] = str(lang)

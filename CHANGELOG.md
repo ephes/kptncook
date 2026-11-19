@@ -2,6 +2,7 @@ Unreleased
 ==========
 
 ### Fixes
+- Resolve missing recipe query defaults from one settings snapshot per request.
 - Read the configured API key immediately before guided login and refuse to save
   the resulting access token if the key changes before publication.
 - Refuse credential updates whose serialized configuration exceeds 64 KiB,

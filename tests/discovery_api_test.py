@@ -1,5 +1,7 @@
 import json
 from importlib import import_module
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import httpx
 import pytest
@@ -83,6 +85,50 @@ def test_list_dailies_includes_filters(monkeypatch):
     assert params["recipeFilter"] == "veggie"
     assert params["zone"] == "+02:00"
     assert params["isSubscribed"] == "false"
+
+
+@pytest.mark.parametrize(
+    ("overrides", "settings_reads"),
+    [
+        ({}, 1),
+        ({"preferences": ""}, 1),
+        ({"lang": "fr", "store": "ch", "preferences": ""}, 0),
+    ],
+)
+def test_recipe_query_defaults_use_one_snapshot(monkeypatch, overrides, settings_reads):
+    get_settings = Mock(
+        side_effect=[
+            SimpleNamespace(
+                kptncook_lang=f"lang-{generation}",
+                kptncook_store=f"store-{generation}",
+                kptncook_preferences=f"preferences-{generation}",
+            )
+            for generation in range(1, 4)
+        ]
+    )
+    monkeypatch.setattr("kptncook.api.get_settings", get_settings)
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        return httpx.Response(200, json=[])
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as http:
+        client = KptnCookClient("https://example.com", "synthetic-key", client=http)
+        client.list_dailies(**overrides)
+
+    assert len(requests) == 1
+    assert (
+        dict(requests[0].url.params)
+        == {
+            "kptnkey": "synthetic-key",
+            "lang": "lang-1",
+            "store": "store-1",
+            "preferences": "preferences-1",
+        }
+        | overrides
+    )
+    assert get_settings.call_count == settings_reads
 
 
 def test_list_dailies_omits_is_subscribed_by_default(monkeypatch):
