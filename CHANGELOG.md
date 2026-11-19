@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Refuse credential updates whose serialized configuration exceeds 64 KiB,
+  preserving the previous readable file and its permissions.
 - Charge actual path-backed ZIP member bytes before compression and discard the
   staged archive when a growing file exhausts the output-work allowance.
 - Stop consuming a Markdown recipe iterable as soon as it exceeds the batch

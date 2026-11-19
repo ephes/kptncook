@@ -822,9 +822,11 @@ handle without changing credentials.
 
 Setup and credential updates read one regular UTF-8 configuration file of at
 most 64 KiB, including when `.env` is a symlink to the configuration target.
-Growing files are subject to the same byte limit. Only a missing file counts as
-empty; unreadable, invalid UTF-8, oversized and special files stop setup before
-credential replacement. Repair the file and retry; setup does not reset it.
+Growing files are subject to the same byte limit. Updates must also fit 64 KiB
+after quoting and UTF-8 encoding. An oversized update preserves the previous
+file and its permissions. Only a missing file counts as empty. Unreadable,
+invalid UTF-8, oversized and special files stop setup before credential
+replacement. Repair the file and retry.
 
 **Important:** The `.env` file must be created in the `~/.kptncook/` directory, NOT in the installation directory or by editing the `kptncook` executable.
 

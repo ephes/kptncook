@@ -118,6 +118,10 @@ def _atomic_write_env(
             # python-dotenv decodes doubled backslashes in single-quoted values.
             set_key(tmp_path, key, value.replace("\\", "\\\\"), quote_mode="always")
         with tmp_path.open("r+", encoding="utf-8") as handle:
+            if os.fstat(handle.fileno()).st_size > MAX_ENV_BYTES:
+                raise OSError(
+                    "Could not write configuration; expected a file of at most 64 KiB"
+                )
             if hasattr(os, "fchmod"):
                 os.fchmod(handle.fileno(), ENV_FILE_MODE)
             handle.flush()

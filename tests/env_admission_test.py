@@ -246,3 +246,19 @@ def test_setup_reports_busy_configuration_once(tmp_path, monkeypatch):
     assert result.exit_code == 1
     assert "Configuration is busy" in result.output
     assert len(calls) == 1
+
+
+def test_oversized_staged_update_preserves_configuration(tmp_path):
+    config = tmp_path / ".env"
+    before = b"KEEP=synthetic\n#" + b"x" * (64 * 1024 - 16 - 20) + b"\n"
+    config.write_bytes(before)
+    config.chmod(0o640)
+
+    # This fits before quoting, but escaping each backslash adds another byte.
+    with pytest.raises(OSError, match="at most 64 KiB"):
+        env.upsert_env_value(config, "NEW", "\\" * 8)
+
+    assert config.read_bytes() == before
+    assert config.stat().st_mode & 0o777 == 0o640
+    assert env.read_env_values(config) == {"KEEP": "synthetic"}
+    assert not list(tmp_path.glob("*.tmp"))
