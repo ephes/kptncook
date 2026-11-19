@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Read the configured API key immediately before guided login and refuse to save
+  the resulting access token if the key changes before publication.
 - Refuse credential updates whose serialized configuration exceeds 64 KiB,
   preserving the previous readable file and its permissions.
 - Charge actual path-backed ZIP member bytes before compression and discard the

@@ -772,6 +772,9 @@ The `.env` is written to `$KPTNCOOK_HOME/.env` when `KPTNCOOK_HOME` is set,
 otherwise to `~/.kptncook/.env`. Guided setup owns and closes its authentication
 client on success and every failure, before attempting to save the token. Only a
 complete successful response containing an admitted access token is saved.
+Setup reads the configured API key immediately before login and checks it again
+under the configuration write lock. If the key changed during login, setup
+preserves the current configuration and reports that setup should be rerun.
 KptnCook and Mealie tokens must contain 1–8,192 visible ASCII characters
 (`!` through `~`); whitespace, controls, non-ASCII text and oversized tokens
 are refused before persistence or changes to authenticated client state.

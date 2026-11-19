@@ -28,6 +28,7 @@ from kptncook.env import (
     read_env_values,
     ENV_BUSY_MESSAGE,
     ConfigurationBusyError,
+    ConfigurationKeyChangedError,
     ConfigurationPublishedError,
     scaffold_env_file,
     upsert_env_value,
@@ -60,7 +61,7 @@ def _configuration_errors() -> Iterator[None]:
     except ConfigurationBusyError:
         rprint(f"[red]{ENV_BUSY_MESSAGE}.[/red]")
         raise typer.Exit(1) from None
-    except ConfigurationPublishedError as exc:
+    except (ConfigurationKeyChangedError, ConfigurationPublishedError) as exc:
         rprint(f"[red]{exc}[/red]")
         raise typer.Exit(1) from None
     except OSError:
@@ -108,11 +109,9 @@ def setup(
         values = read_env_values(env_path)
         existing_api_key = values.get("KPTNCOOK_API_KEY", "").strip()
         if not existing_api_key:
-            chosen_key = api_key or DEFAULT_API_KEY
-            upsert_env_value(env_path, "KPTNCOOK_API_KEY", chosen_key)
+            upsert_env_value(env_path, "KPTNCOOK_API_KEY", api_key or DEFAULT_API_KEY)
             rprint("Added KPTNCOOK_API_KEY to the .env file.")
         else:
-            chosen_key = existing_api_key
             rprint("KPTNCOOK_API_KEY is already set.")
 
         if username_command:
@@ -136,9 +135,18 @@ def setup(
             rprint("[red]Failed to get credentials.[/red]")
             sys.exit(1)
 
+        login_key = read_env_values(env_path).get("KPTNCOOK_API_KEY", "").strip()
+        if not login_key:
+            raise ConfigurationKeyChangedError()
+
         try:
-            access_token = _fetch_access_token(chosen_key, username, password)
-            upsert_env_value(env_path, "KPTNCOOK_ACCESS_TOKEN", access_token)
+            access_token = _fetch_access_token(login_key, username, password)
+            upsert_env_value(
+                env_path,
+                "KPTNCOOK_ACCESS_TOKEN",
+                access_token,
+                expected_api_key=login_key,
+            )
             rprint("[green]✓ Access token retrieved successfully.[/green]")
             rprint(f"Saved KPTNCOOK_ACCESS_TOKEN to {env_path}.")
         except httpx.HTTPStatusError as exc:

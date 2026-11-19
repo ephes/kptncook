@@ -28,6 +28,13 @@ class ConfigurationBusyError(OSError):
     """Another writer holds the configuration lock (message is value-free)."""
 
 
+class ConfigurationKeyChangedError(OSError):
+    """Setup cannot publish a token after a change to its authentication key."""
+
+    def __init__(self) -> None:
+        super().__init__("KptnCook API key changed or is missing. Rerun setup.")
+
+
 class ConfigurationPublishedError(OSError):
     """Complete credentials are visible, but their crash durability is uncertain."""
 
@@ -224,7 +231,10 @@ def scaffold_env_file(env_path: Path = ENV_PATH, *, report_busy: bool = False) -
 
 
 def read_env_values(env_path: Path) -> dict[str, str]:
-    content = _read_env_content(env_path)
+    return _parse_env_values(_read_env_content(env_path))
+
+
+def _parse_env_values(content: str) -> dict[str, str]:
     return {
         key: value
         for key, value in dotenv_values(stream=StringIO(content)).items()
@@ -260,13 +270,20 @@ def _read_env_content(env_path: Path) -> str:
         ) from None
 
 
-def upsert_env_value(env_path: Path, key: str, value: str) -> None:
+def upsert_env_value(
+    env_path: Path, key: str, value: str, *, expected_api_key: str | None = None
+) -> None:
     """Set ``key`` in the env file, keeping every other line.
 
     Only a missing file counts as empty. Any other read error is raised so an
     unreadable file is never replaced by one that holds just ``key``.
+    If supplied, ``expected_api_key`` must match the parsed key under the lock.
     """
     with _locked_env_path(env_path) as target:
         content = _read_env_content(target)
+        if expected_api_key is not None:
+            current_key = _parse_env_values(content).get("KPTNCOOK_API_KEY", "").strip()
+            if current_key != expected_api_key:
+                raise ConfigurationKeyChangedError()
         _atomic_write_env(target, content, assignment=(key, value))
         _tighten_env_permissions(target)
