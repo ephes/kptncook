@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Keep a published Tandoor archive in the export receipt and warn if temporary
+  directory cleanup fails.
 - Use the batch start date in every Markdown note, even when export crosses
   midnight.
 - Encode Markdown notes once and stage the same UTF-8 bytes charged to the

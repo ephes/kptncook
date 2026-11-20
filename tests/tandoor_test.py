@@ -1,4 +1,5 @@
 import json
+import tempfile
 import zipfile
 
 import httpx
@@ -240,6 +241,36 @@ def test_export_keeps_same_titled_recipes_apart(minimal, tmp_path, monkeypatch):
     assert len(set(sources)) == 2
     zips = sorted(p.name for p in tmp_path.glob("*.zip"))
     assert zips == sorted(filenames)
+
+
+def test_export_reports_published_zip_after_temp_cleanup_fault(
+    minimal, tmp_path, monkeypatch, caplog
+):
+    monkeypatch.chdir(tmp_path)
+    first = _synthetic_recipe(minimal, "a" * 24, "Synthetic Soup")
+    second = _synthetic_recipe(minimal, "b" * 24, "Synthetic Stew")
+    cleanup = tempfile.TemporaryDirectory.cleanup
+    scratch_paths = []
+
+    def fail_first_cleanup(directory):
+        cleanup(directory)
+        scratch_paths.append(directory.name)
+        if len(scratch_paths) == 1:
+            assert (tmp_path / "Synthetic_Soup.zip").is_file()
+            raise PermissionError("synthetic scratch cleanup fault")
+
+    monkeypatch.setattr(tempfile.TemporaryDirectory, "cleanup", fail_first_cleanup)
+
+    filenames = TandoorExporter().export([first, second])
+
+    assert filenames == ["Synthetic_Soup.zip", "Synthetic_Stew.zip"]
+    for filename in filenames:
+        with zipfile.ZipFile(tmp_path / filename) as archive:
+            assert json.loads(archive.read("recipe.json"))["name"].startswith(
+                "Synthetic "
+            )
+    assert "Could not clean up Tandoor staging directory" in caplog.text
+    assert scratch_paths[0] in caplog.text
 
 
 def test_export_does_not_clobber_existing_file(minimal, tmp_path, monkeypatch):

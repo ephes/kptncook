@@ -510,7 +510,9 @@ Failures before note publication remove attempt-owned assets when safe and sync
 the asset directory after removal. If either operation raises an I/O error,
 the export attempts to log uncertain asset cleanup and reports the original note
 failure even if logging raises. Warnings about a failed staging unlink are also
-best-effort and preserve the publication result.
+best-effort and preserve the publication result. Tandoor also warns if its
+temporary directory cannot be removed. A confirmed archive still counts as
+completed, and the batch continues.
 A failure or interruption during post-link directory sync reports the published
 path with uncertain durability, retaining all visible files and assets a
 visible note references.

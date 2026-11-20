@@ -7,6 +7,7 @@ Tandoor expects a zip archive with a recipe.json file and an optional image.jpg.
 import json
 import logging
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -70,8 +71,9 @@ class TandoorExporter:
         filename = self.get_export_filename(recipe=recipe)
         payload = self.get_recipe_payload(recipe=recipe)
         image_bytes = self.get_cover_image_bytes(recipe=recipe, budget=budget)
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            zip_path = Path(tmp_dir) / filename
+        scratch = tempfile.TemporaryDirectory()
+        try:
+            zip_path = Path(scratch.name) / filename
             entries: list[tuple[str, ZipContent]] = [
                 (
                     "recipe.json",
@@ -89,6 +91,14 @@ class TandoorExporter:
                 disambiguator=recipe.id.oid,
                 budget=budget,
             )
+        finally:
+            try:
+                scratch.cleanup()
+            except OSError:
+                with suppress(Exception):
+                    logger.warning(
+                        "Could not clean up Tandoor staging directory %s", scratch.name
+                    )
         return target.name
 
     def get_export_filename(self, recipe: Recipe) -> str:
