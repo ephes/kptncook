@@ -116,6 +116,47 @@ def test_login_sends_form_and_forwards_returned_token():
     assert requests[1].headers["authorization"] == "Bearer synthetic-token"
 
 
+@pytest.mark.parametrize(
+    "suffix", ["?synthetic-query", "#synthetic-fragment", "?", "#"]
+)
+def test_login_refuses_base_with_query_or_fragment(suffix):
+    requests = []
+
+    def handle(request):
+        requests.append(request)
+        return httpx.Response(200, json={"access_token": "synthetic-token"})
+
+    with httpx.Client(transport=httpx.MockTransport(handle)) as http:
+        with pytest.raises(ValueError, match="base URL") as error:
+            MealieApiClient(
+                f"https://mealie.example/proxy/api{suffix}", client=http
+            ).login("synthetic-user", "synthetic-password")
+    assert requests == []
+    assert "synthetic-" not in str(error.value)
+
+
+@pytest.mark.parametrize("trailing_slash", ["", "/"])
+def test_login_preserves_encoded_proxy_prefix_and_same_origin_urls(trailing_slash):
+    requests = []
+
+    def handle(request):
+        requests.append(request)
+        return httpx.Response(200, json={"access_token": "synthetic-token"})
+
+    with httpx.Client(transport=httpx.MockTransport(handle)) as http:
+        client = MealieApiClient(
+            f"https://mealie.example/proxy%2Ftenant%3F%23/api{trailing_slash}",
+            client=http,
+        )
+        client.login("synthetic-user", "synthetic-password")
+        client.get("https://MEALIE.example:443/absolute?limit=1")
+    assert [request.url.raw_path for request in requests] == [
+        b"/proxy%2Ftenant%3F%23/api/auth/token",
+        b"/absolute?limit=1",
+    ]
+    assert requests[1].headers["authorization"] == "Bearer synthetic-token"
+
+
 @pytest.mark.parametrize("operation", ["login", "inventory"])
 def test_non_json_reply_is_bounded(operation):
     with httpx.Client(

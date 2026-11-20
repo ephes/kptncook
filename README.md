@@ -148,6 +148,9 @@ port. Cross-origin requests are refused before transport. Automatic redirects
 are disabled even for injected HTTPX clients; requesting `follow_redirects=True`
 is refused. Follow an intended Location explicitly through the API client so
 it receives the same origin check.
+Configure API base URLs, including `MEALIE_URL`, without a query or fragment.
+Relative endpoints retain the base path, such as `/proxy/mealie/api` behind a
+reverse proxy.
 
 Every KptnCook JSON response rejects duplicate object members at any depth and
 nonfinite JSON constants before interpreting tokens, identities or discovery

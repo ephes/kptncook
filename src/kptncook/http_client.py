@@ -56,24 +56,33 @@ class BaseHttpClient:
     def to_url(self, path: str) -> str:
         try:
             base = httpx.URL(self.base_url)
-            candidate = httpx.URL(path)
-            if not candidate.is_absolute_url:
-                if candidate.scheme or candidate.host:
-                    raise ValueError
-                prefix = self.base_url.rstrip("/")
-                candidate = httpx.URL(f"{prefix}/{path.lstrip('/')}") if path else base
             if (
                 base.scheme not in ("http", "https")
                 or not base.host
                 or base.userinfo
-                or candidate.userinfo
-                or (candidate.scheme, candidate.host, candidate.port)
-                != (base.scheme, base.host, base.port)
+                or base != base.copy_with(query=None, fragment=None)
             ):
+                raise ValueError
+            candidate = httpx.URL(path)
+            if not path:
+                candidate = base
+            elif not candidate.is_absolute_url:
+                if candidate.scheme or candidate.host:
+                    raise ValueError
+                # The admitted base has no query, so raw_path is its encoded path.
+                prefix = base.raw_path.decode("ascii").rstrip("/")
+                origin = f"{base.scheme}://{base.netloc.decode('ascii')}"
+                candidate = httpx.URL(f"{origin}{prefix}/{path.lstrip('/')}")
+            if candidate.userinfo or (
+                candidate.scheme,
+                candidate.host,
+                candidate.port,
+            ) != (base.scheme, base.host, base.port):
                 raise ValueError
         except (httpx.InvalidURL, ValueError):
             raise ValueError(
-                "API request must use the configured origin without userinfo"
+                "API request must use the configured origin without userinfo. "
+                "The base URL must have no query or fragment."
             ) from None
         return str(candidate)
 
