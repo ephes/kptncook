@@ -135,3 +135,45 @@ def test_setup_binds_token_to_key_used_for_login(tmp_path, monkeypatch, change_d
         assert values["KPTNCOOK_ACCESS_TOKEN"] == "synthetic-new-token"
         if change_during == "unrelated":
             assert values["KEEP"] == "synthetic-value"
+
+
+@pytest.mark.parametrize("competing_setup", [False, True])
+def test_setup_initializes_api_key_only_if_still_blank(
+    tmp_path, monkeypatch, competing_setup
+):
+    from kptncook import env as env_module
+
+    path = tmp_path / ".env"
+    path.write_text("KPTNCOOK_API_KEY='  '\nKEEP=synthetic\n")
+    acquire = env_module._locked_env_path
+    acquisitions = 0
+    winner = None
+    args = ["--env-path", str(path), "--no-fetch-access-token", "--api-key"]
+
+    def interleave(target):
+        nonlocal acquisitions, winner
+        acquisitions += 1
+        if acquisitions == 2 and competing_setup:
+            # The first setup has inspected the blank file and is about to
+            # acquire its update lock. Run the other setup to completion first.
+            winner = CliRunner().invoke(setup.cli, [*args, "synthetic-winner"])
+        return acquire(target)
+
+    monkeypatch.setattr(env_module, "_locked_env_path", interleave)
+    result = CliRunner().invoke(setup.cli, [*args, "synthetic-first"])
+
+    assert result.exit_code == 0, result.output
+    assert setup.read_env_values(path) == {
+        "KPTNCOOK_API_KEY": "synthetic-winner"
+        if competing_setup
+        else "synthetic-first",
+        "KEEP": "synthetic",
+    }
+    if competing_setup:
+        assert winner is not None and winner.exit_code == 0
+        assert "Added KPTNCOOK_API_KEY" in winner.output
+        assert "KPTNCOOK_API_KEY is already set." in result.output
+        assert "Added KPTNCOOK_API_KEY" not in result.output
+    else:
+        assert "Added KPTNCOOK_API_KEY" in result.output
+    assert "synthetic-" not in result.output

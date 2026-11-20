@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Preserve an API key initialized by a concurrent guided setup and report when
+  the key is already set.
 - Preserve export results and Markdown image references when a cleanup warning
   cannot be logged.
 - Skip partial and other unexpected image responses before reading or staging

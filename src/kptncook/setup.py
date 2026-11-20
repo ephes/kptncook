@@ -30,6 +30,7 @@ from kptncook.env import (
     ConfigurationBusyError,
     ConfigurationKeyChangedError,
     ConfigurationPublishedError,
+    initialize_env_value,
     scaffold_env_file,
     upsert_env_value,
 )
@@ -106,10 +107,9 @@ def setup(
         if scaffolded:
             rprint(f"Created {env_path} with a starter template.")
 
-        values = read_env_values(env_path)
-        existing_api_key = values.get("KPTNCOOK_API_KEY", "").strip()
-        if not existing_api_key:
-            upsert_env_value(env_path, "KPTNCOOK_API_KEY", api_key or DEFAULT_API_KEY)
+        if initialize_env_value(
+            env_path, "KPTNCOOK_API_KEY", api_key or DEFAULT_API_KEY
+        ):
             rprint("Added KPTNCOOK_API_KEY to the .env file.")
         else:
             rprint("KPTNCOOK_API_KEY is already set.")

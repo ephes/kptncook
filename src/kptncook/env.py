@@ -270,6 +270,17 @@ def _read_env_content(env_path: Path) -> str:
         ) from None
 
 
+def initialize_env_value(env_path: Path, key: str, value: str) -> bool:
+    """Set a missing or blank value under the writer lock and report if stored."""
+    with _locked_env_path(env_path) as target:
+        content = _read_env_content(target)
+        if _parse_env_values(content).get(key, "").strip():
+            return False
+        _atomic_write_env(target, content, assignment=(key, value))
+        _tighten_env_permissions(target)
+        return True
+
+
 def upsert_env_value(
     env_path: Path, key: str, value: str, *, expected_api_key: str | None = None
 ) -> None:
