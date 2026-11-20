@@ -1,4 +1,4 @@
-"""Control responses are tested as bytes so duplicate members survive fixtures."""
+"""Use raw JSON for replies with duplicate members or nonfinite numbers."""
 
 import json
 
@@ -113,6 +113,7 @@ def test_array_repeated_values_are_allowed():
                 json={
                     "slug": "invented",
                     "recipeInstructions": [{"text": "Mix"}, {"text": "Mix"}],
+                    "extras": {"measurements": [0, -0.125, 1.25e100]},
                 },
             )
         )
@@ -121,6 +122,7 @@ def test_array_repeated_values_are_allowed():
             "invented"
         )
         assert [step.text for step in recipe.recipe_instructions] == ["Mix", "Mix"]
+        assert recipe.extras["measurements"] == [0, -0.125, 1.25e100]
 
 
 def test_deep_control_json_has_domain_error():
@@ -195,6 +197,81 @@ def test_duplicate_enrichment_response_does_not_retry_or_leak(
     assert "private-fragment" not in caplog.text
     assert "Traceback" not in caplog.text
     assert "Skipping step image" in caplog.text
+
+
+@pytest.mark.parametrize("number", ["NaN", "Infinity", "-Infinity", "1e400", "-1e400"])
+@pytest.mark.parametrize("boundary", ["detail", "reread", "patch"])
+def test_nonfinite_recipe_response_stops_enrichment(
+    monkeypatch, caplog, boundary, number
+):
+    calls = []
+    stored = {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "name": "Invented",
+        "slug": "invented",
+        "recipeInstructions": [{"text": "Mix"}],
+    }
+    reads = 0
+
+    def malformed_reply(payload):
+        body = json.dumps(payload)
+        return httpx.Response(
+            200,
+            content=body[:-1] + f',"synthetic-metadata":{{"values":[{number}]}}}}',
+        )
+
+    def handle(request):
+        nonlocal reads
+        calls.append(request.method)
+        if request.url.path.endswith("/about"):
+            return httpx.Response(200, json={"version": "v3.28.0"})
+        if request.url.path.endswith("/create/zip"):
+            return httpx.Response(201, json="invented")
+        if request.url.path.endswith("/assets"):
+            return httpx.Response(200, json={"fileName": "step.jpg"})
+        if request.method == "PATCH":
+            return malformed_reply({**stored, "name": "Receipt"})
+        reads += 1
+        if (reads == 1 and boundary == "detail") or (
+            reads == 2 and boundary == "reread"
+        ):
+            return malformed_reply(stored)
+        return httpx.Response(200, json=stored)
+
+    monkeypatch.setattr(
+        "kptncook.mealie.download_image", lambda *a, **kw: b"invented-image"
+    )
+    source = RecipeWithImage(
+        name="Invented",
+        recipe_instructions=[
+            RecipeStep(
+                text="Mix",
+                image=Image(name="step.jpg", url="https://example.test/image"),
+            )
+        ],
+    )
+    expected_calls = ["GET", "POST", "GET"]
+    with httpx.Client(transport=httpx.MockTransport(handle)) as http:
+        client = MealieApiClient("https://example.test/api", client=http)
+        if boundary == "detail":
+            with pytest.raises(
+                ValueError, match="^Invalid Mealie control JSON$"
+            ) as error:
+                client.create_recipe(source)
+            assert error.value.__suppress_context__
+        else:
+            result = client.create_recipe(source)
+            assert result.name == "Invented"
+            expected_calls += ["POST", "GET"]
+            if boundary == "patch":
+                expected_calls.append("PATCH")
+            assert (
+                "Skipping step image update for recipe invented (ValueError)"
+                in caplog.text
+            )
+    assert calls == expected_calls
+    assert "synthetic-metadata" not in caplog.text
+    assert number not in caplog.text
 
 
 def test_duplicate_conflict_detail_is_not_an_organizer_uniqueness_signal():

@@ -1,5 +1,6 @@
-"""Strict member admission for JSON that controls Mealie follow-up requests."""
+"""Strict decoding for JSON that controls Mealie follow-up requests."""
 
+import math
 from typing import Any
 
 import httpx
@@ -14,9 +15,20 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def _finite_float(value: str) -> float:
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("Nonfinite JSON number")
+    return number
+
+
 def decode_control_json(response: httpx.Response) -> Any:
     try:
-        return response.json(object_pairs_hook=_unique_object)
+        return response.json(
+            object_pairs_hook=_unique_object,
+            parse_constant=_finite_float,
+            parse_float=_finite_float,
+        )
     except (ValueError, RecursionError):
         # No member names, response fragments or tokens in the error chain.
         raise ValueError("Invalid Mealie control JSON") from None

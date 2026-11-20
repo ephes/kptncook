@@ -366,10 +366,12 @@ Mealie organizer pages must contain a list of objects and a nonnegative integer
 `total_pages` (zero is allowed only for an empty inventory). Invalid pages abort
 listing before organizer creation. Successful password login requires a nonempty
 string token; malformed replies leave any existing authorization unchanged.
-Mealie control JSON refuses duplicate object member names at every nesting
-level, including escaped spellings of the same name, before identity checks or
-follow-up requests. This applies to login, inventories/details, import, organizer
-and media responses, version discovery, PATCH replies and conflict details.
+Mealie control JSON refuses duplicate object member names, including escaped
+spellings of the same name, and nonfinite numbers at every nesting level before
+identity checks or follow-up requests. Nonfinite numbers include `NaN`,
+`Infinity`, `-Infinity` and numbers that overflow floating-point conversion.
+This applies to login, inventories/details, import, organizer and media
+responses, version discovery, PATCH replies and conflict details.
 Repeated values in arrays remain valid. Decode failures use fixed diagnostics
 without response fragments, member names or tokens; existing error-body limits
 and inventory budgets still apply. A malformed response after a write does not

@@ -4,6 +4,8 @@ Unreleased
 ### Fixes
 - Refuse API base URLs with a query or fragment before sending requests and
   preserve reverse-proxy path prefixes when building Mealie endpoints.
+- Refuse nonfinite numbers, including float overflow, in Mealie control replies
+  before using them for follow-up writes or accepting an update receipt.
 - Skip whitespace-only recipe translations during language fallback and retain
   surrounding whitespace on the chosen text.
 - Refuse recipe batches with Unicode surrogate code points in keys or values
