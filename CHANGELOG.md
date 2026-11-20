@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Save guided setup's password-manager command overrides together and use the
+  saved command pair when retrieving credentials.
 - Preserve an API key initialized by a concurrent guided setup and report when
   the key is already set.
 - Preserve export results and Markdown image references when a cleanup warning

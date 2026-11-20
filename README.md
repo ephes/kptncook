@@ -804,6 +804,10 @@ complete successful response containing an admitted access token is saved.
 After scaffolding, setup initializes a missing or blank API key under the
 configuration write lock. If another setup has already filled it in, setup
 keeps that key and reports that it is already set.
+Setup saves `--username-command` and `--password-command` together in one
+configuration update. Either option can be used on its own. When fetching a
+token, setup runs explicit commands as supplied and reads any omitted command
+from the configuration snapshot it just saved.
 Setup reads the configured API key immediately before login and checks it again
 under the configuration write lock. If the key changed during login, setup
 preserves the current configuration and reports that setup should be rerun.

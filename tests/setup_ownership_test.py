@@ -1,5 +1,7 @@
 """Guided setup owns its auth pool and publishes only a complete token."""
 
+import os
+from pathlib import Path
 from unittest.mock import Mock
 
 import httpx
@@ -7,6 +9,12 @@ import pytest
 from typer.testing import CliRunner
 
 import kptncook.setup as setup
+
+COMMANDS_BEFORE = (
+    "KPTNCOOK_API_KEY=synthetic-key\n"
+    "KPTNCOOK_USERNAME_COMMAND=old-user\n"
+    "KPTNCOOK_PASSWORD_COMMAND=old-password\n"
+)
 
 
 @pytest.mark.parametrize(
@@ -177,3 +185,86 @@ def test_setup_initializes_api_key_only_if_still_blank(
     else:
         assert "Added KPTNCOOK_API_KEY" in result.output
     assert "synthetic-" not in result.output
+
+
+def test_setup_keeps_both_commands_if_replacement_fails(tmp_path, monkeypatch):
+    path = tmp_path / ".env"
+    path.write_text(COMMANDS_BEFORE)
+    replace = os.replace
+    credentials = Mock()
+    monkeypatch.setattr(setup, "get_credentials", credentials)
+
+    def fail_second_command(source, target):
+        if target == path and "next-password" in Path(source).read_text():
+            raise OSError("synthetic replacement refusal")
+        return replace(source, target)
+
+    monkeypatch.setattr(os, "replace", fail_second_command)
+    result = CliRunner().invoke(
+        setup.cli,
+        [
+            "--env-path",
+            str(path),
+            "--username-command",
+            "next-user",
+            "--password-command",
+            "next-password",
+        ],
+    )
+
+    assert result.exit_code == 1, result.output
+    assert path.read_text() == COMMANDS_BEFORE
+    assert "Could not read configuration or update it" in result.output
+    assert "Stored KPTNCOOK_" not in result.output
+    credentials.assert_not_called()
+
+
+@pytest.mark.parametrize("paired_override", [False, True])
+def test_setup_uses_its_committed_command_pair(tmp_path, monkeypatch, paired_override):
+    path = tmp_path / ".env"
+    path.write_text(COMMANDS_BEFORE)
+    expected_password = "first-password" if paired_override else "old-password"
+    args = ["--env-path", str(path)]
+    credentials = Mock(return_value=("synthetic-user", "synthetic-password"))
+    monkeypatch.setattr(setup, "get_credentials", credentials)
+    monkeypatch.setattr(setup, "_fetch_access_token", lambda *args: "synthetic-token")
+    print_message = setup.rprint
+    observed = []
+    second = None
+
+    def command_pair():
+        values = setup.read_env_values(path)
+        return values["KPTNCOOK_USERNAME_COMMAND"], values["KPTNCOOK_PASSWORD_COMMAND"]
+
+    def interleave(message):
+        nonlocal second
+        if message.startswith("Stored KPTNCOOK_USERNAME_COMMAND") and not observed:
+            # Observe what a reader sees at the first store report, then run a
+            # competing setup before the first one retrieves its credentials.
+            observed.append(command_pair())
+            second = CliRunner().invoke(
+                setup.cli,
+                [
+                    *args,
+                    "--username-command",
+                    "second-user",
+                    "--password-command",
+                    "second-password",
+                ],
+            )
+        print_message(message)
+
+    monkeypatch.setattr(setup, "rprint", interleave)
+    first_args = [*args, "--username-command", "first-user"]
+    if paired_override:
+        first_args.extend(["--password-command", "first-password"])
+    first = CliRunner().invoke(setup.cli, first_args)
+
+    assert first.exit_code == 0, first.output
+    assert second is not None and second.exit_code == 0
+    assert observed == [("first-user", expected_password)]
+    assert command_pair() == ("second-user", "second-password")
+    assert [call.args for call in credentials.call_args_list] == [
+        ("second-user", "second-password"),
+        ("first-user", expected_password),
+    ]

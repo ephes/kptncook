@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 import stat
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from io import StringIO
 from pathlib import Path
@@ -99,8 +99,8 @@ def _tighten_env_permissions(env_path: Path) -> None:
 
 
 def _atomic_write_env(
-    env_path: Path, content: str, *, assignment: tuple[str, str] | None = None
-) -> None:
+    env_path: Path, content: str, *, assignments: Mapping[str, str] | None = None
+) -> str:
     """Replace ``env_path`` with ``content`` without a window of exposure or loss.
 
     The content goes to a temporary file in the same directory that is created
@@ -109,6 +109,7 @@ def _atomic_write_env(
     old file or the complete new one, never an empty or partial file, and the
     secrets are never readable by other users. If ``env_path`` is a symlink the
     file it points to is replaced, so the link itself is kept.
+    Return the published content from staging, without reopening the target.
     """
     target = Path(os.path.realpath(env_path)) if env_path.is_symlink() else env_path
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -119,8 +120,7 @@ def _atomic_write_env(
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(content)
-        if assignment is not None:
-            key, value = assignment
+        for key, value in (assignments or {}).items():
             # set_key escapes single quotes; also escape backslashes because
             # python-dotenv decodes doubled backslashes in single-quoted values.
             set_key(tmp_path, key, value.replace("\\", "\\\\"), quote_mode="always")
@@ -129,6 +129,8 @@ def _atomic_write_env(
                 raise OSError(
                     "Could not write configuration; expected a file of at most 64 KiB"
                 )
+            if assignments:
+                content = handle.read()
             if hasattr(os, "fchmod"):
                 os.fchmod(handle.fileno(), ENV_FILE_MODE)
             handle.flush()
@@ -145,6 +147,7 @@ def _atomic_write_env(
     except OSError:
         # Replacement has happened: do not roll back or remove visible secrets.
         raise ConfigurationPublishedError() from None
+    return content
 
 
 @contextmanager
@@ -276,7 +279,7 @@ def initialize_env_value(env_path: Path, key: str, value: str) -> bool:
         content = _read_env_content(target)
         if _parse_env_values(content).get(key, "").strip():
             return False
-        _atomic_write_env(target, content, assignment=(key, value))
+        _atomic_write_env(target, content, assignments={key: value})
         _tighten_env_permissions(target)
         return True
 
@@ -296,5 +299,16 @@ def upsert_env_value(
             current_key = _parse_env_values(content).get("KPTNCOOK_API_KEY", "").strip()
             if current_key != expected_api_key:
                 raise ConfigurationKeyChangedError()
-        _atomic_write_env(target, content, assignment=(key, value))
+        _atomic_write_env(target, content, assignments={key: value})
         _tighten_env_permissions(target)
+
+
+def upsert_env_values(env_path: Path, assignments: Mapping[str, str]) -> dict[str, str]:
+    """Publish all assignments together and return the resulting parsed values."""
+    if not assignments:
+        return read_env_values(env_path)
+    with _locked_env_path(env_path) as target:
+        content = _read_env_content(target)
+        committed = _atomic_write_env(target, content, assignments=assignments)
+        _tighten_env_permissions(target)
+    return _parse_env_values(committed)

@@ -33,6 +33,7 @@ from kptncook.env import (
     initialize_env_value,
     scaffold_env_file,
     upsert_env_value,
+    upsert_env_values,
 )
 from kptncook.http_errors import extract_http_error_message, format_request_error
 from kptncook.password_manager import get_credentials
@@ -114,18 +115,26 @@ def setup(
         else:
             rprint("KPTNCOOK_API_KEY is already set.")
 
-        if username_command:
-            upsert_env_value(env_path, "KPTNCOOK_USERNAME_COMMAND", username_command)
-            rprint("Stored KPTNCOOK_USERNAME_COMMAND in the .env file.")
-        if password_command:
-            upsert_env_value(env_path, "KPTNCOOK_PASSWORD_COMMAND", password_command)
-            rprint("Stored KPTNCOOK_PASSWORD_COMMAND in the .env file.")
+        commands = {
+            key: command
+            for key, command in (
+                ("KPTNCOOK_USERNAME_COMMAND", username_command),
+                ("KPTNCOOK_PASSWORD_COMMAND", password_command),
+            )
+            if command
+        }
+        values = upsert_env_values(env_path, commands) if commands else None
+        for key in commands:
+            rprint(f"Stored {key} in the .env file.")
 
         if not fetch_access_token:
             rprint("Skipping access token fetch.")
             return
 
-        values = read_env_values(env_path)
+        if values is None:
+            values = read_env_values(env_path)
+        # Explicit commands go to the shell as supplied. Any command omitted
+        # on the CLI comes from the same file snapshot as the saved overrides.
         username, password = get_credentials(
             username_command or values.get("KPTNCOOK_USERNAME_COMMAND"),
             password_command or values.get("KPTNCOOK_PASSWORD_COMMAND"),
