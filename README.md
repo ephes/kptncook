@@ -430,10 +430,11 @@ pairs/fragments and replaces any old `kptnkey` value.
 Section headings and image alt text follow `KPTNCOOK_LANG`
 (German, English, Spanish, French, and Portuguese are recognized; other
 languages fall back to English). Recipe titles, comments, steps and ingredient
-labels across all exporters prefer that same configured language. Missing or
-empty translations fall back in order to German, English, Spanish, French, then
-Portuguese, without changing the original recipe payload. `<timer>` placeholders in steps are
-replaced with their durations. If a timer is missing or has no duration metadata,
+labels across all exporters prefer that same configured language. Missing,
+empty and whitespace-only translations fall back in order to German, English,
+Spanish, French, then Portuguese. A usable translation retains its surrounding
+whitespace. `<timer>` placeholders in steps are replaced with their durations.
+If a timer is missing or has no duration metadata,
 the placeholder and its punctuation stay in every export: Paprika keeps the
 literal `<timer>`, while the rendered Markdown, Tandoor and Mealie step texts
 write it as the code span `` `<timer>` `` so renderers show it instead of

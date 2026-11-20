@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Skip whitespace-only recipe translations during language fallback and retain
+  surrounding whitespace on the chosen text.
 - Refuse recipe batches with Unicode surrogate code points in keys or values
   before building recipe models or starting an export.
 - Apply explicit wrapper timeouts to borrowed HTTPX clients while preserving

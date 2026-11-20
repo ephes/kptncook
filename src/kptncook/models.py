@@ -38,7 +38,7 @@ class LocalizedString(BaseModel):
         language = normalize_language(language)
         for lang in dict.fromkeys((language, "de", "en", "es", "fr", "pt")):
             candidate = getattr(self, lang)
-            if candidate:
+            if candidate is not None and candidate.strip():
                 return candidate
         return None
 

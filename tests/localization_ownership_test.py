@@ -4,6 +4,7 @@ import copy
 import json
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from kptncook.config import settings
@@ -108,11 +109,23 @@ def test_configured_language_across_exporters(minimal, monkeypatch, lang):
         ("pt", {"en": "English"}, "English"),
         ("xx", {"de": "German", "en": "English"}, "English"),
         ("fr", {}, None),
+        ("fr", {"fr": "\t", "de": " ", "en": "\n"}, None),
     ],
 )
 def test_missing_and_empty_language_fallback(monkeypatch, lang, translations, expected):
     monkeypatch.setattr(settings, "kptncook_lang", lang)
     assert localized_fallback(LocalizedString(**translations), lang) == expected
+
+
+def test_blank_recipe_title_falls_back_in_markdown(minimal, monkeypatch):
+    monkeypatch.setattr(settings, "kptncook_lang", "fr")
+    title = "  German title  "
+    minimal["localizedTitle"] = {"fr": "\t\u2003\n", "de": title, "en": "English title"}
+    recipe = Recipe.model_validate(minimal)
+
+    markdown = MarkdownExporter().render_recipe(recipe)
+    assert yaml.safe_load(markdown.split("---", 2)[1])["title"] == title
+    assert recipe.localized_title.fallback("fr") == title
 
 
 def test_model_localization_does_not_load_configuration(monkeypatch):
