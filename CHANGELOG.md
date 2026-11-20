@@ -4,6 +4,8 @@ Unreleased
 ### Fixes
 - Preserve export results and Markdown image references when a cleanup warning
   cannot be logged.
+- Skip partial and other unexpected image responses before reading or staging
+  image bytes, preserving the recipe text.
 - Stage the legacy Paprika archive and its sidecars before replacing any
   output, preserving the previous bundle when preparation fails.
 - Skip blank translations when choosing discovery list titles and quick-search

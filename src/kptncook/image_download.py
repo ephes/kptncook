@@ -37,6 +37,13 @@ async def _download_image(
                     continue
                 response.raise_for_status()
                 if (
+                    response.status_code != httpx.codes.OK
+                    or "content-range" in response.headers
+                ):
+                    raise httpx.RequestError(
+                        "Image response is not a complete representation"
+                    )
+                if (
                     response.headers.get("content-encoding", "identity").lower()
                     != "identity"
                 ):
@@ -79,9 +86,10 @@ def download_image(
 
     The URL and every redirect target must be on an allowed image host
     (see ``image_origin``); otherwise ``httpx.RequestError`` is raised before
-    any request to that target. An optional export budget charges every received
-    chunk (even from failed images); exhaustion stops the batch rather than
-    silently omitting another optional cover.
+    any request to that target. Only HTTP 200 responses without Content-Range
+    are read. An optional export budget charges every streamed chunk (even
+    from failed images); exhaustion stops the batch rather than silently
+    omitting another optional cover.
     """
     try:
         asyncio.get_running_loop()

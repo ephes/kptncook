@@ -47,7 +47,18 @@ class ImageStream(httpx.AsyncByteStream):
 @pytest.mark.parametrize("caller", ["paprika", "tandoor", "mealie", "markdown"])
 @pytest.mark.parametrize(
     "failure",
-    ["oversize", "misleading-length", "slow", "stalled", "ok", "status", "compressed"],
+    [
+        "oversize",
+        "misleading-length",
+        "slow",
+        "stalled",
+        "ok",
+        "status",
+        "compressed",
+        "partial-status",
+        "content-range",
+        "created",
+    ],
 )
 def test_bounded_image_preserves_recipe(
     caller, failure, minimal, monkeypatch, tmp_path, caplog
@@ -59,13 +70,14 @@ def test_bounded_image_preserves_recipe(
     headers = {"Content-Length": "1"} if failure == "misleading-length" else {}
     if failure == "compressed":
         headers["Content-Encoding"] = "gzip"
+    if failure == "content-range":
+        headers["Content-Range"] = "bytes 0-11/24"
+    status = {"status": 503, "partial-status": 206, "created": 201}.get(failure, 200)
     requests = []
 
     def handle(request):
         requests.append(request)
-        return httpx.Response(
-            503 if failure == "status" else 200, headers=headers, stream=stream
-        )
+        return httpx.Response(status, headers=headers, stream=stream)
 
     http = httpx.AsyncClient(transport=httpx.MockTransport(handle))
     monkeypatch.setattr(image_download.httpx, "AsyncClient", lambda **kw: http)
@@ -73,7 +85,7 @@ def test_bounded_image_preserves_recipe(
     monkeypatch.setattr(
         image_download,
         "MAX_IMAGE_BYTES",
-        10**9 if timed else 12 if failure == "ok" else 8,
+        10**9 if timed else 8 if failure in {"oversize", "misleading-length"} else 12,
     )
     monkeypatch.setattr(
         image_download, "IMAGE_DOWNLOAD_DEADLINE", 0.01 if timed else 60
@@ -110,7 +122,15 @@ def test_bounded_image_preserves_recipe(
         [path] = MarkdownExporter().export([recipe])
         text = path.read_text(encoding="utf-8")
         assert "Mix synthetic ingredients" in text
-        assert bool(list((path.parent / "assets").glob("*.jpg"))) == (failure == "ok")
+        assets = path.parent / "assets"
+        if failure == "ok":
+            [image] = assets.glob("*.jpg")
+            assert image.read_bytes() == b"1234" * 3
+            assert f"](assets/{image.name})" in text
+        else:
+            assert not assets.exists()
+            assert "image:" not in text
+        assert list(path.parent.glob(".kptncook-*")) == []
         assert "kptnkey" not in text
     else:
         stored = {}
@@ -177,7 +197,13 @@ def test_bounded_image_preserves_recipe(
         assert stream.chunks >= 4
     elif failure in {"oversize", "misleading-length"}:
         assert stream.chunks == 3
-    elif failure in {"status", "compressed"}:
+    elif failure in {
+        "status",
+        "compressed",
+        "partial-status",
+        "content-range",
+        "created",
+    }:
         assert stream.chunks == 0
     assert list(workdir.iterdir()) == []
     assert "images.example" not in caplog.text

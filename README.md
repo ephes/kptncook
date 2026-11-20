@@ -332,6 +332,8 @@ limited to 10 MiB per image and 60 seconds for the entire transfer (including
 redirects). Failed, oversized, or slow images are skipped; recipe text is
 still exported or imported. Downloads request uncompressed responses; servers
 that send compressed images despite that request are skipped to bound memory.
+The final response must be HTTP 200 without a `Content-Range` header. Other
+statuses and responses carrying range metadata are refused before reading the body.
 
 The API key is attached only to image URLs on an allowed image host: HTTPS,
 the default port, no user name or password in the URL, and a host name that
