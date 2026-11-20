@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from kptncook import exporter_utils, markdown_exporter
 from kptncook.config import get_settings
 from kptncook.exporter_utils import BatchExportError
 from kptncook.http_errors import UserFacingError
@@ -141,10 +142,83 @@ def test_markdown_batch_receipts(recipes, monkeypatch, failure):
     assert not list(out.glob(".kptncook-*"))
 
 
-@pytest.mark.parametrize("fail_rollback_sync", [False, True])
-def test_markdown_syncs_asset_removal_after_note_failure(
-    recipes, monkeypatch, caplog, fail_rollback_sync
+@pytest.mark.parametrize(
+    ("staging", "publication"),
+    [
+        ("source", "success"),
+        ("sibling", "success"),
+        ("sibling", "failed"),
+        ("sibling", "uncertain"),
+    ],
+)
+def test_markdown_cleanup_logging_preserves_publication(
+    recipes, monkeypatch, mocker, staging, publication
 ):
+    exporter = MarkdownExporter()
+    monkeypatch.setattr(
+        exporter, "_download_recipe_image", lambda recipe, **kw: b"synthetic"
+    )
+    out = get_settings().root / "export_md"
+    note = out / "Recipe 0.md"
+    unlink = Path.unlink
+    link = os.link
+    sync = exporter_utils.fsync_directory
+
+    def fail_staging_unlink(path, *args, **kwargs):
+        if (staging == "source" and path.name == "note.md") or (
+            staging == "sibling"
+            and path.parent == out
+            and path.name.startswith(".kptncook-")
+            and path.suffix == ".tmp"
+        ):
+            raise OSError("synthetic staging unlink failure")
+        return unlink(path, *args, **kwargs)
+
+    def publish(src, dst):
+        if publication == "failed" and dst == note:
+            raise OSError("synthetic note publication failure")
+        link(src, dst)
+
+    def sync_publication(directory):
+        if publication == "uncertain" and directory == out:
+            raise OSError("synthetic directory sync failure")
+        sync(directory)
+
+    monkeypatch.setattr(Path, "unlink", fail_staging_unlink)
+    monkeypatch.setattr(os, "link", publish)
+    monkeypatch.setattr(exporter_utils, "fsync_directory", sync_publication)
+    warning = mocker.patch.object(
+        exporter_utils.logger, "warning", side_effect=RuntimeError("logging failed")
+    )
+
+    if publication == "success":
+        assert exporter.export(recipes[:1]) == [note]
+    else:
+        with pytest.raises(BatchExportError) as caught:
+            exporter.export(recipes[:1])
+        if publication == "failed":
+            assert "synthetic note publication failure" in str(caught.value.__cause__)
+            assert caught.value.uncertain_paths == ()
+        else:
+            assert caught.value.uncertain_paths == (note,)
+
+    warning.assert_called_once()
+    if publication == "failed":
+        assert not note.exists()
+        assert list((out / "assets").iterdir()) == []
+    else:
+        [asset] = (out / "assets").iterdir()
+        assert asset.relative_to(out).as_posix() in note.read_text(encoding="utf-8")
+        assert asset.read_bytes() == b"synthetic"
+        if publication == "uncertain":
+            assert caught.value.retained_assets == (asset,)
+
+
+@pytest.mark.parametrize("rollback", ["ok", "sync-fails", "logging-fails"])
+def test_markdown_syncs_asset_removal_after_note_failure(
+    recipes, monkeypatch, caplog, mocker, rollback
+):
+    fail_rollback_sync = rollback != "ok"
     exporter = MarkdownExporter()
     monkeypatch.setattr(
         exporter, "_download_recipe_image", lambda recipe, **kw: b"synthetic"
@@ -173,6 +247,12 @@ def test_markdown_syncs_asset_removal_after_note_failure(
     monkeypatch.setattr("kptncook.exporter_utils.fsync_directory", sync)
     monkeypatch.setattr("kptncook.markdown_exporter.fsync_directory", sync)
     monkeypatch.setattr(Path, "write_text", fail_note)
+    if rollback == "logging-fails":
+        warning = mocker.patch.object(
+            markdown_exporter.logger,
+            "warning",
+            side_effect=RuntimeError("logging failed"),
+        )
     with pytest.raises(BatchExportError) as caught:
         exporter.export(recipes[:1])
     assert caught.value.__cause__ is note_error
@@ -180,6 +260,10 @@ def test_markdown_syncs_asset_removal_after_note_failure(
     assert synced[1] == []
     assert list(out.iterdir()) == [assets]
     assert list(assets.iterdir()) == []
-    assert ("Markdown asset cleanup is uncertain" in caplog.text) == fail_rollback_sync
-    if fail_rollback_sync:
+    assert ("Markdown asset cleanup is uncertain" in caplog.text) == (
+        rollback == "sync-fails"
+    )
+    if rollback == "sync-fails":
         assert str(synced[0][0]) in caplog.text
+    if rollback == "logging-fails":
+        warning.assert_called_once()

@@ -2,6 +2,7 @@ import errno
 import io
 import itertools
 import secrets
+from contextlib import suppress
 from decimal import Decimal
 from html import escape
 import logging
@@ -421,14 +422,17 @@ def move_to_free_target(
             try:
                 Path(source).unlink()
             except OSError:
-                logger.warning("Export published; could not remove staging source")
+                with suppress(Exception):
+                    logger.warning("Export published; could not remove staging source")
             return target
     finally:
         if staging_path is not None:
             try:
                 staging_path.unlink(missing_ok=True)
             except OSError:
-                logger.warning("Could not remove export staging file")
+                # Preserve the publication result or original exception.
+                with suppress(Exception):
+                    logger.warning("Could not remove export staging file")
     raise UserFacingError(
         f"Export filename collision limit reached in {directory}. "
         "Move existing exports or choose a different export location before retrying."

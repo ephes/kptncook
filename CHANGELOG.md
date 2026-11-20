@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Preserve export results and Markdown image references when a cleanup warning
+  cannot be logged.
 - Stage the legacy Paprika archive and its sidecars before replacing any
   output, preserving the previous bundle when preparation fails.
 - Skip blank translations when choosing discovery list titles and quick-search

@@ -503,7 +503,9 @@ hard links (FAT/exFAT and some network mounts do not); otherwise export stops
 with an error naming the directory and publishes no partial final file.
 Failures before note publication remove attempt-owned assets when safe and sync
 the asset directory after removal. If either operation raises an I/O error,
-the export logs uncertain asset cleanup and reports the original note failure.
+the export attempts to log uncertain asset cleanup and reports the original note
+failure even if logging raises. Warnings about a failed staging unlink are also
+best-effort and preserve the publication result.
 A failure or interruption during post-link directory sync reports the published
 path with uncertain durability, retaining all visible files and assets a
 visible note references.

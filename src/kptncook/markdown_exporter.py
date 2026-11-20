@@ -13,6 +13,7 @@ import json
 import logging
 import uuid
 import tempfile
+from contextlib import suppress
 
 import httpx
 from collections.abc import Iterable
@@ -218,10 +219,11 @@ class MarkdownExporter:
                                 asset_path.unlink(missing_ok=True)
                                 fsync_directory(asset_path.parent)
                             except OSError:
-                                logger.warning(
-                                    "Markdown asset cleanup is uncertain for %s",
-                                    asset_path,
-                                )
+                                with suppress(Exception):
+                                    logger.warning(
+                                        "Markdown asset cleanup is uncertain for %s",
+                                        asset_path,
+                                    )
                         raise
                 written.append(out_path)
                 if asset_path is not None:
