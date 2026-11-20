@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -225,6 +226,35 @@ def test_export_reuses_utf8_bytes_at_output_limit(exporter, monkeypatch):
     assert path.read_bytes() == expected
     assert len(encodings) == len(staged_writes) == 2
     assert all(encoded is staged for encoded, staged in zip(encodings, staged_writes))
+
+
+def test_export_keeps_batch_start_date_across_midnight(exporter, monkeypatch):
+    batch_day = date(2026, 1, 31)
+    next_day = date(2026, 2, 1)
+    current_day = batch_day
+
+    class Calendar:
+        @staticmethod
+        def today():
+            return current_day
+
+    def download_image(recipe, *, budget):
+        nonlocal current_day
+        if recipe.id.oid == "2":
+            current_day = next_day
+
+    monkeypatch.setattr("kptncook.markdown_exporter.date", Calendar)
+    monkeypatch.setattr(exporter, "_download_recipe_image", download_image)
+    first = build_recipe(_id={"$oid": "1"})
+    second = build_recipe(_id={"$oid": "2"})
+
+    paths = exporter.export([first, second])
+
+    assert [path.read_text(encoding="utf-8").splitlines()[2] for path in paths] == [
+        f"date: {batch_day}",
+        f"date: {batch_day}",
+    ]
+    assert exporter.render_recipe(second).splitlines()[2] == f"date: {next_day}"
 
 
 def test_export_disambiguates_duplicate_titles():

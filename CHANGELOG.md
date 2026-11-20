@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Use the batch start date in every Markdown note, even when export crosses
+  midnight.
 - Encode Markdown notes once and stage the same UTF-8 bytes charged to the
   output allowance.
 - Save guided setup's password-manager command overrides together and use the

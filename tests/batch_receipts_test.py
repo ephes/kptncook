@@ -84,11 +84,11 @@ def test_markdown_batch_receipts(recipes, monkeypatch, failure):
     render = exporter.render_recipe
     current = []
 
-    def rendering(recipe, image_path=None):
+    def rendering(recipe, image_path=None, *, export_date=None):
         current.append(recipe.id.oid)
         if recipe is recipes[1] and failure == "render":
             raise ValueError("synthetic render failure")
-        return render(recipe, image_path)
+        return render(recipe, image_path, export_date=export_date)
 
     monkeypatch.setattr(exporter, "render_recipe", rendering)
     link = os.link

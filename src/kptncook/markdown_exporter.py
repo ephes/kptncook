@@ -136,6 +136,7 @@ class MarkdownExporter:
         return recipe.servings_or(self.servings)
 
     def export(self, recipes: Iterable[Recipe]) -> list[Path]:
+        export_date = date.today()
         recipes = list(islice(recipes, exporter_utils.MAX_RECIPES + 1))
         exporter_utils.validate_export_batch_size(len(recipes))
         for recipe in recipes:
@@ -197,7 +198,9 @@ class MarkdownExporter:
                             if asset_path
                             else None
                         )
-                        content = self.render_recipe(recipe, image_path=image_path)
+                        content = self.render_recipe(
+                            recipe, image_path=image_path, export_date=export_date
+                        )
                         staged_note = staging / "note.md"
                         note_bytes = content.encode("utf-8")
                         budget.charge_output(len(note_bytes))
@@ -264,7 +267,13 @@ class MarkdownExporter:
             )
             return None
 
-    def render_recipe(self, recipe: Recipe, image_path: str | None = None) -> str:
+    def render_recipe(
+        self,
+        recipe: Recipe,
+        image_path: str | None = None,
+        *,
+        export_date: date | None = None,
+    ) -> str:
         recipe.validate_scaled_quantities(self.servings_for(recipe))
         labels = _section_labels()
         comment = (
@@ -282,7 +291,8 @@ class MarkdownExporter:
             or "recipe"
         )
         lines.append(f"title: {_yaml_string(title)}")
-        lines.append(f"date: {date.today().isoformat()}")
+        note_date = export_date if export_date is not None else date.today()
+        lines.append(f"date: {note_date.isoformat()}")
 
         servings = self.servings_for(recipe)
         lines.append(f"servings: {servings}")

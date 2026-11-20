@@ -425,11 +425,12 @@ Paprika uses a decimal string, and Mealie uses the string `<count> Portionen`.
 Markdown front-matter string values are quoted as YAML scalars,
 so punctuation and newlines in tags and URLs retain their string values.
 
-The Markdown export counts and stages the same UTF-8 note bytes.
 The Markdown export (`export-recipes-to-markdown`) writes one `.md` file per
 recipe into an `export_md` directory under the KptnCook home, with YAML front
-matter (full title, servings, prep/cook time, link, image, tags) followed by ingredients
-and instructions. Images are downloaded into its sibling `assets/` directory
+matter (full title, export date, servings, prep/cook time, link, image, tags)
+followed by ingredients and instructions. All notes in a batch use the local
+date at the start of the export. The output allowance counts the same UTF-8
+bytes written to staging. Images are downloaded into its sibling `assets/` directory
 with random filenames and relative references; copy that directory along with
 the notes. Markdown uses the final step image when it has a URL and otherwise
 uses the recipe cover if exactly one is available. The selected URL must pass
@@ -437,7 +438,8 @@ the image-origin check. Authentication keys and signed image URLs appear only in
 download requests, never in the generated Markdown or asset filenames. Failed
 image downloads omit image metadata/body markup while retaining the recipe text.
 Library `render_recipe()` performs no image I/O and omits images unless passed
-an explicit local `image_path`. Image authentication preserves existing query
+an explicit local `image_path`. It defaults to the current local date unless an
+`export_date` is supplied. Image authentication preserves existing query
 pairs/fragments and replaces any old `kptnkey` value.
 Section headings and image alt text follow `KPTNCOOK_LANG`
 (German, English, Spanish, French, and Portuguese are recognized; other
