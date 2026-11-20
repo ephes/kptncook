@@ -182,6 +182,10 @@ to 16 dictionary levels and 4,096 visited-value/key-probe operations per list
 search (lists and quick search). Cycles, depth and work overflow produce a short
 malformed-screen error with no partial listing; localized text, key precedence
 and entry order are retained. Screen entry lists are leaves for these searches.
+Localized discovery titles and quick-search labels skip empty and whitespace-only
+translations in the usual key order and preserve the selected text verbatim.
+A list with only blank title translations is shown without a title if it has an
+ID or type. A quick-search entry with only blank translations is omitted.
 Before constructing summaries, the complete screen must also fit 4,096 raw
 entries across the selected lists and quick-search leaves (including entries
 that would be ignored), and 262,144 characters across all displayed IDs, titles,

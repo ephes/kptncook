@@ -67,6 +67,31 @@ def test_screen_preserves_list_precedence_localization_and_order(monkeypatch):
     )
 
 
+def test_screen_skips_blank_translations_in_each_fallback_tier():
+    blank = {"de": "\t ", "en": "", "singular": "  ", "custom": "\n"}
+    payload = {
+        "lists": [
+            {"title": {"de": " \t", "en": "  Fallback  ", "es": "Later"}},
+            {"title": blank},
+            {"id": "untitled", "title": blank},
+        ],
+        "quickSearch": [
+            {"localizedTitle": {"de": "", "singular": " ", "plural": "Plural"}},
+            {"localizedTitle": {"singular": "\n", "custom": " ", "other": "Other"}},
+            {"localizedTitle": blank},
+            {"localizedTitle": {"de": 42, "en": ["unsupported"]}},
+        ],
+    }
+
+    result = discovery.parse_discovery_screen(payload)
+
+    assert result.lists == [
+        discovery.DiscoveryListSummary(None, "  Fallback  ", None),
+        discovery.DiscoveryListSummary("untitled", None, None),
+    ]
+    assert result.quick_search == ["Plural", "Other"]
+
+
 def test_screen_shared_acyclic_dictionary_is_allowed():
     shared = {"irrelevant": {}}
     assert discovery.parse_discovery_screen({"one": shared, "two": shared}).lists == []

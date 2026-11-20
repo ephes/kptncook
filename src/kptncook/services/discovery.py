@@ -75,16 +75,12 @@ def _extract_localized_text(value: object) -> str | None:
     if isinstance(value, str):
         return value
     if isinstance(value, dict):
-        for key in ("de", "en", "es", "fr", "pt"):
+        for key in ("de", "en", "es", "fr", "pt", "singular", "plural", "uncountable"):
             candidate = value.get(key)
-            if isinstance(candidate, str):
-                return candidate
-        for key in ("singular", "plural", "uncountable"):
-            candidate = value.get(key)
-            if isinstance(candidate, str):
+            if isinstance(candidate, str) and candidate.strip():
                 return candidate
         for candidate in value.values():
-            if isinstance(candidate, str):
+            if isinstance(candidate, str) and candidate.strip():
                 return candidate
     return None
 
