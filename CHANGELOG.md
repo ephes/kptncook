@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Stage the legacy Paprika archive and its sidecars before replacing any
+  output, preserving the previous bundle when preparation fails.
 - Refuse API base URLs with a query or fragment before sending requests and
   preserve reverse-proxy path prefixes when building Mealie endpoints.
 - Refuse nonfinite numbers, including float overflow, in Mealie control replies

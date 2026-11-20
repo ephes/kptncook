@@ -59,6 +59,8 @@ def test_legacy_paprika_archive_contains_only_requested_members(tmp_path):
         )
         with ZipFile(result) as archive:
             assert archive.namelist() == [f"recipe_{oid}.paprikarecipe"]
+            sidecar = tmp_path / archive.namelist()[0]
+            assert sidecar.read_bytes() == archive.read(sidecar.name)
             assert (
                 gzip.decompress(archive.read(archive.namelist()[0]))
                 == b'{"synthetic":true}'
@@ -68,3 +70,40 @@ def test_legacy_paprika_archive_contains_only_requested_members(tmp_path):
     result = exporter.save_recipes({}, "empty.zip", str(tmp_path))
     with ZipFile(result) as archive:
         assert archive.namelist() == []
+
+
+@pytest.mark.parametrize("failure", ["second recipe", "archive"])
+def test_legacy_paprika_staging_failure_preserves_existing_bundle(
+    tmp_path, monkeypatch, failure
+):
+    exporter = PaprikaExporter()
+    filename = "recipes.paprikarecipes"
+    exporter.save_recipes({"first": '{"old":true}'}, filename, str(tmp_path))
+    original = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
+
+    if failure == "second recipe":
+        original_write = gzip.GzipFile.write
+
+        def fail_second(stream, data):
+            if data == b'{"synthetic":true}':
+                original_write(stream, data[:4])
+                raise OSError("injected write failure")
+            return original_write(stream, data)
+
+        monkeypatch.setattr(gzip.GzipFile, "write", fail_second)
+    else:
+
+        def fail_zip(path, entries):
+            path.write_bytes(b"partial archive")
+            raise OSError("injected write failure")
+
+        monkeypatch.setattr("kptncook.paprika.write_zip", fail_zip)
+
+    with pytest.raises(OSError, match="injected write failure"):
+        exporter.save_recipes(
+            {"first": '{"new":true}', "second": '{"synthetic":true}'},
+            filename,
+            str(tmp_path),
+        )
+
+    assert {path.name: path.read_bytes() for path in tmp_path.iterdir()} == original

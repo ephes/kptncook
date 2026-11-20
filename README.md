@@ -547,6 +547,12 @@ The library `PaprikaExporter.save_recipes` helper builds its archive from exactl
 the requested IDs, including an empty archive for an empty request. Reusing its
 work directory never includes stale or unrelated `.paprikarecipe` files; those
 unrequested files are left untouched.
+The helper stages all gzip sidecars and the ZIP before changing any destination
+files. A failure while preparing a sidecar or the ZIP preserves the previous
+archive and sidecars. Once ready, it replaces the requested sidecars one at a
+time and then replaces the archive. A replacement failure may leave some
+complete sidecars visible with the previous archive. A directory sync failure
+after archive replacement reports uncertain durability and retains visible files.
 Paprika preserves quotes, backslashes, whitespace and Unicode in recipe text.
 All three local exporters preflight every recipe ID before writing any output:
 IDs must be portable single filename components of at most 128 bytes (no slash,

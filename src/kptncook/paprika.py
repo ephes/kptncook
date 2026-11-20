@@ -21,6 +21,7 @@ from typing import Any
 import httpx
 
 from kptncook.config import get_settings
+from kptncook.durability import fsync_directory
 from kptncook.exporter_utils import (
     BatchExportError,
     BudgetedWriter,
@@ -234,14 +235,42 @@ class PaprikaExporter:
     ) -> str:
         for identifier in export_data:
             validate_export_id(identifier)
-        entries = []
-        for id, recipe_as_json in export_data.items():
-            recipe_as_gz = os.path.join(directory, "recipe_" + id + ".paprikarecipe")
-            with gzip.open(recipe_as_gz, "wb") as f:
-                f.write(recipe_as_json.encode("utf-8"))
-            entries.append((Path(recipe_as_gz).name, Path(recipe_as_gz)))
+
         filename_full_path = os.path.join(directory, filename)
-        write_zip(Path(filename_full_path), entries)
+        archive_target = Path(filename_full_path)
+        sidecar_directory = Path(directory)
+        # Each staging directory shares a filesystem with its final targets.
+        with (
+            tempfile.TemporaryDirectory(dir=sidecar_directory) as member_dir,
+            tempfile.TemporaryDirectory(dir=archive_target.parent) as archive_dir,
+        ):
+            entries = []
+            for index, (identifier, recipe_as_json) in enumerate(export_data.items()):
+                name = f"recipe_{identifier}.paprikarecipe"
+                member = Path(member_dir) / str(index)
+                with member.open("wb") as staged:
+                    with gzip.GzipFile(
+                        filename=name, mode="wb", fileobj=staged
+                    ) as compressed:
+                        compressed.write(recipe_as_json.encode("utf-8"))
+                    staged.flush()
+                    os.fsync(staged.fileno())
+                entries.append((name, member))
+
+            archive = Path(archive_dir) / "archive.zip"
+            write_zip(archive, entries)
+            with archive.open("rb") as staged:
+                os.fsync(staged.fileno())
+
+            for name, member in entries:
+                member.replace(sidecar_directory / name)
+            archive.replace(archive_target)
+            try:
+                fsync_directory(archive_target.parent)
+                if entries and sidecar_directory != archive_target.parent:
+                    fsync_directory(sidecar_directory)
+            except BaseException as exc:
+                raise ExportPublicationUncertain(archive_target) from exc
         return filename_full_path
 
     def get_cover_img_as_base64_string(
