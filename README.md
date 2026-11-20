@@ -425,6 +425,7 @@ Paprika uses a decimal string, and Mealie uses the string `<count> Portionen`.
 Markdown front-matter string values are quoted as YAML scalars,
 so punctuation and newlines in tags and URLs retain their string values.
 
+The Markdown export counts and stages the same UTF-8 note bytes.
 The Markdown export (`export-recipes-to-markdown`) writes one `.md` file per
 recipe into an `export_md` directory under the KptnCook home, with YAML front
 matter (full title, servings, prep/cook time, link, image, tags) followed by ingredients

@@ -234,11 +234,11 @@ def test_markdown_syncs_asset_removal_after_note_failure(
             if fail_rollback_sync and len(synced) == 2:
                 raise OSError("synthetic asset rollback sync failure")
 
-    write_text = Path.write_text
+    write_bytes = Path.write_bytes
 
     def fail_note(path, *args, **kwargs):
         if path.name != "note.md":
-            return write_text(path, *args, **kwargs)
+            return write_bytes(path, *args, **kwargs)
         assert len(synced) == 1
         assert len(synced[0]) == 1
         assert synced[0][0].is_file()
@@ -246,7 +246,7 @@ def test_markdown_syncs_asset_removal_after_note_failure(
 
     monkeypatch.setattr("kptncook.exporter_utils.fsync_directory", sync)
     monkeypatch.setattr("kptncook.markdown_exporter.fsync_directory", sync)
-    monkeypatch.setattr(Path, "write_text", fail_note)
+    monkeypatch.setattr(Path, "write_bytes", fail_note)
     if rollback == "logging-fails":
         warning = mocker.patch.object(
             markdown_exporter.logger,

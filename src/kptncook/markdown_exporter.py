@@ -199,8 +199,9 @@ class MarkdownExporter:
                         )
                         content = self.render_recipe(recipe, image_path=image_path)
                         staged_note = staging / "note.md"
-                        budget.charge_output(len(content.encode("utf-8")))
-                        staged_note.write_text(content, encoding="utf-8")
+                        note_bytes = content.encode("utf-8")
+                        budget.charge_output(len(note_bytes))
+                        staged_note.write_bytes(note_bytes)
                         out_path = move_to_free_target(
                             staged_note,
                             out_dir,

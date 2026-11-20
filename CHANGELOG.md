@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Encode Markdown notes once and stage the same UTF-8 bytes charged to the
+  output allowance.
 - Save guided setup's password-manager command overrides together and use the
   saved command pair when retrieving credentials.
 - Preserve an API key initialized by a concurrent guided setup and report when

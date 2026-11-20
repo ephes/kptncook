@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from kptncook import exporter_utils
@@ -185,6 +187,44 @@ def test_export_writes_one_file_per_recipe():
     assert out_path.suffix == ".md"
     assert out_path.exists()
     assert "### Zutaten" in out_path.read_text(encoding="utf-8")
+
+
+def test_export_reuses_utf8_bytes_at_output_limit(exporter, monkeypatch):
+    title = "Crème 日本語 🍋"
+    recipe = build_recipe(localizedTitle={"de": title}, steps=[])
+    note = exporter.render_recipe(recipe)
+    expected = note.encode("utf-8")
+    encodings = []
+
+    class RecordedNote(str):
+        def encode(self, encoding="utf-8"):
+            encoded = super().encode(encoding)
+            encodings.append(encoded)
+            return encoded
+
+    staged_writes = []
+    write_bytes = Path.write_bytes
+
+    def record_write(path, content):
+        staged_writes.append(content)
+        return write_bytes(path, content)
+
+    monkeypatch.setattr(
+        exporter, "render_recipe", lambda *args, **kwargs: RecordedNote(note)
+    )
+    monkeypatch.setattr(Path, "write_bytes", record_write)
+    # The budget includes both the original note and its copy for publication.
+    monkeypatch.setattr(exporter_utils, "MAX_BATCH_OUTPUT_BYTES", 2 * len(expected) - 1)
+    with pytest.raises(exporter_utils.BatchExportError, match="output byte allowance"):
+        exporter.export([recipe])
+    assert not list((settings.root / "export_md").glob("*.md"))
+
+    monkeypatch.setattr(exporter_utils, "MAX_BATCH_OUTPUT_BYTES", 2 * len(expected) + 1)
+    (path,) = exporter.export([recipe])
+    assert title.encode("utf-8") in path.read_bytes()
+    assert path.read_bytes() == expected
+    assert len(encodings) == len(staged_writes) == 2
+    assert all(encoded is staged for encoded, staged in zip(encodings, staged_writes))
 
 
 def test_export_disambiguates_duplicate_titles():
