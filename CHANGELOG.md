@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Refuse recipe batches with Unicode surrogate code points in keys or values
+  before building recipe models or starting an export.
 - Apply explicit wrapper timeouts to borrowed HTTPX clients while preserving
   per-request overrides and inherited timeouts when the wrapper has no policy.
 - Resolve missing recipe query defaults from one settings snapshot per request.

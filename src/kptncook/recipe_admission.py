@@ -1,5 +1,6 @@
-"""Bound expanded source/restored recipe work before model hydration."""
+"""Validate text and bound expanded recipe work before model hydration."""
 
+import re
 from collections.abc import Iterator, Sequence
 
 from kptncook.repositories import MAX_STORE_BYTES
@@ -15,10 +16,11 @@ MAX_RECIPE_TEXT = 8 * 1024 * 1024
 # text character at least one byte. MAX_RECIPES still caps the recipe count.
 MAX_BATCH_WORK = MAX_STORE_BYTES // 2
 MAX_BATCH_TEXT = MAX_STORE_BYTES
+_SURROGATE = re.compile(r"[\ud800-\udfff]")
 
 
 class RecipeAdmissionError(ValueError):
-    """A recipe batch exceeds the supported model work envelope."""
+    """A recipe batch contains invalid text or exceeds the model work envelope."""
 
 
 def admit_recipes(recipes: Sequence[object]) -> None:
@@ -50,6 +52,10 @@ def admit_recipes(recipes: Sequence[object]) -> None:
             recipe_text += len(node)
             if recipe_text > MAX_RECIPE_TEXT or text > MAX_BATCH_TEXT:
                 raise RecipeAdmissionError("Recipe model work exceeds the text limit")
+            if not node.isascii() and _SURROGATE.search(node):
+                raise RecipeAdmissionError(
+                    "Recipe contains invalid Unicode scalar text."
+                )
         elif isinstance(node, (dict, list, tuple)):
             if depth >= MAX_RECIPE_DEPTH or id(node) in active:
                 raise RecipeAdmissionError(

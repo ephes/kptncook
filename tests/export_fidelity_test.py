@@ -79,6 +79,51 @@ def read_export(kind, result):
     )
 
 
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"localizedTitle": {"en": "Synthetic \ud800 soup"}},
+        {"metadata": {"synthetic \udfff key": None}},
+    ],
+)
+def test_restored_batch_rejects_surrogates_before_hydration_and_export(
+    monkeypatch, synthetic_recipe, overrides
+):
+    valid = synthetic_recipe.model_dump(by_alias=True)
+    invalid = {**valid, **overrides, "_id": {"$oid": "0" * 24}}
+    path = repository_service.get_repository().path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps([{"date": "2026-11-20", "data": data} for data in (valid, invalid)]),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(Recipe, "model_validate", lambda *a: pytest.fail("hydrated"))
+    monkeypatch.setattr(
+        MarkdownExporter, "export", lambda *a, **kw: pytest.fail("exported")
+    )
+
+    with pytest.raises(workflows.UserFacingError, match="invalid Unicode scalar text"):
+        workflows.export_recipes_to_markdown_result(None)
+
+
+def test_restored_recipe_roundtrips_supplementary_text(
+    offline_exports, synthetic_recipe
+):
+    title = "Soupe épicée 🍲"
+    data = {
+        **synthetic_recipe.model_dump(by_alias=True),
+        "localizedTitle": {"fr": title},
+    }
+    path = repository_service.get_repository().path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps([{"date": "2026-11-20", "data": data}]), encoding="utf-8"
+    )
+
+    result = workflows.export_recipes_to_markdown_result(None)
+    assert read_export("markdown", result)["title"] == title
+
+
 @pytest.mark.parametrize("kind", ["paprika", "tandoor", "markdown"])
 @pytest.mark.parametrize("selector", ["uid", "oid", "uid-url", "oid-url"])
 def test_local_exports_resolve_both_identifiers(
