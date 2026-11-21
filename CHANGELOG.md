@@ -4,6 +4,8 @@ Unreleased
 ### Fixes
 - Skip empty recipe image responses and responses with invalid, oversized, or
   mismatched declared lengths while retaining the recipe text.
+- Connect directly to allowed recipe image hosts and ignore HTTPX proxy and CA
+  settings from the environment.
 - Preserve first-occurrence source tag order when substituting Mealie tag IDs
   for archive imports.
 - Keep the Mealie import receipt and continue with later step images when

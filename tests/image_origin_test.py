@@ -178,6 +178,37 @@ def test_allowed_redirects_are_followed(default_hosts_only, monkeypatch):
     assert requests == [f"https://{CDN}/start.jpg", f"https://{CDN}/final.jpg"]
 
 
+def test_image_client_ignores_ambient_proxy_and_checks_redirects(
+    default_hosts_only, monkeypatch
+):
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.invalid:8888")
+    monkeypatch.setenv("NO_PROXY", "")
+    client_class = httpx.AsyncClient
+    clients = []
+    requests = []
+
+    def handle(request):
+        requests.append(request.url.path)
+        location = (
+            "/hop.jpg"
+            if request.url.path == "/start.jpg"
+            else "https://outside.invalid/escape.jpg"
+        )
+        return httpx.Response(302, headers={"Location": location})
+
+    def client_factory(**kwargs):
+        client = client_class(transport=httpx.MockTransport(handle), **kwargs)
+        clients.append(client)
+        return client
+
+    monkeypatch.setattr(image_download.httpx, "AsyncClient", client_factory)
+    with pytest.raises(httpx.RequestError, match="allowed image host"):
+        image_download.download_image(f"https://{CDN}/start.jpg", follow_redirects=True)
+    assert requests == ["/start.jpg", "/hop.jpg"]
+    [client] = clients
+    assert client.trust_env is False
+
+
 def test_redirects_are_not_followed_unless_requested(default_hosts_only, monkeypatch):
     requests = _redirecting_transport(monkeypatch, "/final.jpg")
     with pytest.raises(httpx.HTTPStatusError):

@@ -24,6 +24,7 @@ async def _download_image(
     async with httpx.AsyncClient(
         timeout=IMAGE_DOWNLOAD_TIMEOUT,
         follow_redirects=False,
+        trust_env=False,
         headers={"Accept-Encoding": "identity"},
     ) as client:
         for _ in range(MAX_IMAGE_REDIRECTS + 1):
@@ -112,9 +113,9 @@ def download_image(
     (see ``image_origin``); otherwise ``httpx.RequestError`` is raised before
     any request to that target. Only HTTP 200 responses without Content-Range
     are read. The body must be nonempty and match Content-Length if present.
-    An optional export budget charges every streamed chunk (even
-    from failed images); exhaustion stops the batch rather than silently
-    omitting another optional cover.
+    The image client connects directly and ignores HTTPX proxy and CA settings
+    from the environment. An optional export budget charges every streamed
+    chunk, including chunks from failed images. Exhaustion stops the batch.
     """
     try:
         asyncio.get_running_loop()

@@ -378,6 +378,12 @@ checked downloader and uploaded as image bytes; Mealie is never asked to fetch
 a keyed URL itself, since its scraper would follow redirects unchecked.
 Configured hosts must be names, not IP addresses in any spelling.
 
+The image downloader requires direct HTTPS access to the allowed hosts. It
+ignores HTTPX environment settings for proxies and CA certificates, including
+`HTTPS_PROXY`, `ALL_PROXY`, `SSL_CERT_FILE` and `SSL_CERT_DIR`.
+Deployments that require a forward proxy will skip images if direct access is
+unavailable.
+
 Sync requires a complete, validated remote recipe inventory, including every
 recipe detail. An invalid recipe or unreadable imported identity stops the run
 before any organizer or archive creates, with a bounded positional diagnostic.
