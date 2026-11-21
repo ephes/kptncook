@@ -409,10 +409,9 @@ class KptnCookClient(BaseHttpClient):
         results = _decode_source_json(response)
         if results is None:
             results = []
-        return [
-            RecipeInDb(date=date.today(), data=data)
-            for data in _admit_recipe_results(results)
-        ]
+        results = _admit_recipe_results(results)
+        today = date.today()
+        return [RecipeInDb(date=today, data=data) for data in results]
 
     def get_discovery_screen(
         self,

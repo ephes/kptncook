@@ -171,6 +171,9 @@ starts. Selected local lookups apply the envelope to matching records; full
 listings apply it to the complete set. These expanded-model limits are separate
 from the envelope-search limits below.
 
+Each recipe in a resolved search response receives the same local import date.
+The client reads the date once after accepting the response.
+
 Favorites and discovery-list envelope searches allow at most 16 dictionary
 levels and 4,096 work units per response (each visited value or supported-key
 probe costs one unit). Traversal is iterative, detects active dictionary cycles

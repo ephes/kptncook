@@ -4,6 +4,7 @@ Unreleased
 ### Fixes
 - Refuse unsupported dailies response envelopes and whole lists containing
   non-object entries. Continue accepting empty recipe lists.
+- Use one local import date per resolved search response, even across midnight.
 - Deduplicate exact Tandoor keyword names across the default keyword, active
   tags, and recipe type while preserving first-seen order.
 - Keep a published Tandoor archive in the export receipt and warn if temporary

@@ -1,3 +1,6 @@
+from datetime import date
+from unittest.mock import Mock
+
 import pytest
 import httpx
 from pydantic_core import Url
@@ -44,6 +47,24 @@ def test_resolve_recipe_summaries_uses_bounded_timeout(monkeypatch):
     assert recipes == []
     assert seen["path"] == "/recipes/search?kptnkey=test-key"
     assert seen["timeout"] == RECIPE_RESOLUTION_TIMEOUT
+
+
+def test_resolve_recipe_summaries_uses_one_date_for_the_batch(monkeypatch):
+    before_midnight = date(2026, 1, 1)
+    after_midnight = date(2026, 1, 2)
+    clock = Mock()
+    clock.today.side_effect = [before_midnight, after_midnight]
+    monkeypatch.setattr("kptncook.api.date", clock)
+    ids = ["0" * 24, "1" * 24]
+    payload = [{"_id": {"$oid": oid}} for oid in ids]
+    with httpx.Client(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json=payload))
+    ) as http:
+        client = KptnCookClient("https://api.example", api_key="synthetic", client=http)
+        entries = client.resolve_recipe_summaries([("oid", oid) for oid in ids])
+
+    assert [entry.date for entry in entries] == [before_midnight, before_midnight]
+    clock.today.assert_called_once_with()
 
 
 @pytest.mark.parametrize(
