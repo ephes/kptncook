@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+from contextlib import suppress
 from enum import Enum
 from typing import Any
 
@@ -9,6 +11,7 @@ from . import log_redaction
 
 # httpx logs request URLs, which carry the kptnkey; keep secrets out of logs.
 log_redaction.install()
+logger = logging.getLogger(__name__)
 
 DEFAULT_REQUEST_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 
@@ -50,8 +53,14 @@ class BaseHttpClient:
     def __enter__(self) -> BaseHttpClient:
         return self
 
-    def __exit__(self, *_args: object) -> None:
-        self.close()
+    def __exit__(self, exc_type: type[BaseException] | None, *_args: object) -> None:
+        try:
+            self.close()
+        except Exception:
+            if exc_type is None:
+                raise
+            with suppress(Exception):
+                logger.warning("HTTP client cleanup failed.")
 
     def to_url(self, path: str) -> str:
         try:

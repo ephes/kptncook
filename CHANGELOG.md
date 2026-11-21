@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Preserve the operation error when an owned HTTP client also fails to close,
+  and log a short cleanup warning without exception details.
 - Keep published Markdown notes and images in the export receipt when staging
   directory cleanup fails, and continue the batch with a separate warning.
 - Serialize direct repository backups with writes so an older snapshot cannot

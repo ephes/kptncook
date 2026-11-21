@@ -149,6 +149,11 @@ prints the completed counts and a short cleanup warning, then exits with status
 counts and a `cleanup_warning`. If the backup itself fails, its primary error
 still reaches the caller and the cleanup warning goes to the log.
 
+When a library API client's context exits after an operation error, a failure
+to close its owned HTTP client produces a short warning and the original error
+reaches the caller. A standalone close failure propagates to the caller.
+Injected HTTP clients remain open for their owners to close.
+
 Library API clients send requests only to their configured HTTP(S) origin
 (scheme, host and effective port), with no userinfo in the URL. Relative paths
 and same-origin absolute URLs are supported, including an explicit default

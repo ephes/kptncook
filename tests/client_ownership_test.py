@@ -106,6 +106,34 @@ def test_context_closes_only_owned_http_client(monkeypatch, owned, exceptional):
         http.close()
 
 
+@pytest.mark.parametrize("request_fails", [True, False])
+def test_owned_http_close_failure_preserves_primary_error(
+    monkeypatch, caplog, request_fails
+):
+    request_error = httpx.ReadError("synthetic request failure")
+    close_error = RuntimeError("synthetic private cleanup detail")
+
+    class FailingTransport(httpx.MockTransport):
+        def close(self):
+            raise close_error
+
+    def handle(request):
+        if request_fails:
+            raise request_error
+        return httpx.Response(200)
+
+    http = httpx.Client(transport=FailingTransport(handle))
+    monkeypatch.setattr("kptncook.http_client.httpx.Client", lambda **kw: http)
+    expected = request_error if request_fails else close_error
+    with pytest.raises(type(expected)) as caught:
+        with BaseHttpClient("https://api.example") as client:
+            client.get("/items")
+
+    assert caught.value is expected
+    assert http.is_closed
+    assert caplog.messages == (["HTTP client cleanup failed."] if request_fails else [])
+
+
 class OwnedClient:
     def __init__(self, *args):
         self.closes = 0
