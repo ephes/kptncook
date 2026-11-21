@@ -28,6 +28,7 @@ _SAFE_VALIDATION_MESSAGES = {
     "finite_number": "Expected a finite number",
     "greater_than": "Number is below the allowed range",
     "less_than_equal": "Number exceeds the allowed range",
+    "ingredient_group_label_conflict": "Conflicting labels for the same ingredient group",
 }
 
 
@@ -153,6 +154,13 @@ class Settings(BaseSettings):
         from .image_origin import parse_image_hosts
 
         parse_image_hosts(value)
+        return value
+
+    @field_validator("kptncook_ingredient_group_labels")
+    def ingredient_group_labels_must_agree(cls, value: str | None) -> str | None:
+        from .ingredient_groups import parse_ingredient_group_labels
+
+        parse_ingredient_group_labels(value)
         return value
 
     @field_validator("kptncook_api_key")

@@ -1,5 +1,7 @@
 from collections.abc import Iterable
 
+from pydantic_core import PydanticCustomError
+
 from kptncook.config import get_settings
 from kptncook.models import Ingredient
 
@@ -10,10 +12,8 @@ DEFAULT_INGREDIENT_GROUP_LABELS = {
 
 
 def parse_ingredient_group_labels(raw: str | None) -> dict[str, str]:
-    labels = dict(DEFAULT_INGREDIENT_GROUP_LABELS)
-    if not raw:
-        return labels
-    for entry in raw.split(","):
+    configured: dict[str, str] = {}
+    for entry in (raw or "").split(","):
         entry = entry.strip()
         if not entry or ":" not in entry:
             continue
@@ -22,8 +22,13 @@ def parse_ingredient_group_labels(raw: str | None) -> dict[str, str]:
         value = value.strip()
         if not key or not value:
             continue
-        labels[key] = value
-    return labels
+        if key in configured and configured[key] != value:
+            raise PydanticCustomError(
+                "ingredient_group_label_conflict",
+                "Conflicting labels for the same ingredient group",
+            )
+        configured[key] = value
+    return DEFAULT_INGREDIENT_GROUP_LABELS | configured
 
 
 def _ingredient_group_key(ingredient: Ingredient) -> str:

@@ -85,7 +85,9 @@ def test_distinct_group_membership_has_linear_comparisons(monkeypatch, count):
 def test_mixed_groups_preserve_label_priority_and_first_seen_order(monkeypatch):
     monkeypatch.setattr(settings, "kptncook_group_ingredients_by_typ", True)
     monkeypatch.setattr(
-        settings, "kptncook_ingredient_group_labels", "basic:Vorrat,extra:Extras"
+        settings,
+        "kptncook_ingredient_group_labels",
+        "basic:Vorrat,extra:Extras, BASIC : Vorrat, EXTRA : Extras",
     )
     ingredients = [
         Ingredient.model_validate(

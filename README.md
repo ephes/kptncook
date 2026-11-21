@@ -948,10 +948,15 @@ KPTNCOOK_GROUP_INGREDIENTS_BY_TYP=true
 KPTNCOOK_INGREDIENT_GROUP_LABELS="regular:You need,basic:Pantry"
 ```
 
-Configured groups appear in label-map order (the defaults are `regular`, then
-`basic`); remaining groups retain their first-seen order, as do ingredients within
-each group. Group ordering uses linear membership work even with many distinct
-upstream types. Mealie step references expand each distinct source ingredient ID
+The built-in groups appear first in `regular`, `basic` order. Overriding their
+labels keeps those positions. Additional configured groups appear in the order
+they are first listed, followed by other groups in first-seen order. Ingredients
+retain their original order within each group. Group keys ignore case and outer
+whitespace. Repeating a key with the same trimmed label is allowed. Conflicting
+labels for a key cause a configuration error naming
+`KPTNCOOK_INGREDIENT_GROUP_LABELS` before exporting.
+Group ordering uses linear membership work even with many distinct upstream
+types. Mealie step references expand each distinct source ingredient ID
 once per step and retain first-occurrence reference order. Repeated IDs do not
 multiply expansion work or duplicate references; distinct rows sharing one source
 ID each retain their own reference.

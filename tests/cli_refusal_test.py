@@ -42,6 +42,29 @@ def test_invalid_stored_token_is_a_short_cli_error(monkeypatch):
     assert result.exception is None or isinstance(result.exception, SystemExit)
 
 
+@pytest.mark.parametrize("key", ["regular", "extra"])
+def test_conflicting_group_labels_are_refused_before_export(
+    monkeypatch, tmp_path, minimal, key
+):
+    monkeypatch.setenv("KPTNCOOK_HOME", str(tmp_path))
+    monkeypatch.setenv("KPTNCOOK_GROUP_INGREDIENTS_BY_TYP", "true")
+    monkeypatch.setenv(
+        "KPTNCOOK_INGREDIENT_GROUP_LABELS",
+        f"{key}:Synthetic first, {key.upper()} :Synthetic second",
+    )
+    RecipeRepository(tmp_path).add(
+        RecipeInDb(date=date(2000, 1, 1), data=dict(minimal, steps=[], imageList=[]))
+    )
+
+    result = runner.invoke(cli_module.app, ["export-recipes-to-markdown"])
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    assert "KPTNCOOK_INGREDIENT_GROUP_LABELS: Conflicting labels" in result.output
+    assert "Synthetic" not in result.output
+    assert not (tmp_path / "export_md").exists()
+
+
 def test_access_token_command_logs_in_despite_invalid_stored_token(monkeypatch):
     _invalid_stored_token(monkeypatch)
     monkeypatch.setattr(workflows, "get_credentials", lambda **kwargs: ("user", "pass"))

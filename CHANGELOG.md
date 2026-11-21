@@ -3,6 +3,8 @@ Unreleased
 
 ### Fixes
 - Return valid stored recipes even when logging a skipped row fails.
+- Reject conflicting labels for the same ingredient group key, preserving group
+  order for overrides and repeated identical labels.
 - Report malformed responses for today's recipe list as short errors and stop
   sync before writing to the recipe store.
 - Preserve saved favorites backup counts and primary errors when client cleanup
