@@ -113,15 +113,15 @@ def _collect_recipe_identifiers(items: Sequence[object]) -> list[RecipeIdentifie
     return identifiers
 
 
-def _extract_dailies_payload(payload: object) -> list[dict[str, Any]]:
+def _extract_dailies_payload(payload: object) -> list[Any]:
     if isinstance(payload, list):
-        return [item for item in payload if isinstance(item, dict)]
+        return payload
     if isinstance(payload, dict):
         for key in ("recipes", "dailies", "items"):
             value = payload.get(key)
             if isinstance(value, list):
-                return [item for item in value if isinstance(item, dict)]
-    return []
+                return value
+    raise ResponseShapeError("Dailies response missing recipe list.")
 
 
 class ResponseShapeError(ValueError):
@@ -342,6 +342,8 @@ class KptnCookClient(BaseHttpClient):
         response.raise_for_status()
         payload = _extract_dailies_payload(_decode_source_json(response))
         _admit_recipe_results(payload)
+        if any(not isinstance(item, dict) for item in payload):
+            raise ResponseShapeError("Dailies response contains a non-object recipe.")
         today = date.today()
         return [RecipeInDb(date=today, data=data) for data in payload]
 

@@ -704,6 +704,10 @@ Filter dailies by API fields such as recipeFilter (for example `veggie`) and
 zone (timezone offset like `+02:00`). Add `--save` to store the daily recipes
 in the local repository.
 
+Dailies accepts a recipe list directly or under `recipes`, `dailies` or
+`items`. Empty lists are valid. Unsupported envelopes or any non-object
+list entries cause the entire response to fail before recipes are saved.
+
 Recipe API requests that use language, store and preference defaults read all
 missing values from a single settings snapshot. Library calls that supply all
 three explicitly skip the settings lookup for those query parameters.

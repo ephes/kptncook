@@ -9,7 +9,7 @@ import typer
 from typer.testing import CliRunner
 
 import kptncook as cli_mod
-from kptncook.api import KptnCookClient, _collect_recipe_identifiers
+from kptncook.api import KptnCookClient, ResponseShapeError, _collect_recipe_identifiers
 from kptncook.services.discovery import normalize_discovery_list_type
 
 
@@ -85,6 +85,39 @@ def test_list_dailies_includes_filters(monkeypatch):
     assert params["recipeFilter"] == "veggie"
     assert params["zone"] == "+02:00"
     assert params["isSubscribed"] == "false"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"unexpected": []},
+        {"recipes": None},
+        [{"title": "Synthetic recipe"}, None],
+        {"dailies": [{"title": "Synthetic recipe"}, "unexpected"]},
+    ],
+)
+def test_list_dailies_refuses_malformed_payload_before_adapting(monkeypatch, payload):
+    adapt = Mock(side_effect=AssertionError("adapted malformed batch"))
+    monkeypatch.setattr("kptncook.api.RecipeInDb", adapt)
+    with httpx.Client(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json=payload))
+    ) as http:
+        client = KptnCookClient("https://example.com", "synthetic-key", client=http)
+        with pytest.raises(ResponseShapeError):
+            client.list_dailies()
+
+    adapt.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "payload", [[], {"recipes": []}, {"dailies": []}, {"items": []}]
+)
+def test_list_dailies_accepts_recognized_empty_payload(payload):
+    with httpx.Client(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json=payload))
+    ) as http:
+        client = KptnCookClient("https://example.com", "synthetic-key", client=http)
+        assert client.list_dailies() == []
 
 
 @pytest.mark.parametrize(
