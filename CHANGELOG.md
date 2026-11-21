@@ -29,6 +29,8 @@ Unreleased
   output, preserving the previous bundle when preparation fails.
 - Skip blank translations when choosing discovery list titles and quick-search
   labels so populated fallback translations can be shown.
+- Skip blank quick-search aliases so later populated labels can be shown, and
+  omit quick-search entries with no usable label.
 - Refuse API base URLs with a query or fragment before sending requests and
   preserve reverse-proxy path prefixes when building Mealie endpoints.
 - Refuse nonfinite numbers, including float overflow, in Mealie control replies

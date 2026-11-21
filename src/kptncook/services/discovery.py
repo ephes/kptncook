@@ -71,16 +71,21 @@ def _extract_nested_list(payload: object, keys: tuple[str, ...]) -> list[Any]:
     return []
 
 
+def _nonblank_text(value: object) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value
+    return None
+
+
 def _extract_localized_text(value: object) -> str | None:
     if isinstance(value, str):
         return value
     if isinstance(value, dict):
         for key in ("de", "en", "es", "fr", "pt", "singular", "plural", "uncountable"):
-            candidate = value.get(key)
-            if isinstance(candidate, str) and candidate.strip():
+            if (candidate := _nonblank_text(value.get(key))) is not None:
                 return candidate
-        for candidate in value.values():
-            if isinstance(candidate, str) and candidate.strip():
+        for translation in value.values():
+            if (candidate := _nonblank_text(translation)) is not None:
                 return candidate
     return None
 
@@ -170,15 +175,15 @@ def _extract_quick_search_entries(payload: object) -> list[Any]:
 
 
 def _format_quick_search_entry(entry: object) -> str | None:
-    if isinstance(entry, str):
-        return entry
-    if isinstance(entry, dict):
-        for key in ("title", "name", "label", "text", "query"):
-            value = entry.get(key)
-            if isinstance(value, str):
-                return value
-        localized = entry.get("localizedTitle") or entry.get("title")
-        return _extract_localized_text(localized)
+    if not isinstance(entry, dict):
+        return _nonblank_text(entry)
+    for key in ("title", "name", "label", "text", "query"):
+        if (label := _nonblank_text(entry.get(key))) is not None:
+            return label
+    for key in ("localizedTitle", "title"):
+        label = _nonblank_text(_extract_localized_text(entry.get(key)))
+        if label is not None:
+            return label
     return None
 
 

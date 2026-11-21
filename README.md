@@ -199,7 +199,10 @@ and entry order are retained. Screen entry lists are leaves for these searches.
 Localized discovery titles and quick-search labels skip empty and whitespace-only
 translations in the usual key order and preserve the selected text verbatim.
 A list with only blank title translations is shown without a title if it has an
-ID or type. A quick-search entry with only blank translations is omitted.
+ID or type. Quick search checks the aliases `title`, `name`, `label`, `text`
+and `query` for nonblank strings in that order, then tries localized text in
+`localizedTitle` and `title`. Blank standalone labels and entries without a
+usable label are omitted.
 Before constructing summaries, the complete screen must also fit 4,096 raw
 entries across the selected lists and quick-search leaves (including entries
 that would be ignored), and 262,144 characters across all displayed IDs, titles,

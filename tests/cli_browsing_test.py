@@ -8,6 +8,7 @@ from click import unstyle
 from typer.testing import CliRunner
 
 from kptncook.repositories import RecipeInDb
+from kptncook.services import workflows
 from kptncook.services.discovery import DiscoveryListSummary, DiscoveryScreenData
 from kptncook.services.repository import InvalidStoredRecipe
 from kptncook.services.workflows import (
@@ -60,6 +61,32 @@ def test_discovery_screen_display(mocker, hide_quick_search, empty):
     else:
         assert "Quick search:" in result.output
         assert "- Synthetic quick soup" in result.output
+
+
+def test_discovery_screen_skips_blank_quick_search_aliases(mocker):
+    client = mocker.patch.object(workflows, "_kptncook_client").return_value
+    client.get_discovery_screen.return_value = {
+        "quickSearch": [
+            {"title": " \t", "name": "", "label": "Soup", "text": "Later"},
+            {"title": "", "query": "", "localizedTitle": {"de": "Salat"}},
+            {"title": {"en": "Bread"}, "localizedTitle": {"de": " "}},
+            {"title": "First", "name": "Second", "localizedTitle": {"de": "Dritte"}},
+            {"title": " ", "name": "\t", "localizedTitle": {"en": ""}},
+            "\n ",
+        ],
+    }
+
+    result = runner.invoke(cli.app, ["discovery-screen"])
+
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines() == [
+        "No discovery lists found.",
+        "Quick search:",
+        "- Soup",
+        "- Salat",
+        "- Bread",
+        "- First",
+    ]
 
 
 @pytest.mark.parametrize(
