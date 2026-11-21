@@ -50,6 +50,7 @@ async def _download_image(
                     raise httpx.RequestError(
                         "Image response uses unsupported content encoding"
                     )
+                declared_length = _declared_length(response)
                 body = bytearray()
                 async for chunk in response.aiter_bytes():
                     if budget:
@@ -57,8 +58,31 @@ async def _download_image(
                     if len(body) + len(chunk) > MAX_IMAGE_BYTES:
                         raise httpx.RequestError("Image exceeds download size limit")
                     body.extend(chunk)
+                if not body or (
+                    declared_length is not None and len(body) != declared_length
+                ):
+                    raise httpx.RequestError(
+                        "Image response is not a complete representation"
+                    )
                 return bytes(body)
         raise httpx.RequestError("Image exceeded redirect limit")
+
+
+def _declared_length(response: httpx.Response) -> int | None:
+    header = response.headers.get("content-length")
+    if header is None:
+        return None
+    value = header.strip(" \t")
+    if not value.isascii() or not value.isdecimal():
+        raise httpx.RequestError("Image response has an invalid Content-Length")
+    digits = value.lstrip("0") or "0"
+    # Bound the decimal conversion even for an unusually long header.
+    max_digits = str(MAX_IMAGE_BYTES)
+    if len(digits) > len(max_digits) or (
+        len(digits) == len(max_digits) and digits > max_digits
+    ):
+        raise httpx.RequestError("Image exceeds download size limit")
+    return int(digits)
 
 
 def _check_origin(url: str) -> None:
@@ -87,7 +111,8 @@ def download_image(
     The URL and every redirect target must be on an allowed image host
     (see ``image_origin``); otherwise ``httpx.RequestError`` is raised before
     any request to that target. Only HTTP 200 responses without Content-Range
-    are read. An optional export budget charges every streamed chunk (even
+    are read. The body must be nonempty and match Content-Length if present.
+    An optional export budget charges every streamed chunk (even
     from failed images); exhaustion stops the batch rather than silently
     omitting another optional cover.
     """

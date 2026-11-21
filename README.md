@@ -363,6 +363,9 @@ still exported or imported. Downloads request uncompressed responses; servers
 that send compressed images despite that request are skipped to bound memory.
 The final response must be HTTP 200 without a `Content-Range` header. Other
 statuses and responses carrying range metadata are refused before reading the body.
+A declared `Content-Length` must be valid and within the per-image limit before
+streaming begins. An image is attached only when the body is nonempty and its
+byte count matches any declared length.
 
 The API key is attached only to image URLs on an allowed image host: HTTPS,
 the default port, no user name or password in the URL, and a host name that

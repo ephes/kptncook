@@ -25,7 +25,7 @@ class ImageStream(httpx.AsyncByteStream):
 
     async def __aiter__(self):
         try:
-            for _ in range(3):
+            for _ in range({"empty": 0, "short": 2}.get(self.failure, 3)):
                 self.chunks += 1
                 yield b"1234"
             if self.failure in {"slow", "stalled"}:
@@ -50,6 +50,11 @@ class ImageStream(httpx.AsyncByteStream):
     [
         "oversize",
         "misleading-length",
+        "oversize-length",
+        "invalid-length",
+        "short",
+        "empty",
+        "exact-length",
         "slow",
         "stalled",
         "ok",
@@ -67,7 +72,16 @@ def test_bounded_image_preserves_recipe(
         httpx, "get", lambda *a, **kw: pytest.fail("Buffered download bypasses bounds")
     )
     stream = ImageStream(failure)
-    headers = {"Content-Length": "1"} if failure == "misleading-length" else {}
+    declared_length = {
+        "misleading-length": "1",
+        "oversize-length": "13",
+        "invalid-length": "+12",
+        "short": "12",
+        "exact-length": "012",
+    }.get(failure)
+    headers = {"Content-Length": declared_length} if declared_length is not None else {}
+    if failure == "ok":
+        headers["Transfer-Encoding"] = "chunked"
     if failure == "compressed":
         headers["Content-Encoding"] = "gzip"
     if failure == "content-range":
@@ -81,6 +95,7 @@ def test_bounded_image_preserves_recipe(
 
     http = httpx.AsyncClient(transport=httpx.MockTransport(handle))
     monkeypatch.setattr(image_download.httpx, "AsyncClient", lambda **kw: http)
+    has_image = failure in {"ok", "exact-length"}
     timed = failure in {"slow", "stalled"}
     monkeypatch.setattr(
         image_download,
@@ -111,19 +126,19 @@ def test_bounded_image_preserves_recipe(
             payload = json.loads(gzip.decompress(archive.read(archive.namelist()[0])))
         assert payload["name"] == "Synthetic stew"
         assert payload["directions"] == "Mix synthetic ingredients\n"
-        assert bool(payload["photo_data"]) == (failure == "ok")
+        assert bool(payload["photo_data"]) == has_image
     elif caller == "tandoor":
         filename = TandoorExporter().export_recipe(recipe)
         with ZipFile(filename) as archive:
             payload = json.loads(archive.read("recipe.json"))
-            assert ("image.jpg" in archive.namelist()) == (failure == "ok")
+            assert ("image.jpg" in archive.namelist()) == has_image
         assert payload["steps"][0]["instruction"] == "Mix synthetic ingredients"
     elif caller == "markdown":
         [path] = MarkdownExporter().export([recipe])
         text = path.read_text(encoding="utf-8")
         assert "Mix synthetic ingredients" in text
         assets = path.parent / "assets"
-        if failure == "ok":
+        if has_image:
             [image] = assets.glob("*.jpg")
             assert image.read_bytes() == b"1234" * 3
             assert f"](assets/{image.name})" in text
@@ -187,7 +202,7 @@ def test_bounded_image_preserves_recipe(
         assert result.recipe_instructions[0].text.startswith(
             "Mix synthetic ingredients"
         )
-        assert bool(writes) == (failure == "ok")
+        assert bool(writes) == has_image
         assert stored["extras"]["kptncook_id"] == "a" * 24
     assert len(requests) == 1
     assert stream.closed
@@ -203,6 +218,9 @@ def test_bounded_image_preserves_recipe(
         "partial-status",
         "content-range",
         "created",
+        "oversize-length",
+        "invalid-length",
+        "empty",
     }:
         assert stream.chunks == 0
     assert list(workdir.iterdir()) == []
