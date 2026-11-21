@@ -23,6 +23,10 @@ class RecipeAdmissionError(ValueError):
     """A recipe batch contains invalid text or exceeds the model work envelope."""
 
 
+def has_surrogate_code_points(text: str) -> bool:
+    return not text.isascii() and _SURROGATE.search(text) is not None
+
+
 def admit_recipes(recipes: Sequence[object]) -> None:
     if len(recipes) > MAX_RECIPES:
         raise RecipeAdmissionError("Recipe model work exceeds the recipe count limit")
@@ -52,7 +56,7 @@ def admit_recipes(recipes: Sequence[object]) -> None:
             recipe_text += len(node)
             if recipe_text > MAX_RECIPE_TEXT or text > MAX_BATCH_TEXT:
                 raise RecipeAdmissionError("Recipe model work exceeds the text limit")
-            if not node.isascii() and _SURROGATE.search(node):
+            if has_surrogate_code_points(node):
                 raise RecipeAdmissionError(
                     "Recipe contains invalid Unicode scalar text."
                 )

@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from collections.abc import Iterator
 from typing import Any
 
+from kptncook.recipe_admission import has_surrogate_code_points
+
 
 @dataclass(frozen=True)
 class DiscoveryListSummary:
@@ -253,6 +255,12 @@ def parse_discovery_screen(payload: object) -> DiscoveryScreenData:
         if text_chars > MAX_SCREEN_TEXT_CHARS:
             raise DiscoveryScreenError(
                 "Malformed discovery screen: text limit exceeded"
+            )
+        if any(
+            value is not None and has_surrogate_code_points(value) for value in values
+        ):
+            raise DiscoveryScreenError(
+                "Malformed discovery screen: invalid Unicode scalar text"
             )
 
     admitted: list[tuple[str | None, str | None, str | None]] = []

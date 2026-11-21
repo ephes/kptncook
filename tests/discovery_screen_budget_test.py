@@ -161,3 +161,48 @@ def test_screen_leaf_and_text_exact_limits():
     payload["quickSearch"][-1] += "x"
     with pytest.raises(discovery.DiscoveryScreenError, match="text limit"):
         discovery.parse_discovery_screen(payload)
+
+
+@pytest.mark.parametrize("field", ["id", "title", "listType", "quickSearch"])
+def test_screen_rejects_nonscalar_display_text_before_building_summaries(
+    monkeypatch, field
+):
+    built = []
+    monkeypatch.setattr(
+        discovery, "DiscoveryListSummary", lambda **kw: built.append(kw)
+    )
+    payload = {"lists": [{"id": "early-valid-list"}]}
+    if field == "quickSearch":
+        payload[field] = ["private-label\udfff"]
+    else:
+        payload["lists"].append({field: "private-label\ud800"})
+    closed = screen_service(monkeypatch, payload)
+
+    with pytest.raises(workflows.UserFacingError) as error:
+        workflows.get_discovery_screen()
+
+    assert str(error.value) == "Malformed discovery screen: invalid Unicode scalar text"
+    assert built == []
+    assert closed == [True]
+
+
+def test_screen_preserves_multilingual_and_supplementary_display_text(monkeypatch):
+    payload = {
+        "lists": [
+            {
+                "id": {"$oid": "献立𐐀"},
+                "title": {"de": "Frühstück 🍳"},
+                "listType": "curated",
+            }
+        ],
+        "quickSearch": [{"localizedTitle": {"ja": "おにぎり 🍙"}}],
+    }
+    closed = screen_service(monkeypatch, payload)
+
+    result = workflows.get_discovery_screen()
+
+    assert result.lists == [
+        discovery.DiscoveryListSummary("献立𐐀", "Frühstück 🍳", "curated")
+    ]
+    assert result.quick_search == ["おにぎり 🍙"]
+    assert closed == [True]

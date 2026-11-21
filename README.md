@@ -206,8 +206,10 @@ usable label are omitted.
 Before constructing summaries, the complete screen must also fit 4,096 raw
 entries across the selected lists and quick-search leaves (including entries
 that would be ignored), and 262,144 characters across all displayed IDs, titles,
-list types and quick-search labels. Exceeding either limit refuses the whole
-screen with a short error; no truncated or partial listing is returned.
+list types and quick-search labels. Displayed fields must contain valid Unicode
+scalar text. Supplementary characters such as emoji are supported. Exceeding
+either limit or encountering a surrogate code point in a displayed field
+refuses the whole screen with a short error.
 
 Share URLs are resolved using only the response headers, without reading bodies
 or following redirects. Only 301/302 responses with a Location are accepted.
