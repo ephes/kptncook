@@ -291,9 +291,11 @@ class RecipeRepository:
             self._check_snapshot(snapshot)
             if snapshot is None:
                 # Settings or a failed attempt may already have created the
-                # directories without making their links durable.
+                # directories without making their links durable. Directories
+                # created here are readable by their owner, so an unreadable
+                # ancestor pre-existed and is skipped.
                 for ancestor in self.path.parent.resolve(strict=True).parents:
-                    fsync_directory(ancestor)
+                    fsync_directory(ancestor, skip_unreadable=True)
             else:
                 self._create_backup_locked(snapshot=snapshot)
             self._check_snapshot(snapshot)

@@ -8,6 +8,8 @@ Unreleased
   logging an optional media warning fails.
 - Sync the recipe store's parent directory links before the first publication,
   including when retrying in a directory created by a failed attempt.
+  Unreadable pre-existing ancestors, such as traverse-only home directories,
+  are skipped.
 - Preserve the directory sync outcome when closing its read-only descriptor
   fails after publishing a file.
 - Derive the API request's Host header from the admitted URL, overriding

@@ -1,5 +1,8 @@
 import json
 from datetime import date
+import errno
+import os
+from pathlib import Path
 
 import pytest
 
@@ -348,7 +351,7 @@ def test_first_publication_syncs_parent_chain_before_replacing(tmp_path, monkeyp
     ancestor_error = OSError("synthetic ancestor sync failure")
     fail = True
 
-    def sync(directory):
+    def sync(directory, **kwargs):
         sync_calls.append((directory, repo.path.exists()))
         if directory == root and fail:
             raise ancestor_error
@@ -382,3 +385,53 @@ def test_first_publication_syncs_parent_chain_before_replacing(tmp_path, monkeyp
     repo.add(RecipeInDb(date=date.today(), data={"_id": {"$oid": "2"}}))
     assert sync_calls == [(store_dir, True), (store_dir, True)]
     assert repo.backup_path.read_bytes() == previous
+
+
+@pytest.mark.parametrize("open_errno", [errno.EACCES, errno.EPERM])
+def test_first_publication_skips_unreadable_preexisting_ancestor(
+    tmp_path, monkeypatch, open_errno
+):
+    root = tmp_path.resolve()
+    store_dir = root / "new" / "store"
+    repo = RecipeRepository(store_dir)
+    recipe = RecipeInDb(date=date.today(), data={"_id": {"$oid": "1"}})
+    real_open = os.open
+    opened = []
+
+    def open_dir(path, flags, *args, **kwargs):
+        if Path(path) == root:
+            raise OSError(open_errno, "synthetic traverse-only directory")
+        opened.append(Path(path))
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(repositories_module.os, "open", open_dir)
+
+    repo.add(recipe)
+
+    assert repo.list() == [recipe]
+    assert root not in opened
+    assert root.parent in opened
+    assert root / "new" in opened
+
+
+def test_first_publication_still_fails_on_ancestor_sync_error(tmp_path, monkeypatch):
+    root = tmp_path.resolve()
+    store_dir = root / "new" / "store"
+    repo = RecipeRepository(store_dir)
+    recipe = RecipeInDb(date=date.today(), data={"_id": {"$oid": "1"}})
+    real_fsync = os.fsync
+    sync_error = OSError(errno.EIO, "synthetic ancestor sync failure")
+
+    def fsync(fd):
+        if os.path.samestat(os.fstat(fd), os.stat(root)):
+            raise sync_error
+        real_fsync(fd)
+
+    monkeypatch.setattr(repositories_module.os, "fsync", fsync)
+
+    with pytest.raises(
+        RepositoryError, match="Could not write repository file"
+    ) as caught:
+        repo.add(recipe)
+    assert caught.value.__cause__ is sync_error
+    assert not repo.path.exists()
