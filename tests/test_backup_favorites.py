@@ -1,8 +1,49 @@
+from types import SimpleNamespace
+from unittest.mock import Mock
+
 import httpx
 import pytest
+from typer.testing import CliRunner
 
 import kptncook as cli_mod
+from kptncook.cli import app
+from kptncook.repositories import RecipeInDb
 from kptncook.services import workflows
+
+
+@pytest.mark.parametrize("fetch_fails", [False, True])
+def test_backup_favorites_preserves_outcome_when_close_fails(
+    monkeypatch, minimal, caplog, fetch_fails
+):
+    recipe = RecipeInDb(date=workflows.date.today(), data=minimal)
+    client = SimpleNamespace(
+        list_favorites=Mock(return_value=[{"_id": minimal["_id"]}]),
+        resolve_recipe_summaries=Mock(return_value=[recipe]),
+        close=Mock(side_effect=httpx.CloseError("private-cleanup-detail")),
+    )
+    if fetch_fails:
+        client.list_favorites.side_effect = httpx.ReadTimeout("private-fetch-detail")
+    save = Mock(return_value=1)
+    monkeypatch.setattr(workflows, "_require_access_token", lambda: None)
+    monkeypatch.setattr(workflows, "KptnCookClient", lambda: client)
+    monkeypatch.setattr(workflows, "save_recipe_entries", save)
+
+    result = CliRunner().invoke(app, ["backup-favorites"])
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    client.close.assert_called_once_with()
+    if fetch_fails:
+        save.assert_not_called()
+        assert "Request failed: timeout" in result.output
+        assert "Added" not in result.output
+    else:
+        save.assert_called_once_with([recipe], expected={})
+        assert "Found 1 favorites" in result.output
+        assert "Added 1 recipes to local repository" in result.output
+        assert "KptnCook client cleanup failed." in result.output
+    assert "KptnCook client cleanup failed." in caplog.text
+    assert "private-" not in result.output + caplog.text
 
 
 def test_backup_favorites_redirect_error(monkeypatch, capsys):

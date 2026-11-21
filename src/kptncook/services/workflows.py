@@ -70,6 +70,7 @@ SYNC_LOCK_TIMEOUT_SECONDS = 30.0
 class FavoritesBackupResult:
     favorite_count: int
     saved_count: int
+    cleanup_warning: str | None = None
 
 
 @dataclass(frozen=True)
@@ -541,6 +542,7 @@ def backup_kptncook_favorites() -> FavoritesBackupResult:
     _require_access_token()
     expected = _repository_id_map()
     client = _kptncook_client()
+    result = None
     try:
         try:
             favorites = client.list_favorites()
@@ -571,12 +573,19 @@ def backup_kptncook_favorites() -> FavoritesBackupResult:
             raise UserFacingError("Could not find any favorites")
 
         saved_count = _save_repository_entries(recipes, expected=expected)
-        return FavoritesBackupResult(
+        result = FavoritesBackupResult(
             favorite_count=len(favorites),
             saved_count=saved_count,
         )
     finally:
-        client.close()
+        try:
+            client.close()
+        except Exception:
+            warning = "KptnCook client cleanup failed."
+            logger.warning("%s", warning)
+            if result is not None:
+                result = replace(result, cleanup_warning=warning)
+    return result
 
 
 def get_kptncook_access_token() -> str:

@@ -141,6 +141,12 @@ records and retain their original store positions; unrelated malformed recipes
 are reported by full listings/exports instead. The raw JSON store is still read
 and checked in full, including its duplicate-OID admission policy.
 
+If closing the KptnCook client fails after `backup-favorites` saves, the CLI
+prints the completed counts and a short cleanup warning, then exits with status
+1. The backup remains saved and needs no replay. Library callers receive the
+counts and a `cleanup_warning`. If the backup itself fails, its primary error
+still reaches the caller and the cleanup warning goes to the log.
+
 Library API clients send requests only to their configured HTTP(S) origin
 (scheme, host and effective port), with no userinfo in the URL. Relative paths
 and same-origin absolute URLs are supported, including an explicit default

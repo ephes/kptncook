@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Preserve saved favorites backup counts and primary errors when client cleanup
+  fails, with a short warning that omits exception details.
 - Refuse unsupported dailies response envelopes and whole lists containing
   non-object entries. Continue accepting empty recipe lists.
 - Use one local import date per resolved search response, even across midnight.

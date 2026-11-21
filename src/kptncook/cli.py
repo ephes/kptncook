@@ -244,6 +244,9 @@ def backup_kptncook_favorites():
     result = _run_or_exit(backup_kptncook_favorites_workflow)
     rprint(f"Found {result.favorite_count} favorites")
     rprint(f"Added {result.saved_count} recipes to local repository")
+    if result.cleanup_warning:
+        rprint(f"[yellow]{escape(result.cleanup_warning)}[/yellow]")
+        raise typer.Exit(code=1)
 
 
 @app.command(name="kptncook-access-token")
