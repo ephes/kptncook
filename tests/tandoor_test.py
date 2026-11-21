@@ -134,6 +134,40 @@ def test_get_keywords_includes_active_tags_and_rtype(minimal):
     assert exporter.get_keywords(recipe).count({"name": "kptncook"}) == 1
 
 
+def test_export_deduplicates_exact_keyword_names_in_first_seen_order(
+    minimal, tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    recipe = Recipe.model_validate(
+        {
+            **minimal,
+            "imageList": [],
+            "activeTags": [
+                "Fish",
+                "kptncook",
+                "quick",
+                "Fish",
+                "fish",
+                "quick",
+                "KptnCook",
+            ],
+            "rtype": "Fish",
+        }
+    )
+
+    (filename,) = TandoorExporter().export([recipe])
+
+    with zipfile.ZipFile(tmp_path / filename) as archive:
+        payload = json.loads(archive.read("recipe.json"))
+    assert payload["keywords"] == [
+        {"name": "kptncook"},
+        {"name": "Fish"},
+        {"name": "quick"},
+        {"name": "fish"},
+        {"name": "KptnCook"},
+    ]
+
+
 def test_get_recipe_payload_uses_tandoor_time_fields(minimal):
     exporter = TandoorExporter()
     recipe = Recipe.model_validate({**minimal, "cookingTime": 45})

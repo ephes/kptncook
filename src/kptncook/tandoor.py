@@ -172,18 +172,10 @@ class TandoorExporter:
         return f"https://share.kptncook.com/{source_id}"
 
     def get_keywords(self, recipe: Recipe) -> list[dict[str, str]]:
-        keywords = [{"name": "kptncook"}]
-        if recipe.active_tags:
-            keywords.extend(
-                [{"name": tag} for tag in self._filter_active_tags(recipe.active_tags)]
-            )
+        names = ["kptncook", *(recipe.active_tags or [])]
         if recipe.rtype:
-            keywords.append({"name": recipe.rtype})
-        return keywords
-
-    @staticmethod
-    def _filter_active_tags(active_tags: list[str]) -> list[str]:
-        return [tag for tag in active_tags if tag != "kptncook"]
+            names.append(recipe.rtype)
+        return [{"name": name} for name in dict.fromkeys(names)]
 
     def get_steps(self, recipe: Recipe) -> list[dict[str, Any]]:
         steps = []

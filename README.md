@@ -398,8 +398,10 @@ with a synthetic transport, including exceptional context exits.
 
 ### Export metadata
 
-Exports to Mealie and Tandoor include KptnCook active tags as tags/keywords
-(verbatim).
+Exports to Mealie and Tandoor include KptnCook active tags verbatim. Tandoor
+keeps the first occurrence of each exact keyword name, in order from the
+`kptncook` keyword through the active tags to the recipe type. Spelling and
+case are preserved.
 
 All exporters preserve the recipe's explicit `fixedPortionCount`, falling back
 to the standard two portions when it is absent. KptnCook stores ingredient

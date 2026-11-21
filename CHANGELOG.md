@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Deduplicate exact Tandoor keyword names across the default keyword, active
+  tags, and recipe type while preserving first-seen order.
 - Keep a published Tandoor archive in the export receipt and warn if temporary
   directory cleanup fails.
 - Use the batch start date in every Markdown note, even when export crosses
