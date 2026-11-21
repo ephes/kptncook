@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Keep published Markdown notes and images in the export receipt when staging
+  directory cleanup fails, and continue the batch with a separate warning.
 - Serialize direct repository backups with writes so an older snapshot cannot
   overwrite a writer's newer recovery backup.
 - Return valid stored recipes even when logging a skipped row fails.

@@ -2,6 +2,7 @@
 
 import importlib
 import os
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -140,6 +141,55 @@ def test_markdown_batch_receipts(recipes, monkeypatch, failure):
         assert list((out / "assets").iterdir()) == [asset_targets[0]]
     assert not (out / "Recipe 2.md").exists()
     assert not list(out.glob(".kptncook-*"))
+
+
+@pytest.mark.parametrize("later_failure", [False, True])
+def test_markdown_counts_published_pair_when_stage_cleanup_fails(
+    recipes, monkeypatch, caplog, later_failure
+):
+    exporter = MarkdownExporter()
+    out = get_settings().root / "export_md"
+    first_note = out / "Recipe 0.md"
+    second_note = out / "Recipe 1.md"
+    cleanup = tempfile.TemporaryDirectory.cleanup
+    cleaned = []
+    first_assets = []
+
+    def download(recipe, **kwargs):
+        if later_failure and recipe is recipes[1]:
+            raise UserFacingError("Synthetic second recipe failure.")
+        return b"synthetic"
+
+    def fail_first_cleanup(directory):
+        cleanup(directory)
+        cleaned.append(directory.name)
+        if len(cleaned) == 1:
+            assert first_note.is_file()
+            [asset] = (out / "assets").iterdir()
+            assert asset.read_bytes() == b"synthetic"
+            first_assets.append(asset)
+            raise PermissionError("private synthetic cleanup detail")
+
+    monkeypatch.setattr(exporter, "_download_recipe_image", download)
+    monkeypatch.setattr(tempfile.TemporaryDirectory, "cleanup", fail_first_cleanup)
+
+    if later_failure:
+        with pytest.raises(BatchExportError) as caught:
+            exporter.export(recipes)
+        error = caught.value
+        assert error.completed_paths == (first_note,)
+        assert error.completed_assets == tuple(first_assets)
+        assert error.failed_recipe_id == recipes[1].id.oid
+        assert error.remaining_count == 1
+        assert list(out.glob("*.md")) == [first_note]
+    else:
+        assert exporter.export(recipes[:2]) == [first_note, second_note]
+        assert set(out.glob("*.md")) == {first_note, second_note}
+
+    [first_asset] = first_assets
+    assert first_asset.relative_to(out).as_posix() in first_note.read_text("utf-8")
+    assert caplog.text.count("Could not clean up Markdown staging directory.") == 1
+    assert "private synthetic cleanup detail" not in caplog.text
 
 
 @pytest.mark.parametrize(

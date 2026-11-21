@@ -166,10 +166,9 @@ class MarkdownExporter:
                 )
                 base = sanitize_filename(title)
                 image_bytes = self._download_recipe_image(recipe, budget=budget)
-                with tempfile.TemporaryDirectory(
-                    dir=out_dir, prefix=".kptncook-"
-                ) as temp:
-                    staging = Path(temp)
+                scratch = tempfile.TemporaryDirectory(dir=out_dir, prefix=".kptncook-")
+                try:
+                    staging = Path(scratch.name)
                     try:
                         if image_bytes is not None:
                             staged_asset = staging / "image.jpg"
@@ -229,9 +228,17 @@ class MarkdownExporter:
                                         asset_path,
                                     )
                         raise
-                written.append(out_path)
-                if asset_path is not None:
-                    written_assets.append(asset_path)
+                    written.append(out_path)
+                    if asset_path is not None:
+                        written_assets.append(asset_path)
+                finally:
+                    try:
+                        scratch.cleanup()
+                    except OSError:
+                        with suppress(Exception):
+                            logger.warning(
+                                "Could not clean up Markdown staging directory."
+                            )
             except Exception as exc:
                 raise BatchExportError(
                     written,
