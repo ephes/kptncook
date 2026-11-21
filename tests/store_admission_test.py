@@ -188,8 +188,8 @@ def test_growing_batch_refused_before_backup_or_publication(tmp_path, monkeypatc
     original = repo.path.read_bytes()
     repo.backup_path.write_bytes(b"recovery")
     monkeypatch.setattr(storage, "MAX_STORE_BYTES", len(original) * 2)
-    backup = Mock(wraps=repo.create_backup)
-    monkeypatch.setattr(repo, "create_backup", backup)
+    backup = Mock(wraps=repo._create_backup_locked)
+    monkeypatch.setattr(repo, "_create_backup_locked", backup)
     with pytest.raises(RepositoryError, match="capacity"):
         repo.add_list([entry(f"new-{i}") for i in range(10)])
     backup.assert_not_called()

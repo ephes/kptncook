@@ -683,8 +683,10 @@ check: a reader returns the complete generation it opened, even when a writer
 atomically replaces the file meanwhile.
 Backup copying never reopens an unchecked pathname or follows a substituted symlink
 or FIFO. Direct library `create_backup()` calls use the same bounded regular-file
-admission. Advisory locks coordinate cooperating writers; external editors must
-not replace files during publication.
+admission and acquire the same writer lock, with the same 30-second wait
+budget. A direct backup holds the lock from snapshot selection through
+publication and directory sync. External editors must avoid replacing files
+during publication.
 Backup and primary publication sync their containing directory where the OS
 supports it. Only unsupported directory-sync errors are tolerated; genuine I/O
 errors stop the write. Failure before backup replacement leaves both snapshots

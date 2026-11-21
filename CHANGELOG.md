@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Serialize direct repository backups with writes so an older snapshot cannot
+  overwrite a writer's newer recovery backup.
 - Return valid stored recipes even when logging a skipped row fails.
 - Reject conflicting labels for the same ingredient group key, preserving group
   order for overrides and repeated identical labels.

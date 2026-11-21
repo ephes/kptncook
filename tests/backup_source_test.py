@@ -2,8 +2,10 @@
 
 import multiprocessing
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
+from threading import Event
 
 import pytest
 
@@ -136,6 +138,57 @@ def test_direct_backup_uses_bounded_regular_source(tmp_path, monkeypatch, kind):
         repo.create_backup()
     assert repo.backup_path.read_bytes() == b"previous recovery"
     assert list(tmp_path.glob(".*.tmp")) == []
+
+
+def test_direct_backup_serializes_publication_with_writers(tmp_path, monkeypatch):
+    from kptncook import repositories
+
+    def entry(oid):
+        return RecipeInDb(date=date(2026, 1, 1), data={"_id": {"$oid": oid}})
+
+    repo = RecipeRepository(tmp_path)
+    direct = RecipeRepository(tmp_path)
+    repo.add(entry("first"))
+
+    backup_ready = Event()
+    writer_progress = Event()
+    replace = os.replace
+    lock = repositories.portalocker.lock
+
+    def pause_first_backup(source, target):
+        if target == repo.backup_path and not backup_ready.is_set():
+            backup_ready.set()
+            assert writer_progress.wait(5)
+        return replace(source, target)
+
+    def observe_lock_contention(*args, **kwargs):
+        try:
+            return lock(*args, **kwargs)
+        except repositories.portalocker.exceptions.AlreadyLocked:
+            writer_progress.set()
+            raise
+
+    def write_twice():
+        try:
+            repo.add(entry("second"))
+            predecessor = repo.path.read_bytes()
+            repo.add(entry("third"))
+            return predecessor
+        finally:
+            writer_progress.set()
+
+    monkeypatch.setattr(repositories.os, "replace", pause_first_backup)
+    monkeypatch.setattr(repositories.portalocker, "lock", observe_lock_contention)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        backup = pool.submit(direct.create_backup)
+        assert backup_ready.wait(5)
+        writer = pool.submit(write_twice)
+        predecessor = writer.result(timeout=5)
+        backup.result(timeout=5)
+
+    assert list(repo.list_by_id()) == ["first", "second", "third"]
+    assert repo.backup_path.read_bytes() == predecessor
 
 
 def _replace_after_open(repo, monkeypatch):

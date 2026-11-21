@@ -116,6 +116,11 @@ class RecipeRepository:
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def create_backup(self, *, snapshot: _StoreSnapshot | None = None) -> None:
+        """Back up the primary while holding the repository writer lock."""
+        with self._write_lock():
+            self._create_backup_locked(snapshot=snapshot)
+
+    def _create_backup_locked(self, *, snapshot: _StoreSnapshot | None) -> None:
         if snapshot is None:
             snapshot = self._read_store()
         self._check_snapshot(snapshot)
@@ -285,7 +290,7 @@ class RecipeRepository:
                 os.fsync(f.fileno())
             self._check_snapshot(snapshot)
             if snapshot is not None:
-                self.create_backup(snapshot=snapshot)
+                self._create_backup_locked(snapshot=snapshot)
             self._check_snapshot(snapshot)
             os.replace(temp_path, self.path)
             published = True
