@@ -288,8 +288,9 @@ same unique texts in the same order as the source. Missing, inserted, reordered
 or repeated texts omit all step photos with a bounded warning, retaining the
 imported text recipe and server-assigned instruction fields.
 
-Cover and step images are best-effort follow-ups. A media failure does not
-undo the core import, and step-image updates patch only the instructions.
+Cover and step images are best-effort follow-ups. The client keeps the core
+import receipt and continues eligible media work even when logging a warning
+fails. Step-image updates patch only the instructions.
 Immediately before the instruction PATCH, the client re-reads recipe identity
 and the complete instruction list. Changes to text, IDs, order, references or
 other instruction fields during asset uploads skip enrichment with a warning.

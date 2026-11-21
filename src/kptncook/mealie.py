@@ -1,4 +1,5 @@
 import datetime
+from contextlib import suppress
 from copy import deepcopy
 import io
 import json
@@ -78,6 +79,11 @@ def _require_recipe_identity(
         "Mealie recipe identity does not match requested slug/ID; "
         "the import may have completed. Reconcile inventory before retrying."
     )
+
+
+def _warn_media(message: str, *args: str) -> None:
+    with suppress(Exception):
+        logger.warning(message, *args)
 
 
 def _media_failure_reason(exc: BaseException) -> str:
@@ -354,7 +360,7 @@ class MealieApiClient(BaseHttpClient):
             return
         image_path = _recipe_path(slug) + "/image"
         if not is_allowed_image_url(recipe.image_url):
-            logger.warning("Skipping cover image: not on an allowed image host")
+            _warn_media("Skipping cover image: not on an allowed image host")
             return
         image_bytes = download_image(recipe.image_url, follow_redirects=True)
         extension = Path(urlsplit(recipe.image_url).path).suffix.lstrip(".").lower()
@@ -733,7 +739,7 @@ class MealieApiClient(BaseHttpClient):
             or [step["text"] for step in instructions] != source_texts
             or len(set(source_texts)) != len(source_texts)
         ):
-            logger.warning(
+            _warn_media(
                 "Skipping step images: imported instructions do not match source unambiguously"
             )
             return recipe
@@ -751,7 +757,7 @@ class MealieApiClient(BaseHttpClient):
                 )
                 changed = True
             except Exception as exc:
-                logger.warning(
+                _warn_media(
                     "Skipping step image for recipe %s (%s)",
                     recipe.slug,
                     _media_failure_reason(exc),
@@ -773,9 +779,7 @@ class MealieApiClient(BaseHttpClient):
                 )
                 != original_instructions
             ):
-                logger.warning(
-                    "Skipping step images: recipe changed during asset uploads"
-                )
+                _warn_media("Skipping step images: recipe changed during asset uploads")
                 return recipe
             response = self.request(
                 "PATCH",
@@ -821,7 +825,7 @@ class MealieApiClient(BaseHttpClient):
         except Exception as exc:
             # The download error carries the keyed image URL: log no traceback,
             # message or URL, only the status or error type.
-            logger.warning(
+            _warn_media(
                 "Skipping cover image for recipe %s (%s)",
                 created.slug,
                 _media_failure_reason(exc),
@@ -829,7 +833,7 @@ class MealieApiClient(BaseHttpClient):
         try:
             created = self._attach_step_images(created, stored, recipe)
         except Exception as exc:
-            logger.warning(
+            _warn_media(
                 "Skipping step image update for recipe %s (%s)",
                 created.slug,
                 _media_failure_reason(exc),

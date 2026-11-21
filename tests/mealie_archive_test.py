@@ -2,6 +2,7 @@
 
 import io
 import json
+import logging
 from email.parser import BytesParser
 from email.policy import default
 from zipfile import ZipFile
@@ -221,6 +222,73 @@ def test_media_failures_leave_core_import_successful(failed_operation):
     ]
     if failed_operation in {"asset", "malformed-asset"}:
         assert not any(method == "PATCH" for method, _ in calls)
+
+
+def test_media_warning_failure_keeps_receipt_and_processes_later_steps(mocker):
+    stored = {
+        "id": "ac49c559-a816-4a4e-95ca-bea4c21d71bc",
+        "name": "Test",
+        "slug": "test-1",
+        "extras": {"source": "kptncook", "kptncook_id": "synthetic"},
+        "recipeInstructions": [{"text": "Mix"}, {"text": "Serve"}],
+    }
+    recipe = RecipeWithImage(
+        name="Test",
+        extras=stored["extras"],
+        recipe_instructions=[
+            RecipeStep(
+                text=text,
+                image=Image(
+                    name=f"{name}.jpg", url=f"https://images.example/{name}.jpg"
+                ),
+            )
+            for text, name in [("Mix", "mix"), ("Serve", "serve")]
+        ],
+    )
+    uploads = []
+
+    def upload(slug, image):
+        uploads.append((slug, image.name))
+        if image.name == "mix.jpg":
+            raise OSError("synthetic step failure")
+        return {"fileName": "serve.jpg"}
+
+    def handle(request):
+        assert request.url.path == "/api/recipes/test-1"
+        if request.method == "GET":
+            return httpx.Response(200, json=stored)
+        assert request.method == "PATCH"
+        return httpx.Response(200, json=stored | json.loads(request.content))
+
+    with httpx.Client(transport=httpx.MockTransport(handle)) as http:
+        client = MealieApiClient("http://mealie.local/api", client=http)
+        mocker.patch.object(client, "_get_archive_endpoint")
+        mocker.patch.object(client, "_import_recipe_archive", return_value=stored)
+        mocker.patch.object(
+            client,
+            "_scrape_image_for_recipe",
+            side_effect=OSError("synthetic cover failure"),
+        )
+        mocker.patch.object(client, "upload_asset", side_effect=upload)
+        warning = mocker.patch.object(
+            logging.getLogger("kptncook.mealie"), "warning", side_effect=RuntimeError
+        )
+        organizer_index = {"synthetic": []}
+        client._organizer_index["organizers/tags"] = organizer_index
+
+        result = client.create_recipe(recipe)
+        assert client._organizer_index["organizers/tags"] is organizer_index
+
+    assert uploads == [("test-1", "mix.jpg"), ("test-1", "serve.jpg")]
+    assert str(result.id) == stored["id"]
+    assert result.slug == stored["slug"]
+    assert result.extras == stored["extras"]
+    assert result.recipe_instructions[0].text == "Mix"
+    assert result.recipe_instructions[1].text.startswith("Serve <img")
+    assert warning.call_args_list == [
+        mocker.call("Skipping cover image for recipe %s (%s)", "test-1", "OSError"),
+        mocker.call("Skipping step image for recipe %s (%s)", "test-1", "OSError"),
+    ]
 
 
 @pytest.mark.parametrize(

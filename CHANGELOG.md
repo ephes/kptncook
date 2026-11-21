@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Keep the Mealie import receipt and continue with later step images when
+  logging an optional media warning fails.
 - Sync the recipe store's parent directory links before the first publication,
   including when retrying in a directory created by a failed attempt.
 - Preserve the directory sync outcome when closing its read-only descriptor
