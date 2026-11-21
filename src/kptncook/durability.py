@@ -1,8 +1,12 @@
 """Directory sync with a narrow portability fallback, never hiding disk faults."""
 
+from contextlib import suppress
 import errno
+import logging
 import os
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 _UNSUPPORTED = {errno.EINVAL, errno.ENOSYS, errno.ENOTSUP, errno.EOPNOTSUPP}
 
@@ -22,4 +26,8 @@ def fsync_directory(directory: Path) -> None:
             if exc.errno not in _UNSUPPORTED:
                 raise
     finally:
-        os.close(fd)
+        try:
+            os.close(fd)
+        except OSError:
+            with suppress(Exception):
+                logger.warning("Could not close directory sync descriptor.")

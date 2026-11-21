@@ -695,8 +695,9 @@ budget. A direct backup holds the lock from snapshot selection through
 publication and directory sync. External editors must avoid replacing files
 during publication.
 Backup and primary publication sync their containing directory where the OS
-supports it. Only unsupported directory-sync errors are tolerated; genuine I/O
-errors stop the write. Failure before backup replacement leaves both snapshots
+supports it. Genuine directory open and sync errors stop the write. If closing
+the read-only sync descriptor fails, the tool attempts a short cleanup warning
+and preserves the sync outcome for exports, configuration and recipe storage. Failure before backup replacement leaves both snapshots
 intact. Failure syncing an already replaced backup leaves the primary unchanged
 and reports uncertain backup durability. Failure syncing an already replaced
 primary reports that the new primary is published with uncertain durability;

@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Preserve the directory sync outcome when closing its read-only descriptor
+  fails after publishing a file.
 - Derive the API request's Host header from the admitted URL, overriding
   caller-provided Host values and injected HTTPX defaults.
 - Preserve the operation error when an owned HTTP client also fails to close,

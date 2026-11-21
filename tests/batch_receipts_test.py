@@ -1,20 +1,67 @@
 """Offline failures retain exact receipts for already published recipes."""
 
+import errno
 import importlib
+import logging
 import os
+import stat
 import tempfile
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
-from kptncook import exporter_utils, markdown_exporter
+from kptncook import durability, exporter_utils, markdown_exporter
 from kptncook.config import get_settings
-from kptncook.exporter_utils import BatchExportError
+from kptncook.exporter_utils import (
+    BatchExportError,
+    ExportPublicationUncertain,
+    move_to_free_target,
+)
 from kptncook.http_errors import UserFacingError
 from kptncook.markdown_exporter import MarkdownExporter
 from kptncook.models import Recipe
 from kptncook.tandoor import TandoorExporter
+
+
+@pytest.mark.parametrize("sync_errno", [None, errno.ENOTSUP, errno.EIO])
+def test_directory_close_failure_preserves_export_outcome(
+    tmp_path, monkeypatch, mocker, sync_errno
+):
+    source = tmp_path / "source"
+    source.write_bytes(b"synthetic export")
+    target = tmp_path / "published.zip"
+    fsync = os.fsync
+    close = os.close
+    sync_error = OSError(sync_errno, "synthetic sync failure")
+
+    def sync(fd):
+        if sync_errno is not None and stat.S_ISDIR(os.fstat(fd).st_mode):
+            raise sync_error
+        fsync(fd)
+
+    def close_with_error(fd):
+        is_directory = stat.S_ISDIR(os.fstat(fd).st_mode)
+        close(fd)
+        if is_directory:
+            raise OSError(errno.EIO, "synthetic close failure")
+
+    warning = mocker.patch.object(
+        logging.getLogger(durability.__name__), "warning", side_effect=RuntimeError
+    )
+    monkeypatch.setattr(durability.os, "fsync", sync)
+    monkeypatch.setattr(durability.os, "close", close_with_error)
+
+    if sync_errno == errno.EIO:
+        with pytest.raises(ExportPublicationUncertain) as caught:
+            move_to_free_target(source, tmp_path, "published", ".zip")
+        assert caught.value.target == target
+        assert caught.value.__cause__ is sync_error
+    else:
+        assert move_to_free_target(source, tmp_path, "published", ".zip") == target
+
+    warning.assert_called_once_with("Could not close directory sync descriptor.")
+    assert target.read_bytes() == b"synthetic export"
 
 
 @pytest.fixture
