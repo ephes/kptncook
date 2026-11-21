@@ -430,7 +430,9 @@ with a synthetic transport, including exceptional context exits.
 Exports to Mealie and Tandoor include KptnCook active tags verbatim. Tandoor
 keeps the first occurrence of each exact keyword name, in order from the
 `kptncook` keyword through the active tags to the recipe type. Spelling and
-case are preserved.
+case are preserved. Mealie keeps the first occurrence of each exact source tag
+name in archive order and substitutes the server tag record using a
+case-insensitive lookup.
 
 All exporters preserve the recipe's explicit `fixedPortionCount`, falling back
 to the standard two portions when it is absent. KptnCook stores ingredient

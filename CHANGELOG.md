@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Preserve first-occurrence source tag order when substituting Mealie tag IDs
+  for archive imports.
 - Keep the Mealie import receipt and continue with later step images when
   logging an optional media warning fails.
 - Sync the recipe store's parent directory links before the first publication,

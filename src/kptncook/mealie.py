@@ -652,9 +652,8 @@ class MealieApiClient(BaseHttpClient):
             )
 
     def _update_tag_ids(self, recipe):
-        recipe_tags = {tag for tag in recipe.tags}
-        if len(recipe_tags) == 0:
-            # return early if there's nothing to do
+        recipe_tags = list(dict.fromkeys(recipe.tags))
+        if not recipe_tags:
             return recipe
 
         name_to_tag_with_id = self._create_item_name_to_item_lookup(

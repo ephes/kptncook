@@ -3,8 +3,12 @@
 import io
 import json
 import logging
+import os
+import subprocess
+import sys
 from email.parser import BytesParser
 from email.policy import default
+from pathlib import Path
 from zipfile import ZipFile
 
 import httpx
@@ -37,6 +41,68 @@ def archive_payload(request):
     with ZipFile(io.BytesIO(parts[0].get_payload(decode=True))) as archive:
         assert archive.namelist() == ["recipe.json"]
         return json.loads(archive.read("recipe.json"))
+
+
+def _capture_archive_tags():
+    stored_tags = [
+        {"id": "5edb3a89-69e3-4c2d-96d9-18b72dc285de", "name": "Zesty"},
+        {"id": "31748ce4-465f-48af-b222-a84a9d95573e", "name": "Quick"},
+        {"id": "77a6cd2f-9368-4d83-95da-2c266781ace2", "name": "Pantry"},
+    ]
+    archived = {}
+
+    def handle(request):
+        path = request.url.path
+        if path == "/api/app/about":
+            return httpx.Response(200, json={"version": "v3.28.0"})
+        if request.method == "GET" and path == "/api/organizers/tags":
+            return httpx.Response(200, json={"items": stored_tags, "total_pages": 1})
+        if request.method == "POST" and path == "/api/recipes/create/zip":
+            archived.update(archive_payload(request))
+            return httpx.Response(201, json="synthetic-recipe")
+        if request.method == "GET" and path == "/api/recipes/synthetic-recipe":
+            return httpx.Response(
+                200,
+                json={
+                    "id": "ac49c559-a816-4a4e-95ca-bea4c21d71bc",
+                    "slug": "synthetic-recipe",
+                    "name": "Test",
+                },
+            )
+        pytest.fail(f"Unexpected {request.method} {path}")
+
+    recipe = RecipeWithImage(
+        name="Test",
+        tags=[RecipeTag(name=name) for name in ("zesty", "quick", "zesty", "pantry")],
+    )
+    with httpx.Client(transport=httpx.MockTransport(handle)) as http:
+        client = MealieApiClient("http://mealie.local/api", client=http)
+        client.create_recipe(recipe)
+    return archived["tags"]
+
+
+def test_archive_tag_substitution_preserves_first_source_order_across_hash_seeds():
+    script = (
+        "import json; from mealie_archive_test import _capture_archive_tags; "
+        "print(json.dumps(_capture_archive_tags()))"
+    )
+    payloads = [
+        json.loads(
+            subprocess.check_output(
+                [sys.executable, "-c", script],
+                cwd=Path(__file__).parent,
+                env=os.environ | {"PYTHONHASHSEED": seed},
+                text=True,
+            )
+        )
+        for seed in ("1", "2")
+    ]
+    assert payloads[0] == payloads[1]
+    assert payloads[0] == [
+        {"id": "5edb3a89-69e3-4c2d-96d9-18b72dc285de", "name": "Zesty"},
+        {"id": "31748ce4-465f-48af-b222-a84a9d95573e", "name": "Quick"},
+        {"id": "77a6cd2f-9368-4d83-95da-2c266781ace2", "name": "Pantry"},
+    ]
 
 
 @pytest.mark.parametrize(
