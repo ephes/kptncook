@@ -1,6 +1,7 @@
 """Selected lookups validate matches from one raw snapshot, with original positions."""
 
 from datetime import date
+from logging import Handler
 
 import pytest
 
@@ -94,6 +95,39 @@ def test_complete_listing_still_reports_all_invalid_records(selected_store):
     assert len(result.invalid_entries) == 1501
     assert len(validated) == 3003
     assert reads == [True]
+
+
+@pytest.mark.parametrize("selected", [False, True], ids=["list", "oid"])
+def test_invalid_recipe_warning_failure_preserves_valid_results(
+    monkeypatch, minimal, selected
+):
+    entries = [
+        RecipeInDb(date=date.today(), data=data)
+        for data in ({"_id": {"$oid": OID}}, dict(minimal, _id={"$oid": OID}))
+    ]
+    monkeypatch.setattr(repository, "list_repository_entries", lambda: entries)
+
+    attempts = []
+
+    class FailingHandler(Handler):
+        def emit(self, record):
+            attempts.append(record.getMessage())
+            raise OSError("warning sink unavailable")
+
+    handler = FailingHandler()
+    repository.logger.addHandler(handler)
+    try:
+        recipes = (
+            repository.get_repository_recipe_by_oid(OID)
+            if selected
+            else repository.list_repository_recipes()
+        )
+    finally:
+        repository.logger.removeHandler(handler)
+
+    assert [recipe.id.oid for recipe in recipes] == [OID]
+    assert len(attempts) == 1
+    assert attempts[0].startswith(f"Skipping invalid stored recipe {OID}:")
 
 
 def test_selected_lookup_wraps_repository_failure(monkeypatch):

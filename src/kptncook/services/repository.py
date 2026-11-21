@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import date
 
@@ -48,7 +49,8 @@ def _extract_recipe_id(data: dict[object, object]) -> str | None:
 def _log_invalid_entries(invalid_entries: list[InvalidStoredRecipe]) -> None:
     for entry in invalid_entries:
         label = entry.recipe_id or f"entry #{entry.position}"
-        logger.warning("Skipping invalid stored recipe %s: %s", label, entry.reason)
+        with suppress(Exception):
+            logger.warning("Skipping invalid stored recipe %s: %s", label, entry.reason)
 
 
 def get_repository() -> RecipeRepository:

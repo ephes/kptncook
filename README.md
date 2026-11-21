@@ -140,6 +140,8 @@ recipe models only for matching identities. Warnings concern malformed matching
 records and retain their original store positions; unrelated malformed recipes
 are reported by full listings/exports instead. The raw JSON store is still read
 and checked in full, including its duplicate-OID admission policy.
+Repository library calls that log skipped rows still return the valid recipes
+if a logging handler fails to deliver a warning.
 
 If closing the KptnCook client fails after `backup-favorites` saves, the CLI
 prints the completed counts and a short cleanup warning, then exits with status
