@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Sync the recipe store's parent directory links before the first publication,
+  including when retrying in a directory created by a failed attempt.
 - Preserve the directory sync outcome when closing its read-only descriptor
   fails after publishing a file.
 - Derive the API request's Host header from the admitted URL, overriding

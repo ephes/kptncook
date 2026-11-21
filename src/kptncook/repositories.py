@@ -289,7 +289,12 @@ class RecipeRepository:
                 f.flush()
                 os.fsync(f.fileno())
             self._check_snapshot(snapshot)
-            if snapshot is not None:
+            if snapshot is None:
+                # Settings or a failed attempt may already have created the
+                # directories without making their links durable.
+                for ancestor in self.path.parent.resolve(strict=True).parents:
+                    fsync_directory(ancestor)
+            else:
                 self._create_backup_locked(snapshot=snapshot)
             self._check_snapshot(snapshot)
             os.replace(temp_path, self.path)

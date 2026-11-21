@@ -697,8 +697,12 @@ during publication.
 Backup and primary publication sync their containing directory where the OS
 supports it. Genuine directory open and sync errors stop the write. If closing
 the read-only sync descriptor fails, the tool attempts a short cleanup warning
-and preserves the sync outcome for exports, configuration and recipe storage. Failure before backup replacement leaves both snapshots
-intact. Failure syncing an already replaced backup leaves the primary unchanged
+and preserves the sync outcome for exports, configuration and recipe storage.
+Before the first primary file is published, the store also syncs the resolved
+parent chain, including directories left visible by a failed attempt. An
+ancestor sync failure leaves the first primary unpublished. Failure before backup
+replacement leaves both snapshots intact. Failure syncing an already replaced
+backup leaves the primary unchanged
 and reports uncertain backup durability. Failure syncing an already replaced
 primary reports that the new primary is published with uncertain durability;
 it is never rolled back or deleted. Inspect/reload the visible primary and

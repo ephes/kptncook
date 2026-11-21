@@ -4,7 +4,7 @@ from datetime import date
 import pytest
 
 import kptncook.repositories as repositories_module
-from kptncook.repositories import RecipeInDb, RecipeRepository
+from kptncook.repositories import RecipeInDb, RecipeRepository, RepositoryError
 
 
 def test_no_repository_file_returns_empty_list(tmpdir):
@@ -337,3 +337,48 @@ def test_malformed_incoming_id_preserves_repository(tmp_path, data, operation):
     assert repo.path.read_bytes() == b"[]"
     assert repo.backup_path.read_bytes() == b"recovery"
     assert not repo.lock_path.exists()
+
+
+def test_first_publication_syncs_parent_chain_before_replacing(tmp_path, monkeypatch):
+    root = tmp_path.resolve()
+    store_dir = root / "new" / "nested" / "store"
+    repo = RecipeRepository(store_dir)
+    recipe = RecipeInDb(date=date.today(), data={"_id": {"$oid": "1"}})
+    sync_calls = []
+    ancestor_error = OSError("synthetic ancestor sync failure")
+    fail = True
+
+    def sync(directory):
+        sync_calls.append((directory, repo.path.exists()))
+        if directory == root and fail:
+            raise ancestor_error
+
+    monkeypatch.setattr(repositories_module, "fsync_directory", sync)
+
+    with pytest.raises(
+        RepositoryError, match="Could not write repository file"
+    ) as caught:
+        repo.add(recipe)
+    assert caught.value.__cause__ is ancestor_error
+    assert store_dir.is_dir()
+    assert not repo.path.exists()
+    assert not repo.backup_path.exists()
+    assert not list(store_dir.glob("*.tmp"))
+
+    # A fresh instance must sync the links even though mkdir already ran.
+    repo = RecipeRepository(store_dir)
+    fail = False
+    sync_calls.clear()
+    repo.add(recipe)
+    assert sync_calls == [
+        *((directory, False) for directory in store_dir.parents),
+        (store_dir, True),
+    ]
+    assert repo.list() == [recipe]
+
+    # Once published, updating keeps the usual backup and primary barriers.
+    previous = repo.path.read_bytes()
+    sync_calls.clear()
+    repo.add(RecipeInDb(date=date.today(), data={"_id": {"$oid": "2"}}))
+    assert sync_calls == [(store_dir, True), (store_dir, True)]
+    assert repo.backup_path.read_bytes() == previous
