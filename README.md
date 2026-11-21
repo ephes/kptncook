@@ -163,6 +163,11 @@ nonfinite JSON constants before interpreting tokens, identities or discovery
 fields. Decoder errors report only "KptnCook returned an unreadable response."
 and contain no response fragments, member names or keyed URLs.
 
+If today's recipe list cannot be decoded or contains a non-object entry,
+`kptncook-today`, `save-todays-recipes` and `sync` report a short error without
+response details. A refused list leaves the local recipe store unchanged
+and stops `sync` before contacting Mealie.
+
 Before recipe models are built, today's recipes, dailies, resolved search results
 and selected restored recipes must fit a recipe envelope. Each recipe may use 32
 container levels, 262,144 visited values/keys and 8,388,608 text characters

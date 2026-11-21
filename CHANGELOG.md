@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Report malformed responses for today's recipe list as short errors and stop
+  sync before writing to the recipe store.
 - Preserve saved favorites backup counts and primary errors when client cleanup
   fails, with a short warning that omits exception details.
 - Refuse unsupported dailies response envelopes and whole lists containing

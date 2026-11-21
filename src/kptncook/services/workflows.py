@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 import httpx
 import portalocker
+from pydantic import ValidationError
 
 from kptncook.api import (
     ResponseShapeError,
@@ -214,6 +215,8 @@ def get_today_recipes() -> list[RecipeInDb]:
             ) from None
         except httpx.HTTPError as exc:
             raise UserFacingError(format_request_error(exc)) from None
+        except (ResponseShapeError, ValidationError) as exc:
+            raise _recipe_list_shape_error(exc) from None
 
 
 def save_todays_recipes() -> int:

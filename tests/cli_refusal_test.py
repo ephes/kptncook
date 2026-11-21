@@ -1,7 +1,9 @@
 """Credential and envelope refusals end as short CLI errors, never tracebacks."""
 
 import json
+from datetime import date
 from importlib import import_module
+from unittest.mock import Mock
 
 import httpx
 import pytest
@@ -10,7 +12,8 @@ from typer.testing import CliRunner
 from kptncook.api import KptnCookClient
 from kptncook.config import clear_settings_cache
 from kptncook.http_errors import UserFacingError
-from kptncook.services import workflows
+from kptncook.repositories import RecipeInDb, RecipeRepository
+from kptncook.services import repository, workflows
 
 runner = CliRunner()
 cli_module = import_module("kptncook.cli")
@@ -103,7 +106,17 @@ def test_refused_recipe_envelopes_are_user_facing(monkeypatch, call):
 @pytest.mark.parametrize(
     "body", [b"{not json synthetic-detail", b"\x80\x81 synthetic-detail"]
 )
-def test_undecodable_recipe_list_is_user_facing_without_details(monkeypatch, body):
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: workflows.get_discovery_list_recipes(list_type="latest", list_id=None),
+        workflows.get_today_recipes,
+    ],
+    ids=["discovery", "today"],
+)
+def test_undecodable_recipe_list_is_user_facing_without_details(
+    monkeypatch, body, call
+):
     bad = httpx.Response(
         200,
         content=body,
@@ -112,5 +125,30 @@ def test_undecodable_recipe_list_is_user_facing_without_details(monkeypatch, bod
     )
     monkeypatch.setattr(KptnCookClient, "get", lambda self, path, **kw: bad)
     with pytest.raises(UserFacingError) as caught:
-        workflows.get_discovery_list_recipes(list_type="latest", list_id=None)
+        call()
     assert str(caught.value) == "KptnCook returned an unreadable response."
+
+
+def test_sync_refuses_malformed_today_list_before_saving(monkeypatch, tmp_path):
+    repo = RecipeRepository(tmp_path)
+    repo.add(RecipeInDb(date=date(2000, 1, 1), data={"_id": {"$oid": "a" * 24}}))
+    previous = repo.path.read_bytes()
+    monkeypatch.setattr(repository, "get_repository", lambda: repo)
+    monkeypatch.setattr(
+        KptnCookClient, "get", lambda self, path: _response(["synthetic-detail"])
+    )
+    save = Mock()
+    monkeypatch.setattr(workflows, "save_recipe_entries", save)
+    sync_mealie = Mock()
+    monkeypatch.setattr(cli_module, "sync_with_mealie_workflow", sync_mealie)
+
+    result = runner.invoke(cli_module.app, ["sync"])
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    assert (
+        result.output.strip() == "KptnCook returned an unreadable recipe list response."
+    )
+    save.assert_not_called()
+    sync_mealie.assert_not_called()
+    assert repo.path.read_bytes() == previous
