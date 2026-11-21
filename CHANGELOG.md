@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Derive the API request's Host header from the admitted URL, overriding
+  caller-provided Host values and injected HTTPX defaults.
 - Preserve the operation error when an owned HTTP client also fails to close,
   and log a short cleanup warning without exception details.
 - Keep published Markdown notes and images in the export receipt when staging

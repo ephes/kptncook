@@ -104,19 +104,22 @@ class BaseHttpClient:
         timeout: httpx.Timeout | float | object = httpx.USE_CLIENT_DEFAULT,
         **kwargs: Any,
     ) -> httpx.Response:
-        merged_headers = self.headers | (headers or {})
         request_kwargs = dict(kwargs)
         if request_kwargs.get("follow_redirects"):
             raise ValueError("API clients do not support automatic redirects")
         # An injected pool may enable redirects; Token is not stripped by HTTPX
         # on a cross-origin redirect as Authorization is.
         request_kwargs["follow_redirects"] = False
+        url = self.to_url(path)
+        merged_headers = httpx.Headers(self.headers | (headers or {}))
+        # Replace Host case-insensitively and override any injected pool default.
+        merged_headers["Host"] = httpx.URL(url).netloc.decode("ascii")
         request_kwargs["headers"] = merged_headers
         if timeout is not httpx.USE_CLIENT_DEFAULT:
             request_kwargs["timeout"] = timeout
         elif self._timeout is not _TimeoutDefault.UNSPECIFIED:
             request_kwargs["timeout"] = self._timeout
-        return self._client.request(method, self.to_url(path), **request_kwargs)
+        return self._client.request(method, url, **request_kwargs)
 
     def get(self, path: str, **kwargs: Any) -> httpx.Response:
         return self.request("GET", path, **kwargs)

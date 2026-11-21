@@ -157,10 +157,12 @@ Injected HTTP clients remain open for their owners to close.
 Library API clients send requests only to their configured HTTP(S) origin
 (scheme, host and effective port), with no userinfo in the URL. Relative paths
 and same-origin absolute URLs are supported, including an explicit default
-port. Cross-origin requests are refused before transport. Automatic redirects
-are disabled even for injected HTTPX clients; requesting `follow_redirects=True`
-is refused. Follow an intended Location explicitly through the API client so
-it receives the same origin check.
+port. Cross-origin requests are refused before transport. The Host header is
+derived from the admitted URL and takes precedence over any Host value set on
+the wrapper, the individual request, or the injected HTTPX client. Automatic
+redirects are disabled even for injected HTTPX clients; requesting
+`follow_redirects=True` is refused. Follow an intended Location explicitly
+through the API client so it receives the same origin check.
 Configure API base URLs, including `MEALIE_URL`, without a query or fragment.
 Relative endpoints retain the base path, such as `/proxy/mealie/api` behind a
 reverse proxy.
