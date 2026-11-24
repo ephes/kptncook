@@ -308,6 +308,9 @@ The summary means:
   error). Other recipes are still synced, and the command exits with status 1.
   Name-collision errors are failures, not successful identity matches.
 
+The sync continues and retains its summary if a logging handler fails to deliver
+a recipe or cleanup warning.
+
 Client cleanup is attempted once even after a failed or interrupted sync. A close
 failure preserves the primary error or the completed result's created/failed
 counts. A completed result carries a separate `cleanup_warning`; the CLI displays

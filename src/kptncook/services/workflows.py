@@ -6,7 +6,7 @@ import logging
 import os
 import stat
 from collections.abc import Iterator, Sequence
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, suppress
 from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
@@ -442,6 +442,11 @@ def _mealie_sync_lock() -> Iterator[None]:
         lock.release()
 
 
+def _warn_best_effort(message: str, *args: str) -> None:
+    with suppress(Exception):
+        logger.warning(message, *args)
+
+
 def sync_with_mealie_result() -> SyncWithMealieResult:
     client = get_mealie_client()
     result: SyncWithMealieResult | None = None
@@ -475,7 +480,7 @@ def sync_with_mealie_result() -> SyncWithMealieResult:
                     continue
                 failure = MealieSyncFailure(recipe.id.oid, recipe_name, reason)
                 failed_recipes.append(failure)
-                logger.warning(
+                _warn_best_effort(
                     "Failed to sync recipe %s (%s) with Mealie: %s",
                     failure.recipe_name,
                     failure.recipe_id,
@@ -495,9 +500,9 @@ def sync_with_mealie_result() -> SyncWithMealieResult:
                 "Completed imports remain committed; unresolved outcomes remain unknown. "
                 "No automatic replay was attempted; the next sync checks stored identity."
             )
-            logger.warning("%s", warning)
             if result is not None:
                 result = replace(result, cleanup_warning=warning)
+            _warn_best_effort("%s", warning)
     return result
 
 

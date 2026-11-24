@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Continue Mealie sync and retain its created count, recipe failures and cleanup
+  warning if a logging handler fails.
 - Skip empty recipe image responses and responses with invalid, oversized, or
   mismatched declared lengths while retaining the recipe text.
 - Connect directly to allowed recipe image hosts and ignore HTTPX proxy and CA

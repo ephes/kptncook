@@ -66,6 +66,47 @@ def test_close_failure_preserves_operation_outcome(
     assert "private-cleanup-detail" not in caplog.text
 
 
+def test_failed_warning_delivery_preserves_sync_receipt(monkeypatch, minimal):
+    recipes = [
+        Recipe.model_validate({**minimal, "_id": {"$oid": digit * 24}})
+        for digit in "123"
+    ]
+    client = SimpleNamespace(
+        create_recipe=Mock(), close=Mock(side_effect=OSError("private close detail"))
+    )
+    convert = Mock(
+        side_effect=[recipes[0], ValueError("invalid conversion"), recipes[2]]
+    )
+    warning = Mock(side_effect=RuntimeError("warning handler failed"))
+    monkeypatch.setattr(workflows, "get_mealie_client", lambda: client)
+    monkeypatch.setattr(
+        workflows, "get_kptncook_recipes_from_mealie", lambda client: []
+    )
+    monkeypatch.setattr(
+        workflows,
+        "load_kptncook_recipes_from_repository",
+        lambda: RepositoryRecipesResult(recipes, []),
+    )
+    monkeypatch.setattr(workflows, "kptncook_to_mealie", convert)
+    monkeypatch.setattr(workflows.logger, "warning", warning)
+
+    result = workflows.sync_with_mealie_result()
+
+    assert result.created_count == 2
+    assert [call.args[0] for call in client.create_recipe.call_args_list] == [
+        recipes[0],
+        recipes[2],
+    ]
+    [failure] = result.failed_recipes
+    assert failure.recipe_id == recipes[1].id.oid
+    assert failure.reason == "ValueError: invalid conversion"
+    assert result.cleanup_warning
+    assert "Mealie client cleanup failed (OSError)" in result.cleanup_warning
+    assert "private close detail" not in result.cleanup_warning
+    client.close.assert_called_once_with()
+    assert warning.call_count == 2
+
+
 def cleanup_result():
     return SimpleNamespace(
         created_count=2,
