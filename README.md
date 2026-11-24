@@ -800,6 +800,8 @@ to `discovery-list` to store the resolved recipes locally.
 Discovery screen entries are printed as `id | title | type` so you can copy the
 list id into `discovery-list`. Discovery list entries are recipe summaries; the
 CLI resolves them to full recipes before printing or saving.
+If `discovery-screen` receives unreadable JSON, including duplicate object
+members, it exits with status 1 and a short error without rendering any entries.
 
 ```shell
 $ kptncook discovery-screen

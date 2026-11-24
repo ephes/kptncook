@@ -124,8 +124,11 @@ def _extract_dailies_payload(payload: object) -> list[Any]:
     raise ResponseShapeError("Dailies response missing recipe list.")
 
 
+UNREADABLE_RESPONSE_MESSAGE = "KptnCook returned an unreadable response."
+
+
 class ResponseShapeError(ValueError):
-    """A recipe response envelope was refused with a fixed, value-free message."""
+    """An API response was refused with a fixed, value-free message."""
 
 
 def _reject_constant(value: str) -> None:
@@ -138,7 +141,7 @@ def _decode_source_json(response: httpx.Response) -> Any:
             object_pairs_hook=_unique_object, parse_constant=_reject_constant
         )
     except (ValueError, RecursionError):
-        raise ResponseShapeError("KptnCook returned an unreadable response.") from None
+        raise ResponseShapeError(UNREADABLE_RESPONSE_MESSAGE) from None
 
 
 def _admit_recipe_results(payload: Any) -> list[Any]:

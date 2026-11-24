@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Translate unreadable discovery screen replies to the standard user-facing
+  response error in the discovery workflow.
 - Preserve a valid KptnCook access token or the original login error when
   closing the login client fails.
 - Continue Mealie sync and retain its created count, recipe failures and cleanup

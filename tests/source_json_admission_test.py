@@ -3,8 +3,10 @@
 import httpx
 import pytest
 
-from kptncook.api import KptnCookClient
 from kptncook import setup
+from kptncook.api import KptnCookClient
+from kptncook.cli import app
+from kptncook.services import workflows
 from typer.testing import CliRunner
 
 
@@ -69,17 +71,38 @@ def test_valid_source_json_unchanged(minimal):
     assert [recipe.data for recipe in recipes] == [minimal]
 
 
-def test_malformed_source_screen_has_short_cli_error(monkeypatch):
-    from kptncook.cli import app
-    from kptncook.services import workflows
-
+@pytest.mark.parametrize(
+    "body, expected_lines",
+    [
+        pytest.param('{"private-detail":', None, id="malformed"),
+        pytest.param('{"private-detail":[],"private-detail":[]}', None, id="duplicate"),
+        pytest.param(
+            '{"lists":[{"id":"soups","title":"Soup","listType":"curated"}],'
+            '"quickSearch":["Tomato"]}',
+            [
+                "Discovery lists:",
+                "- soups | Soup | curated",
+                "Quick search:",
+                "- Tomato",
+            ],
+            id="valid",
+        ),
+    ],
+)
+def test_discovery_screen_source_response(monkeypatch, body, expected_lines):
     with httpx.Client(
-        transport=httpx.MockTransport(
-            lambda r: httpx.Response(200, content='{"items":[],"items":[]}')
-        )
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, content=body))
     ) as http:
         client = KptnCookClient("https://api.example", api_key="synthetic", client=http)
         monkeypatch.setattr(workflows, "_kptncook_client", lambda: client)
         result = CliRunner().invoke(app, ["discovery-screen"])
-    assert result.exit_code == 1
-    assert "KptnCook returned an unreadable response." in result.output
+        if expected_lines is None:
+            message = "KptnCook returned an unreadable response."
+            assert result.exit_code == 1
+            assert result.output.strip() == message
+            with pytest.raises(workflows.UserFacingError) as caught:
+                workflows.get_discovery_screen()
+            assert str(caught.value) == message
+        else:
+            assert result.exit_code == 0, result.output
+            assert result.output.splitlines() == expected_lines

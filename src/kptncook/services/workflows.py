@@ -18,6 +18,7 @@ import portalocker
 from pydantic import ValidationError
 
 from kptncook.api import (
+    UNREADABLE_RESPONSE_MESSAGE,
     ResponseShapeError,
     KptnCookClient,
     RecipeIdentifierError,
@@ -638,6 +639,8 @@ def get_discovery_screen() -> DiscoveryScreenData:
     with closing(_kptncook_client()) as client:
         try:
             payload = client.get_discovery_screen()
+        except ResponseShapeError:
+            raise UserFacingError(UNREADABLE_RESPONSE_MESSAGE) from None
         except httpx.HTTPStatusError as exc:
             raise UserFacingError(
                 format_http_status_error(
