@@ -1222,9 +1222,12 @@ Use the helper commands below from a clean worktree:
    Preparations sharing a changelog directory serialize on the stable
    `.kptncook-release.lock` (30-second wait; keep this file). Both source
    generations are checked before publication and each atomic replacement.
-   If the second write fails, only this attempt's changelog generation is
-   restored. A conflicting edit is preserved and the error names a private
-   `CHANGELOG.md.recovery-*` copy of the original for manual reconciliation.
+   If publication fails or Ctrl-C interrupts it after the changelog is replaced
+   and before the project file is replaced, only this attempt's changelog
+   generation is restored. A conflicting edit is preserved and the error names
+   a private `CHANGELOG.md.recovery-*` copy of the original for manual
+   reconciliation. Ctrl-C still interrupts the command. If both replacements
+   already completed, the prepared files are kept.
    These checks detect edits before publication; editors do not honor the
    advisory lock, so a final check-to-replace race remains. This is not a
    two-file transaction or crash recovery mechanism.

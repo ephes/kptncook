@@ -7,6 +7,8 @@ import stat
 import subprocess
 import sys
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -196,9 +198,10 @@ def _require_generation(path: Path, expected: _Generation) -> None:
         raise ReleaseError("Release source changed; retry preparation.")
 
 
-def _atomic_replace(
-    path: Path, content: bytes, *, expected: _Generation | None = None
-) -> _Generation:
+@contextmanager
+def _stage_replacement(
+    path: Path, content: bytes
+) -> Iterator[tuple[Path, _Generation]]:
     temporary: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
@@ -207,14 +210,29 @@ def _atomic_replace(
             stream.flush()
             os.fsync(stream.fileno())
         temporary.chmod(path.stat().st_mode & 0o777)
-        published = _generation(temporary)
-        if expected is not None:
-            _require_generation(path, expected)
-        os.replace(temporary, path)
-        return published
+        yield temporary, _generation(temporary)
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
+
+
+def _atomic_replace(
+    path: Path, content: bytes, *, expected: _Generation | None = None
+) -> None:
+    with _stage_replacement(path, content) as (temporary, _):
+        if expected is not None:
+            _require_generation(path, expected)
+        os.replace(temporary, path)
+
+
+def _names_replacement(path: Path, staged: _Generation) -> bool:
+    # A replace can complete before the call returns to Python. The staged
+    # inode identifies publication even if an editor then writes to it.
+    try:
+        named = path.lstat()
+    except FileNotFoundError:
+        return False
+    return (named.st_dev, named.st_ino) == (staged.device, staged.inode)
 
 
 def _restore_changelog(path: Path, original: _Generation, owned: _Generation) -> None:
@@ -312,20 +330,34 @@ def prepare_release(
                 pyproject_path,
                 version=version,
             )
-            # Preflight both sources before publishing the first file.
-            _require_generation(changelog_path, original_changelog)
-            _require_generation(pyproject_path, original_project)
-            owned = _atomic_replace(
-                changelog_path, changelog.encode("utf-8"), expected=original_changelog
-            )
-            try:
-                _require_generation(changelog_path, owned)
-                _atomic_replace(
-                    pyproject_path, project.encode("utf-8"), expected=original_project
-                )
-            except (OSError, ReleaseError):
-                _restore_changelog(changelog_path, original_changelog, owned)
-                raise
+            with (
+                _stage_replacement(changelog_path, changelog.encode("utf-8")) as (
+                    changelog_temp,
+                    owned_changelog,
+                ),
+                _stage_replacement(pyproject_path, project.encode("utf-8")) as (
+                    project_temp,
+                    owned_project,
+                ),
+            ):
+                _require_generation(pyproject_path, original_project)
+                _require_generation(changelog_path, original_changelog)
+                changelog_published = False
+                try:
+                    os.replace(changelog_temp, changelog_path)
+                    changelog_published = True
+                    _require_generation(changelog_path, owned_changelog)
+                    _require_generation(pyproject_path, original_project)
+                    os.replace(project_temp, pyproject_path)
+                except (OSError, ReleaseError, KeyboardInterrupt):
+                    if (
+                        changelog_published
+                        or _names_replacement(changelog_path, owned_changelog)
+                    ) and not _names_replacement(pyproject_path, owned_project):
+                        _restore_changelog(
+                            changelog_path, original_changelog, owned_changelog
+                        )
+                    raise
     except portalocker.exceptions.LockException as exc:
         raise ReleaseError(
             "Release preparation is busy or the lock is unavailable."

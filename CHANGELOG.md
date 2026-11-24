@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Recover from Ctrl-C during release preparation by restoring the changelog
+  after a partial publication and keeping both files after a completed one.
 - Reject incompatible popular ingredient responses with a short error while
   accepting empty lists and supported wrappers.
 - Translate unreadable discovery screen replies to the standard user-facing

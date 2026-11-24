@@ -205,3 +205,51 @@ def test_release_wait_is_bounded(tmp_path, monkeypatch):
             process.join(5)
         results.close()
         results.join_thread()
+
+
+@pytest.mark.parametrize(
+    "interruption", ["after_changelog", "before_project", "after_project"]
+)
+def test_interrupted_publication_leaves_consistent_pair(
+    tmp_path, monkeypatch, interruption
+):
+    changelog, project = files(tmp_path)
+    originals = changelog.read_bytes(), project.read_bytes()
+    replace = release.os.replace
+    interrupted = False
+
+    def interrupt(source, target):
+        nonlocal interrupted
+        if (
+            not interrupted
+            and target == changelog
+            and interruption == "after_changelog"
+        ):
+            interrupted = True
+            replace(source, target)
+            raise KeyboardInterrupt
+        if target == project:
+            if interruption == "after_project":
+                replace(source, target)
+            raise KeyboardInterrupt
+        replace(source, target)
+
+    monkeypatch.setattr(release.os, "replace", interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        release.prepare_release(
+            changelog, project, version="0.0.2", release_date="2026-11-24"
+        )
+
+    if interruption == "after_project":
+        assert changelog.read_bytes() == (
+            b"Unreleased\n==========\n\n0.0.2 - 2026-11-24\n==================\n"
+            b"\n- Invented notes.\n"
+        )
+        assert project.read_bytes() == b'[project]\nversion = "0.0.2"\n'
+    else:
+        assert (changelog.read_bytes(), project.read_bytes()) == originals
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        ".kptncook-release.lock",
+        "CHANGELOG.md",
+        "pyproject.toml",
+    ]
