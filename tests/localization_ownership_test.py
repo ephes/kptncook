@@ -128,6 +128,31 @@ def test_blank_recipe_title_falls_back_in_markdown(minimal, monkeypatch):
     assert recipe.localized_title.fallback("fr") == title
 
 
+@pytest.mark.parametrize(
+    "localized_unit, expected",
+    [
+        ({"singular": {}, "plural": {"de": "Esslöffel"}}, "Esslöffel"),
+        (
+            {"singular": {"de": "\u2003"}, "plural": {"de": " Esslöffel "}},
+            " Esslöffel ",
+        ),
+        ({"singular": {"it": "cucchiaio"}, "plural": {"de": "Esslöffel"}}, "Esslöffel"),
+        ({"singular": {"en": "tbsp"}, "plural": {"de": "Esslöffel"}}, "tbsp"),
+        ({"singular": {"de": None}, "de": "EL"}, "EL"),
+    ],
+)
+def test_legacy_step_unit_uses_first_usable_variant(
+    minimal, monkeypatch, localized_unit, expected
+):
+    monkeypatch.setattr(settings, "kptncook_lang", "de")
+    minimal["steps"][0]["ingredients"] = [
+        {"ingredient": "Mehl", "unit": {"localizedTitle": localized_unit}}
+    ]
+    recipe = Recipe.model_validate(minimal)
+    payload = TandoorExporter().get_recipe_payload(recipe)
+    assert payload["steps"][0]["ingredients"][0]["unit"] == {"name": expected}
+
+
 def test_model_localization_does_not_load_configuration(monkeypatch):
     def fail():
         pytest.fail("Pure localization loaded settings")

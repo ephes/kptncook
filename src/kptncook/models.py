@@ -52,8 +52,10 @@ class LocalizedString(BaseModel):
             plural = value.get("plural")
             uncountable = value.get("uncountable")
             for candidate in (singular, plural, uncountable):
-                if isinstance(candidate, dict):
-                    # Prefer localized singular/plural if present.
+                if isinstance(candidate, dict) and any(
+                    isinstance(text, str) and text.strip()
+                    for text in (candidate.get(lang) for lang in cls.model_fields)
+                ):
                     return candidate
             for candidate in (uncountable, singular, plural):
                 if isinstance(candidate, str):

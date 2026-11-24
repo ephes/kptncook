@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Recover recipe labels and step units from later legacy variants when an
+  earlier variant has no usable translation.
 - Bound release metadata reads to regular files of at most 1 MiB in release
   preparation and notes generation.
 - Recover from Ctrl-C during release preparation by restoring the changelog

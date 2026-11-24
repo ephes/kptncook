@@ -492,7 +492,10 @@ languages fall back to English). Recipe titles, comments, steps and ingredient
 labels across all exporters prefer that same configured language. Missing,
 empty and whitespace-only translations fall back in order to German, English,
 Spanish, French, then Portuguese. A usable translation retains its surrounding
-whitespace. `<timer>` placeholders in steps are replaced with their durations.
+whitespace. For legacy variant maps, the first map in `singular`, `plural`,
+`uncountable` order with a nonblank translation in a supported language is
+used. Direct language maps and plain strings are also accepted.
+`<timer>` placeholders in steps are replaced with their durations.
 If a timer is missing or has no duration metadata,
 the placeholder and its punctuation stay in every export: Paprika keeps the
 literal `<timer>`, while the rendered Markdown, Tandoor and Mealie step texts
