@@ -935,6 +935,10 @@ replacement. Repair the file and retry.
 If you want to back up your favorite recipes from KptnCook, you have to set the `KPTNCOOK_ACCESS_TOKEN` variable as well. You can obtain the access token by running `kptncook kptncook-access-token`; the command fetches the token and saves `KPTNCOOK_ACCESS_TOKEN` into `~/.kptncook/.env` instead of printing the raw token to stdout. It logs in without the stored token, so it also replaces an invalid one; other commands stop with a short error naming the invalid setting (never its value). A login reply without a valid token, or a recipe-list reply whose wrapper is too deep or too large, ends as a short error instead of a traceback. But you need a kptncook account to do that.
 Beware: If you don't have a kptncook account, you'll lose all your favorites by creating a new one.
 
+If closing the login client fails, `kptncook-access-token` still saves a valid
+token or reports the original login error. It attempts to log a short cleanup
+warning without credential or exception details.
+
 Optional API defaults for discovery/dailies/onboarding requests:
 
 - `KPTNCOOK_LANG` (default `de`)

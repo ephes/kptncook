@@ -2,6 +2,7 @@ import copy
 import logging
 from datetime import date
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import httpx
 import pytest
@@ -13,6 +14,53 @@ from kptncook.repositories import RecipeInDb
 from kptncook.services import repository as repository_service
 from kptncook.services import workflows
 from kptncook.services.repository import InvalidStoredRecipe, RepositoryRecipesResult
+
+
+@pytest.mark.parametrize("status", [200, 401])
+@pytest.mark.parametrize("warning_fails", [False, True])
+def test_login_close_failure_preserves_exchange_outcome(
+    monkeypatch, caplog, status, warning_fails
+):
+    token = "synthetic-token"
+
+    def respond(request):
+        assert request.url.path == "/auth/login"
+        return httpx.Response(status, json={"accessToken": token})
+
+    http = httpx.Client(transport=httpx.MockTransport(respond))
+    real_close = http.close
+
+    def fail_close():
+        real_close()
+        raise OSError(f"private close detail: {token}")
+
+    close = Mock(side_effect=fail_close)
+    monkeypatch.setattr(http, "close", close)
+    monkeypatch.setattr("kptncook.http_client.httpx.Client", lambda **kwargs: http)
+    monkeypatch.setattr(
+        workflows,
+        "get_credentials",
+        lambda **kwargs: ("synthetic-user", "synthetic-pw"),
+    )
+    if warning_fails:
+        warning = Mock(side_effect=RuntimeError("warning handler failed"))
+        monkeypatch.setattr(workflows.logger, "warning", warning)
+
+    if status == 200:
+        assert workflows.get_kptncook_access_token() == token
+    else:
+        with pytest.raises(
+            workflows.UserFacingError, match=r"Login failed \(HTTP 401\)"
+        ):
+            workflows.get_kptncook_access_token()
+
+    close.assert_called_once_with()
+    if warning_fails:
+        warning.assert_called_once_with("KptnCook client cleanup failed.")
+    else:
+        assert "KptnCook client cleanup failed." in caplog.text
+        assert token not in caplog.text
+        assert "private close detail" not in caplog.text
 
 
 def _recipe_data(minimal, *, oid: str | None = None) -> dict:

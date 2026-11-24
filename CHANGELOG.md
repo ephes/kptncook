@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Preserve a valid KptnCook access token or the original login error when
+  closing the login client fails.
 - Continue Mealie sync and retain its created count, recipe failures and cleanup
   warning if a logging handler fails.
 - Skip empty recipe image responses and responses with invalid, oversized, or

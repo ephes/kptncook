@@ -606,29 +606,32 @@ def get_kptncook_access_token() -> str:
         raise UserFacingError("Failed to get credentials")
 
     # Logging in must not depend on the (possibly invalid) stored token.
-    with closing(
-        KptnCookClient(
-            base_url=str(settings.kptncook_api_url),
-            api_key=settings.kptncook_api_key,
-        )
-    ) as client:
+    client = KptnCookClient(
+        base_url=str(settings.kptncook_api_url),
+        api_key=settings.kptncook_api_key,
+    )
+    try:
+        return client.get_access_token(username, password)
+    except InvalidTokenError:
+        raise UserFacingError(INVALID_LOGIN_RESPONSE_MESSAGE) from None
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 401:
+            message = (
+                "Login failed (HTTP 401). Check your email/password and make sure "
+                "KPTNCOOK_API_KEY is set to your real API key (not a placeholder)."
+            )
+        else:
+            message = format_http_status_error(
+                exc.response, action="getting access token"
+            )
+        raise UserFacingError(message) from exc
+    except httpx.HTTPError as exc:
+        raise UserFacingError(format_request_error(exc)) from exc
+    finally:
         try:
-            return client.get_access_token(username, password)
-        except InvalidTokenError:
-            raise UserFacingError(INVALID_LOGIN_RESPONSE_MESSAGE) from None
-        except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 401:
-                message = (
-                    "Login failed (HTTP 401). Check your email/password and make sure "
-                    "KPTNCOOK_API_KEY is set to your real API key (not a placeholder)."
-                )
-            else:
-                message = format_http_status_error(
-                    exc.response, action="getting access token"
-                )
-            raise UserFacingError(message) from exc
-        except httpx.HTTPError as exc:
-            raise UserFacingError(format_request_error(exc)) from exc
+            client.close()
+        except Exception:
+            _warn_best_effort("KptnCook client cleanup failed.")
 
 
 def get_discovery_screen() -> DiscoveryScreenData:
