@@ -501,14 +501,17 @@ class KptnCookClient(BaseHttpClient):
         response = self.get("ingredients/popular", params=params)
         response.raise_for_status()
         payload = _decode_source_json(response)
-        if isinstance(payload, list):
-            return [item for item in payload if isinstance(item, dict)]
         if isinstance(payload, dict):
             for key in ("ingredients", "items", "data"):
                 value = payload.get(key)
                 if isinstance(value, list):
-                    return [item for item in value if isinstance(item, dict)]
-        return []
+                    payload = value
+                    break
+        if not isinstance(payload, list) or any(
+            not isinstance(item, dict) for item in payload
+        ):
+            raise ResponseShapeError(UNREADABLE_RESPONSE_MESSAGE)
+        return payload
 
     def get_recipes_with_ingredients(
         self,

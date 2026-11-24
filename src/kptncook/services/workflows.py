@@ -677,6 +677,8 @@ def list_popular_ingredients() -> list[dict[str, object]]:
     with closing(_kptncook_client()) as client:
         try:
             return client.list_popular_ingredients()
+        except ResponseShapeError:
+            raise UserFacingError(UNREADABLE_RESPONSE_MESSAGE) from None
         except httpx.HTTPStatusError as exc:
             raise UserFacingError(
                 format_http_status_error(

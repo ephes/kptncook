@@ -820,6 +820,12 @@ Ingredient discovery and ingredient-based recipes require
 the `_id.$oid` value from `kptncook ingredients-popular` (output is `id | name`
 for easy copy/paste). Use `kptncook kptncook-access-token` if you need to
 generate one.
+Popular ingredient replies may be a list of objects or contain such a list
+under `ingredients`, `items` or `data`. The first list in that order is used.
+An empty list reports "No popular ingredients found." Unreadable JSON, a
+missing list or a non-object list entry makes the command exit with status 1
+and the standard unreadable-response error before printing any entries.
+
 The `--ingredient-id` flag is required and repeatable for
 `recipes-with-ingredients` (`-i` is the short flag).
 Add `--save` to `recipes-with-ingredients` to store matched recipes locally.

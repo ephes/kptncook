@@ -2,12 +2,12 @@
 
 import httpx
 import pytest
+from typer.testing import CliRunner
 
 from kptncook import setup
 from kptncook.api import KptnCookClient
 from kptncook.cli import app
 from kptncook.services import workflows
-from typer.testing import CliRunner
 
 
 @pytest.mark.parametrize(
@@ -106,3 +106,54 @@ def test_discovery_screen_source_response(monkeypatch, body, expected_lines):
         else:
             assert result.exit_code == 0, result.output
             assert result.output.splitlines() == expected_lines
+
+
+@pytest.mark.parametrize(
+    "body, expected_row",
+    [
+        pytest.param("[]", "", id="empty"),
+        pytest.param('{"ingredients":[],"items":[null]}', "", id="wrapper-precedence"),
+        pytest.param('[{"id":"1","name":"Salt"}]', "- 1 | Salt", id="bare-list"),
+        pytest.param('{"ingredients":[{"id":"2"}]}', "- 2 | -", id="ingredients"),
+        pytest.param('{"items":[{"id":"3"}]}', "- 3 | -", id="items"),
+        pytest.param('{"data":[{"id":"4"}]}', "- 4 | -", id="data"),
+        pytest.param('[{"id":"hidden"},null]', None, id="mixed-list"),
+        pytest.param('{"items":[{"id":"hidden"},42]}', None, id="mixed-wrapper"),
+        pytest.param('{"unexpected":[]}', None, id="unknown-wrapper"),
+        pytest.param('{"items":{}}', None, id="wrong-wrapper-type"),
+        pytest.param("null", None, id="wrong-root-type"),
+        pytest.param('{"items":', None, id="malformed-json"),
+        pytest.param('{"items":[],"items":[]}', None, id="duplicate-member"),
+    ],
+)
+def test_popular_ingredients_source_response(monkeypatch, body, expected_row):
+    monkeypatch.setenv("KPTNCOOK_ACCESS_TOKEN", "synthetic-token")
+
+    def respond(request):
+        assert request.url.path == "/ingredients/popular"
+        return httpx.Response(200, content=body)
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as http:
+        client = KptnCookClient(
+            "https://api.example",
+            api_key="synthetic",
+            access_token="synthetic-token",
+            client=http,
+        )
+        monkeypatch.setattr(workflows, "_kptncook_client", lambda: client)
+        result = CliRunner().invoke(app, ["ingredients-popular"])
+        if expected_row is None:
+            with pytest.raises(workflows.UserFacingError) as caught:
+                workflows.list_popular_ingredients()
+            assert str(caught.value) == "KptnCook returned an unreadable response."
+
+    if expected_row is None:
+        assert result.exit_code == 1
+        assert result.output.strip() == "KptnCook returned an unreadable response."
+    else:
+        assert result.exit_code == 0, result.output
+        assert result.output.splitlines() == (
+            ["Popular ingredients:", expected_row]
+            if expected_row
+            else ["No popular ingredients found."]
+        )
