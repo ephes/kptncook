@@ -247,6 +247,10 @@ class StepIngredient(BaseModel):
         return values
 
 
+# Recipe durations and step timer endpoints are capped at 365 days.
+MAX_DURATION_MINUTES = 525_600
+
+
 class StepTimer(BaseModel):
     """Timer for a recipe step. Times are in minutes."""
 
@@ -254,8 +258,8 @@ class StepTimer(BaseModel):
         alias_generator=to_camel, extra="ignore", populate_by_name=True
     )
 
-    min_or_exact: int | None = Field(None, strict=True, ge=0)
-    max: int | None = Field(None, strict=True, ge=0)
+    min_or_exact: int | None = Field(None, strict=True, ge=0, le=MAX_DURATION_MINUTES)
+    max: int | None = Field(None, strict=True, ge=0, le=MAX_DURATION_MINUTES)
 
     @model_validator(mode="after")
     def ordered_range(self) -> "StepTimer":
@@ -283,9 +287,8 @@ class Recipe(BaseModel):
     rtype: str | None = None
     localized_title: LocalizedString
     author_comment: LocalizedString | None = None
-    # Whole-recipe durations are integer minutes, capped at one year.
-    preparation_time: int = Field(..., strict=True, ge=0, le=525600)
-    cooking_time: int | None = Field(None, strict=True, ge=0, le=525600)
+    preparation_time: int = Field(..., strict=True, ge=0, le=MAX_DURATION_MINUTES)
+    cooking_time: int | None = Field(None, strict=True, ge=0, le=MAX_DURATION_MINUTES)
     recipe_nutrition: Nutrition
     active_tags: list[str] | None = None
     steps: list[RecipeStep] = Field(..., alias="steps")

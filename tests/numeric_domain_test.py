@@ -56,6 +56,33 @@ def test_invalid_timer_payloads_refused(minimal, timer):
         Recipe.model_validate(minimal)
 
 
+@pytest.mark.parametrize("endpoint", ["minOrExact", "max"])
+def test_timer_endpoint_above_one_year_is_refused(minimal, endpoint):
+    minimal["steps"][0]["timers"] = [{endpoint: 525601}]
+    with pytest.raises(ValidationError) as exc:
+        Recipe.model_validate(minimal)
+    [error] = exc.value.errors()
+    assert error["loc"] == ("steps", 0, "timers", 0, endpoint)
+    assert error["type"] == "less_than_equal"
+
+
+@pytest.mark.parametrize(
+    "timer, formatted",
+    [
+        ({"minOrExact": 525600}, "525600 Min."),
+        ({"max": 525600}, "bis zu 525600 Min."),
+        ({"minOrExact": 525600, "max": 525600}, "525600–525600 Min."),
+    ],
+)
+def test_timer_at_one_year_is_exported(minimal, timer, formatted):
+    from kptncook.tandoor import TandoorExporter
+
+    minimal["steps"][0].update(title={"de": "Wait <timer>"}, timers=[timer])
+    recipe = Recipe.model_validate(minimal)
+    payload = TandoorExporter().get_recipe_payload(recipe)
+    assert payload["steps"][0]["instruction"] == f"Wait {formatted}"
+
+
 @pytest.mark.parametrize("count", [0, -1, True, False, "3", 1.5])
 def test_invalid_explicit_servings_refused(minimal, count):
     minimal["fixedPortionCount"] = count

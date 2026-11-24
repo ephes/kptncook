@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Apply the 365-day duration limit to both step timer endpoints during recipe
+  validation.
 - Recover recipe labels and step units from later legacy variants when an
   earlier variant has no usable translation.
 - Bound release metadata reads to regular files of at most 1 MiB in release

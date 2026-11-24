@@ -460,9 +460,10 @@ supported, with the same six-decimal rounding across adapters.
 Whole-recipe preparation and cooking times are strict integer minutes from 0 to
 525600 (365 days); booleans, strings and fractional values are refused.
 Preparation time is required. Missing/null cooking time stays unknown; explicit
-zero stays zero in every exporter. Timer
-bounds must be nonnegative integers, with maximum at least minimum when both
-are present. Exact/zero, max-only and ranged timers are retained without
+zero stays zero in every exporter. Each step timer endpoint is optional and must
+be a strict integer in the same 0 to 525600 minute range when present. The
+maximum must be at least the minimum when both are present.
+Exact/zero, max-only and ranged timers are retained without
 mutating source lists. Invalid numeric recipes are reported through the existing
 invalid-stored-entry warnings and excluded from export/import.
 Tandoor and Markdown use numeric `servings`,
