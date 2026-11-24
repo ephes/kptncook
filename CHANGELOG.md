@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Bound release metadata reads to regular files of at most 1 MiB in release
+  preparation and notes generation.
 - Recover from Ctrl-C during release preparation by restoring the changelog
   after a partial publication and keeping both files after a completed one.
 - Reject incompatible popular ingredient responses with a short error while

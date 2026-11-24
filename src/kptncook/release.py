@@ -27,6 +27,7 @@ RELEASE_HEADING_PATTERN = re.compile(
 )
 UNRELEASED_PREFIX = "Unreleased\n==========\n"
 RELEASE_LOCK_TIMEOUT_SECONDS = 30.0
+MAX_RELEASE_INPUT_BYTES = 1024 * 1024
 
 
 class ReleaseError(Exception):
@@ -79,7 +80,7 @@ def _split_changelog(changelog_text: str) -> tuple[str, str]:
 
 
 def _read_release_notes(changelog_path: Path, version: str) -> ReleaseNotes:
-    changelog_text = changelog_path.read_text()
+    changelog_text = _read_release_text(changelog_path)
     match = re.search(
         rf"^(?P<heading>{re.escape(version)} - (?P<date>\d{{4}}-\d{{2}}-\d{{2}}))\n=+\n",
         changelog_text,
@@ -179,18 +180,60 @@ class _Generation:
 
 
 def _generation(path: Path) -> _Generation:
-    with path.open("rb") as stream:
-        before = os.fstat(stream.fileno())
-        content = stream.read()
-        after = os.fstat(stream.fileno())
+    regular_file_error = f"Release source {path} must be a regular file."
+    size_error = f"Release source {path} exceeds the 1 MiB size limit."
+    changed_error = "Release source changed while reading; retry."
+
+    def open_nonblocking(filename: str, flags: int) -> int:
+        return os.open(filename, flags | getattr(os, "O_NONBLOCK", 0))
+
+    def identity(info: os.stat_result) -> tuple[int, int, int, int, int]:
+        return (
+            info.st_dev,
+            info.st_ino,
+            info.st_mtime_ns,
+            info.st_ctime_ns,
+            info.st_size,
+        )
+
     named = path.stat()
+    if not stat.S_ISREG(named.st_mode):
+        raise ReleaseError(regular_file_error)
+    with open(path, "rb", opener=open_nonblocking) as stream:
+        before = os.fstat(stream.fileno())
+        if not stat.S_ISREG(before.st_mode):
+            raise ReleaseError(regular_file_error)
+        if before.st_size > MAX_RELEASE_INPUT_BYTES:
+            raise ReleaseError(size_error)
+        if identity(named) != identity(before):
+            raise ReleaseError(changed_error)
 
-    def identity(info: os.stat_result) -> tuple[int, int, int, int]:
-        return info.st_dev, info.st_ino, info.st_mtime_ns, info.st_size
-
-    if identity(before) != identity(after) or identity(after) != identity(named):
-        raise ReleaseError("Release source changed while reading; retry preparation.")
+        content = stream.read(MAX_RELEASE_INPUT_BYTES + 1)
+        after = os.fstat(stream.fileno())
+        if (
+            len(content) > MAX_RELEASE_INPUT_BYTES
+            or after.st_size > MAX_RELEASE_INPUT_BYTES
+        ):
+            raise ReleaseError(size_error)
+        if (
+            len(content) != after.st_size
+            or identity(before) != identity(after)
+            or identity(after) != identity(path.stat())
+        ):
+            raise ReleaseError(changed_error)
     return _Generation(content, after.st_dev, after.st_ino, after.st_mtime_ns)
+
+
+def _read_release_text(path: Path) -> str:
+    try:
+        return (
+            _generation(path)
+            .content.decode("utf-8")
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+        )
+    except (OSError, UnicodeError) as exc:
+        raise ReleaseError(f"Could not read release source {path} as UTF-8.") from exc
 
 
 def _require_generation(path: Path, expected: _Generation) -> None:
@@ -202,6 +245,10 @@ def _require_generation(path: Path, expected: _Generation) -> None:
 def _stage_replacement(
     path: Path, content: bytes
 ) -> Iterator[tuple[Path, _Generation]]:
+    if len(content) > MAX_RELEASE_INPUT_BYTES:
+        raise ReleaseError(
+            f"Prepared release file {path} exceeds the 1 MiB size limit."
+        )
     temporary: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
@@ -255,7 +302,7 @@ def update_changelog_for_release(
     changelog_path: Path, *, version: str, release_date: str
 ) -> None:
     text = _updated_changelog(
-        changelog_path.read_text(),
+        _read_release_text(changelog_path),
         changelog_path,
         version=version,
         release_date=release_date,
@@ -265,7 +312,7 @@ def update_changelog_for_release(
 
 def update_pyproject_version(pyproject_path: Path, *, version: str) -> None:
     text = _updated_pyproject(
-        pyproject_path.read_text(), pyproject_path, version=version
+        _read_release_text(pyproject_path), pyproject_path, version=version
     )
     _atomic_replace(pyproject_path, text.encode("utf-8"))
 

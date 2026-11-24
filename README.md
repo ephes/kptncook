@@ -1218,7 +1218,9 @@ Use the helper commands below from a clean worktree:
    ```shell
    $ just release-prepare <version>
    ```
-   Preparation validates both replacement texts before writing either file.
+   Preparation reads regular UTF-8 files only. Each source and each replacement
+   may be at most 1 MiB. Preparation checks the input type and size and
+   validates both replacement texts before publishing either file.
    Preparations sharing a changelog directory serialize on the stable
    `.kptncook-release.lock` (30-second wait; keep this file). Both source
    generations are checked before publication and each atomic replacement.
@@ -1243,7 +1245,8 @@ Use the helper commands below from a clean worktree:
    ```shell
    $ just check
    ```
-3. Review the generated release notes if needed:
+3. Review the generated release notes if needed. Both the notes and draft
+   helpers require a regular UTF-8 changelog of at most 1 MiB.
    ```shell
    $ just release-notes <version>
    ```

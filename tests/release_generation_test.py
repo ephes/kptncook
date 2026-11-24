@@ -1,6 +1,10 @@
 """Offline release preparation must retain competing generations."""
 
 import multiprocessing
+import os
+import stat
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -253,3 +257,89 @@ def test_interrupted_publication_leaves_consistent_pair(
         "CHANGELOG.md",
         "pyproject.toml",
     ]
+
+
+@pytest.mark.parametrize("oversized", ["changelog", "project"])
+def test_prepare_refuses_oversized_release_input(tmp_path, oversized):
+    changelog, project = files(tmp_path)
+    target = changelog if oversized == "changelog" else project
+    with target.open("ab") as stream:
+        stream.write(b"#" + b"x" * (1024 * 1024) + b"\n")
+    originals = changelog.read_bytes(), project.read_bytes()
+    inodes = changelog.stat().st_ino, project.stat().st_ino
+
+    with pytest.raises(release.ReleaseError, match=rf"{target.name}.*1 MiB"):
+        release.prepare_release(changelog, project, version="0.0.2")
+
+    assert (changelog.read_bytes(), project.read_bytes()) == originals
+    assert (changelog.stat().st_ino, project.stat().st_ino) == inodes
+
+
+def test_release_notes_refuse_oversized_changelog(tmp_path):
+    changelog, _ = files(tmp_path)
+    changelog.write_bytes(
+        b"0.0.2 - 2026-11-24\n==================\n\n" + b"x" * (1024 * 1024)
+    )
+    with pytest.raises(release.ReleaseError, match=r"CHANGELOG.md.*1 MiB"):
+        release.render_release_notes(changelog, version="0.0.2")
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="requires POSIX named pipes")
+@pytest.mark.parametrize("command", ["prepare", "notes"])
+def test_release_command_refuses_fifo_without_waiting(tmp_path, command):
+    changelog, project = files(tmp_path)
+    fifo, other = (project, changelog) if command == "prepare" else (changelog, project)
+    original = other.read_bytes()
+    original_inode = other.stat().st_ino
+    fifo.unlink()
+    os.mkfifo(fifo)
+    fifo_inode = fifo.stat().st_ino
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "kptncook.release",
+            "--changelog",
+            str(changelog),
+            "--pyproject",
+            str(project),
+            command,
+            "0.0.2",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+
+    assert result.returncode == 1
+    assert "must be a regular file" in result.stderr
+    assert (other.read_bytes(), other.stat().st_ino) == (original, original_inode)
+    assert stat.S_ISFIFO(fifo.stat().st_mode)
+    assert fifo.stat().st_ino == fifo_inode
+
+
+def test_prepare_refuses_growth_after_descriptor_size_check(tmp_path, monkeypatch):
+    changelog, project = files(tmp_path)
+    original_changelog = changelog.read_bytes()
+    original_project = project.read_bytes()
+    project_inode = project.stat().st_ino
+    fstat = os.fstat
+    growth = b"#" + b"x" * (1024 * 1024) + b"\n"
+    grew = False
+
+    def grow(fd):
+        nonlocal grew
+        info = fstat(fd)
+        if info.st_ino == project_inode and not grew:
+            grew = True
+            with project.open("ab") as stream:
+                stream.write(growth)
+        return info
+
+    monkeypatch.setattr(release.os, "fstat", grow)
+    with pytest.raises(release.ReleaseError, match=r"pyproject.toml.*1 MiB"):
+        release.prepare_release(changelog, project, version="0.0.2")
+
+    assert changelog.read_bytes() == original_changelog
+    assert project.read_bytes() == original_project + growth
