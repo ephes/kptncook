@@ -5,17 +5,26 @@ Base settings for kptncook.
 from __future__ import annotations
 
 import os
+from contextvars import ContextVar
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from pydantic import AnyHttpUrl, DirectoryPath, Field, ValidationError, field_validator
 from pydantic_core import PydanticUndefined
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    DotEnvSettingsSource,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
+from pydantic_settings.sources import ENV_FILE_SENTINEL, DotenvType
+from pydantic_settings.sources.utils import parse_env_vars
 from rich import print as rprint
 
-from .env import ENV_PATH, scaffold_env_file
+from .env import ENV_PATH, ENV_READ_ERROR, read_dotenv, scaffold_env_file
 
 _MISSING_DEFAULT = object()
+_dotenv_files: ContextVar[DotenvType | None] = ContextVar("dotenv_files", default=None)
 _settings_cache: Settings | None = None
 _SAFE_VALIDATION_MESSAGES = {
     "missing": "Required setting is missing",
@@ -83,14 +92,18 @@ class SettingsError(Exception):
 
     def __init__(
         self,
-        validation_error: ValidationError,
+        validation_error: ValidationError | None,
         *,
         missing_fields: set[str],
         env_path: Path,
         scaffolded: bool,
     ) -> None:
         super().__init__("Invalid kptncook configuration")
-        self.diagnostics = _safe_validation_diagnostics(validation_error)
+        self.diagnostics = (
+            _safe_validation_diagnostics(validation_error)
+            if validation_error is not None
+            else (ENV_READ_ERROR,)
+        )
         self.missing_fields = missing_fields
         self.env_path = env_path
         self.scaffolded = scaffolded
@@ -142,6 +155,57 @@ class Settings(BaseSettings):
     # Extra image hosts (comma-separated) allowed to receive the API key, in
     # addition to KptnCook's own image CDN.
     kptncook_image_hosts: str | None = None
+
+    def __init__(
+        self, *, _env_file: DotenvType | None = ENV_FILE_SENTINEL, **values: Any
+    ) -> None:
+        files = (
+            type(self).model_config.get("env_file")
+            if _env_file == ENV_FILE_SENTINEL
+            else _env_file
+        )
+        token = _dotenv_files.set(files)
+        try:
+            # The built-in source opens its files before settings_customise_sources.
+            super().__init__(_env_file=None, **values)
+        finally:
+            _dotenv_files.reset(token)
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        source = cast(DotEnvSettingsSource, dotenv_settings)
+        files = _dotenv_files.get()
+        if isinstance(files, (str, os.PathLike)):
+            files = (files,)
+        variables: dict[str, str | None] = {}
+        for file in files or ():
+            path = Path(file)
+            try:
+                content = read_dotenv(path.expanduser())
+            except (OSError, RuntimeError):
+                pass
+            else:
+                variables.update(
+                    parse_env_vars(
+                        content,
+                        case_sensitive=source.case_sensitive,
+                        ignore_empty=source.env_ignore_empty,
+                        parse_none_str=source.env_parse_none_str,
+                    )
+                )
+                continue
+            raise SettingsError(
+                None, missing_fields=set(), env_path=path, scaffolded=False
+            ) from None
+        source.env_vars = variables
+        return init_settings, env_settings, source, file_secret_settings
 
     @field_validator("root", mode="before")
     def root_must_exist(cls, path: str | Path | os.PathLike[str]) -> Path:

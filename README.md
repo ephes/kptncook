@@ -916,6 +916,13 @@ format guidance; rejected values, URLs and validator context are never printed.
 Correct the named setting in your shell or `.env` and re-run the command.
 Direct `Settings` validation also hides inputs in normal exception formatting;
 Pydantic's programmatic `errors()` data remains sensitive and should not be logged.
+Runtime settings read `.env` only from a regular UTF-8 file of at most 64 KiB,
+the same admission rule used by setup. An unreadable, oversized, invalid UTF-8
+or special file stops runtime configuration with a short error before client
+setup. Missing files are treated as empty. For library callers,
+`Settings(_env_file=path)` selects a different file and `_env_file=None` disables
+dotenv. Constructor values take precedence over shell variables, which take
+precedence over dotenv values.
 
 Then set environment variables in the `~/.kptncook/.env` file (or directly in your shell). You'll need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie, set `MEALIE_API_TOKEN` or `MEALIE_USERNAME`/`MEALIE_PASSWORD`.
 

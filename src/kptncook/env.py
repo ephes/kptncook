@@ -20,6 +20,9 @@ from .durability import fsync_directory
 DEFAULT_API_KEY = "6q7QNKy-oIgk-IMuWisJ-jfN7s6"
 ENV_FILE_MODE = 0o600
 MAX_ENV_BYTES = 64 * 1024
+ENV_READ_ERROR = (
+    "Could not read configuration; expected a regular UTF-8 file of at most 64 KiB"
+)
 ENV_LOCK_TIMEOUT_SECONDS = 30.0
 ENV_BUSY_MESSAGE = "Configuration is busy; retry after the current writer finishes"
 
@@ -237,6 +240,11 @@ def read_env_values(env_path: Path) -> dict[str, str]:
     return _parse_env_values(_read_env_content(env_path))
 
 
+def read_dotenv(env_path: Path) -> dict[str, str | None]:
+    """Load a runtime dotenv with universal newlines and bare keys preserved."""
+    return dotenv_values(stream=StringIO(_read_env_content(env_path), newline=None))
+
+
 def _parse_env_values(content: str) -> dict[str, str]:
     return {
         key: value
@@ -268,9 +276,7 @@ def _read_env_content(env_path: Path) -> str:
                 raise OSError
         return content.decode("utf-8")
     except (OSError, UnicodeError, RuntimeError):
-        raise OSError(
-            "Could not read configuration; expected a regular UTF-8 file of at most 64 KiB"
-        ) from None
+        raise OSError(ENV_READ_ERROR) from None
 
 
 def initialize_env_value(env_path: Path, key: str, value: str) -> bool:

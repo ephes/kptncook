@@ -2,13 +2,17 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
+from dotenv.main import DotEnv
 from pydantic import ValidationError
+from typer.testing import CliRunner
 
 import kptncook.config as config
+from kptncook.cli import app
 from kptncook.config import Settings, SettingsError, clear_settings_cache, get_settings
-from kptncook.env import ENV_TEMPLATE, scaffold_env_file
+from kptncook.env import ENV_TEMPLATE, MAX_ENV_BYTES, scaffold_env_file
 
 
 def test_root_must_exist_creates_dir(tmp_path, monkeypatch):
@@ -133,3 +137,69 @@ def test_settings_proxy_raises_attribute_error_for_missing_required_field():
 
     with pytest.raises(AttributeError):
         _ = config.settings.kptncook_api_key
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_settings_refuse_oversized_dotenv_before_parsing(
+    tmp_path, monkeypatch, explicit
+):
+    env_path = tmp_path / "private-file-name"
+    env_path.write_text("MEALIE_PASSWORD=" + "x" * MAX_ENV_BYTES)
+    parse = Mock(return_value={})
+    monkeypatch.setattr(DotEnv, "dict", parse)
+    overrides = {"_env_file": env_path} if explicit else {}
+    if not explicit:
+        monkeypatch.setitem(Settings.model_config, "env_file", env_path)
+
+    with pytest.raises(SettingsError) as caught:
+        Settings(**overrides)
+
+    parse.assert_not_called()
+    assert "64 KiB" in " ".join(caught.value.diagnostics)
+    assert "private-file-name" not in " ".join(caught.value.diagnostics)
+
+
+def test_cli_refuses_invalid_dotenv_before_constructing_client(tmp_path, monkeypatch):
+    env_path = tmp_path / "private-file-name"
+    env_path.write_bytes(b"KPTNCOOK_API_KEY=private-value\xff")
+    monkeypatch.setitem(Settings.model_config, "env_file", env_path)
+    create_client = Mock(side_effect=AssertionError("HTTP client constructed"))
+    monkeypatch.setattr("kptncook.http_client.httpx.Client", create_client)
+
+    result = CliRunner().invoke(app, ["kptncook-today"])
+
+    assert result.exit_code == 1
+    assert "Invalid configuration" in result.output
+    assert "64 KiB" in result.output
+    assert "private" not in result.output
+    create_client.assert_not_called()
+
+
+def test_settings_preserve_dotenv_mapping_and_precedence(tmp_path, monkeypatch):
+    env_path = tmp_path / "selected.env"
+    env_path.write_text(
+        "kptncook_api_key=file-key\n"
+        "SYNTHETIC_LANG=fr\n"
+        "KPTNCOOK_LANG=${SYNTHETIC_LANG}\n"
+        "KPTNCOOK_HOME=" + str(tmp_path / "file-home") + "\n"
+    )
+    default_path = tmp_path / "default.env"
+    default_path.write_text("KPTNCOOK_LANG=es\n")
+    monkeypatch.setitem(Settings.model_config, "env_file", default_path)
+    monkeypatch.delenv("KPTNCOOK_LANG", raising=False)
+    monkeypatch.delenv("KPTNCOOK_HOME")
+    monkeypatch.delenv("KPTNCOOK_API_KEY")
+
+    from_file = Settings(_env_file=env_path)
+    assert from_file.kptncook_api_key == "file-key"
+    assert from_file.kptncook_lang == "fr"
+    assert from_file.root == tmp_path / "file-home"
+
+    monkeypatch.setenv("KPTNCOOK_API_KEY", "shell-key")
+    assert Settings(_env_file=env_path).kptncook_api_key == "shell-key"
+    assert (
+        Settings(_env_file=env_path, kptncook_api_key="init-key").kptncook_api_key
+        == "init-key"
+    )
+    assert Settings(KPTNCOOK_HOME=tmp_path).kptncook_lang == "es"
+    assert Settings(_env_file=None, KPTNCOOK_HOME=tmp_path).kptncook_lang == "de"
