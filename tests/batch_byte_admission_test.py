@@ -37,7 +37,7 @@ def batch(minimal):
 
 
 @pytest.mark.parametrize("kind", ["paprika", "tandoor", "markdown"])
-@pytest.mark.parametrize("mode", ["partial", "exact", "oversized"])
+@pytest.mark.parametrize("mode", ["partial", "exact", "oversized", "declared"])
 def test_cumulative_assets_stop_with_receipts(batch, tmp_path, monkeypatch, kind, mode):
     monkeypatch.setattr(
         exporter_utils,
@@ -73,7 +73,10 @@ def test_cumulative_assets_stop_with_receipts(batch, tmp_path, monkeypatch, kind
     def handle(request):
         stream = Stream()
         streams.append(stream)
-        return httpx.Response(200, stream=stream)
+        headers = {}
+        if mode == "declared":
+            headers["Content-Length"] = "8" if len(streams) == 1 else "5"
+        return httpx.Response(200, headers=headers, stream=stream)
 
     client_class = httpx.AsyncClient
     monkeypatch.setattr(
@@ -111,7 +114,9 @@ def test_cumulative_assets_stop_with_receipts(batch, tmp_path, monkeypatch, kind
     assert all(path.exists() for path in error.completed_paths)
     assert sentinel.read_bytes() == b"keep"
     assert len(streams) == (1 if mode == "exact" else 2)
-    assert all(stream.closed and stream.chunks == 2 for stream in streams)
+    assert all(stream.closed for stream in streams)
+    expected_chunks = {"exact": [2], "declared": [2, 0]}.get(mode, [2, 2])
+    assert [stream.chunks for stream in streams] == expected_chunks
     assert list(scratch.iterdir()) == []
 
 

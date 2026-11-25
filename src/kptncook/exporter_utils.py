@@ -221,16 +221,15 @@ class ExportBudget:
         self.asset_bytes = 0
         self.output_bytes = 0
 
-    def charge_asset(self, amount: int) -> None:
+    def check_asset_capacity(self, amount: int = 1) -> None:
         if self.asset_bytes + amount > MAX_BATCH_ASSET_BYTES:
             raise ExportLimitError(
                 "Batch asset byte allowance exceeded. Export a smaller selection."
             )
-        self.asset_bytes += amount
 
-    def check_asset_capacity(self) -> None:
-        if self.asset_bytes >= MAX_BATCH_ASSET_BYTES:
-            self.charge_asset(1)
+    def charge_asset(self, amount: int) -> None:
+        self.check_asset_capacity(amount)
+        self.asset_bytes += amount
 
     def charge_output(self, amount: int) -> None:
         if self.output_bytes + amount > MAX_BATCH_OUTPUT_BYTES:

@@ -52,6 +52,8 @@ async def _download_image(
                         "Image response uses unsupported content encoding"
                     )
                 declared_length = _declared_length(response)
+                if budget is not None and declared_length is not None:
+                    budget.check_asset_capacity(declared_length)
                 body = bytearray()
                 async for chunk in response.aiter_bytes():
                     if budget:
@@ -115,7 +117,8 @@ def download_image(
     are read. The body must be nonempty and match Content-Length if present.
     The image client connects directly and ignores HTTPX proxy and CA settings
     from the environment. An optional export budget charges every streamed
-    chunk, including chunks from failed images. Exhaustion stops the batch.
+    chunk, including chunks from failed images. An oversized declaration is
+    refused before reading the body. Exhaustion stops the batch.
     """
     try:
         asyncio.get_running_loop()

@@ -606,7 +606,9 @@ Each `export()` batch has a cumulative 100 MiB asset allowance and a 256 MiB
 output-work allowance, in addition to the 10 MiB per-image limit and 4,096-recipe
 count ceiling. Markdown inspects at most 4,097 recipes from an iterable and
 refuses an oversized batch before creating export directories or downloading
-images. Downloads charge each received chunk before retaining it, including
+images. If Content-Length exceeds the remaining batch asset allowance,
+the download stops before reading the body. Downloads charge each received
+chunk before retaining it, including
 chunks from failed or oversized optional images. The downloader may receive one
 extra chunk to detect overflow. Exhausting the allowance stops the batch.
 
