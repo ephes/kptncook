@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Preserve the favorites backup receipt or the original backup error when
+  logging a client cleanup warning fails.
 - Keep the original error when a recipe or discovery read and client close
   both fail. Report standalone close failures with a short CLI error.
 - Show discovery list and popular ingredient IDs from later aliases when a

@@ -146,8 +146,9 @@ if a logging handler fails to deliver a warning.
 If closing the KptnCook client fails after `backup-favorites` saves, the CLI
 prints the completed counts and a short cleanup warning, then exits with status
 1. The backup remains saved and needs no replay. Library callers receive the
-counts and a `cleanup_warning`. If the backup itself fails, its primary error
-still reaches the caller and the cleanup warning goes to the log.
+counts and a `cleanup_warning` even if a log handler fails. If the backup
+itself fails, its primary error still reaches the caller. The workflow tries
+to log the cleanup warning in either case.
 
 When a recipe or discovery read fails, the CLI reports the original error,
 even if closing the client also fails. A close failure after a successful

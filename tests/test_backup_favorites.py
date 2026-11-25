@@ -1,3 +1,4 @@
+import logging
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -7,8 +8,8 @@ from typer.testing import CliRunner
 
 import kptncook as cli_mod
 from kptncook.cli import app
-from kptncook.repositories import RecipeInDb
-from kptncook.services import workflows
+from kptncook.repositories import RecipeInDb, RecipeRepository
+from kptncook.services import repository as repository_service, workflows
 
 
 @pytest.mark.parametrize("fetch_fails", [False, True])
@@ -44,6 +45,52 @@ def test_backup_favorites_preserves_outcome_when_close_fails(
         assert "KptnCook client cleanup failed." in result.output
     assert "KptnCook client cleanup failed." in caplog.text
     assert "private-" not in result.output + caplog.text
+
+
+@pytest.mark.parametrize("fetch_fails", [False, True])
+def test_backup_favorites_preserves_outcome_when_cleanup_logging_fails(
+    monkeypatch, tmp_path, minimal, fetch_fails
+):
+    repository = RecipeRepository(tmp_path)
+    monkeypatch.setattr(repository_service, "get_repository", lambda: repository)
+    monkeypatch.setenv("KPTNCOOK_ACCESS_TOKEN", "synthetic-token")
+    recipe = RecipeInDb(date=workflows.date.today(), data=minimal)
+    client = SimpleNamespace(
+        list_favorites=Mock(return_value=[{"_id": minimal["_id"]}]),
+        resolve_recipe_summaries=Mock(return_value=[recipe]),
+        close=Mock(side_effect=httpx.CloseError("private-cleanup-detail")),
+    )
+    if fetch_fails:
+        client.list_favorites.side_effect = httpx.ReadTimeout("private-fetch-detail")
+    monkeypatch.setattr(workflows, "KptnCookClient", lambda: client)
+    emit = Mock(side_effect=OSError("private-log-sink-error"))
+    handler = logging.Handler()
+    handler.emit = emit
+
+    workflows.logger.addHandler(handler)
+    try:
+        if fetch_fails:
+            with pytest.raises(
+                workflows.UserFacingError, match="^Request failed: timeout$"
+            ):
+                workflows.backup_kptncook_favorites()
+            assert repository.list() == []
+        else:
+            assert (
+                workflows.backup_kptncook_favorites()
+                == workflows.FavoritesBackupResult(
+                    favorite_count=1,
+                    saved_count=1,
+                    cleanup_warning="KptnCook client cleanup failed.",
+                )
+            )
+            assert repository.list() == [recipe]
+    finally:
+        workflows.logger.removeHandler(handler)
+
+    client.close.assert_called_once_with()
+    emit.assert_called_once()
+    assert emit.call_args.args[0].getMessage() == "KptnCook client cleanup failed."
 
 
 def test_backup_favorites_redirect_error(monkeypatch, capsys):

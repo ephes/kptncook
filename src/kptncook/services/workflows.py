@@ -609,10 +609,9 @@ def backup_kptncook_favorites() -> FavoritesBackupResult:
         try:
             client.close()
         except Exception:
-            warning = "KptnCook client cleanup failed."
-            logger.warning("%s", warning)
             if result is not None:
-                result = replace(result, cleanup_warning=warning)
+                result = replace(result, cleanup_warning=KPTNCOOK_CLEANUP_MESSAGE)
+            _warn_best_effort(KPTNCOOK_CLEANUP_MESSAGE)
     return result
 
 
