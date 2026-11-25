@@ -4,6 +4,8 @@ Unreleased
 ### Fixes
 - Show discovery list and popular ingredient IDs from later aliases when a
   preferred alias resolves to null.
+- Show discovery lists and quick-search entries from the first nonempty alias
+  in the same response object, even when an earlier alias is empty.
 - Apply the 365-day duration limit to both step timer endpoints during recipe
   validation.
 - Recover recipe labels and step units from later legacy variants when an

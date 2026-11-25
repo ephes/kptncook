@@ -65,6 +65,12 @@ def test_screen_preserves_list_precedence_localization_and_order(monkeypatch):
     assert (
         discovery.parse_discovery_screen({"lists": [], "nested": payload}).lists == []
     )
+    assert (
+        discovery.parse_discovery_screen(
+            {"quickSearchEntries": [], "nested": payload}
+        ).quick_search
+        == []
+    )
 
 
 def test_screen_skips_blank_translations_in_each_fallback_tier():
@@ -112,6 +118,16 @@ def test_screen_work_boundary(monkeypatch):
     monkeypatch.setattr(discovery, "MAX_SCREEN_WORK", 1)
     with pytest.raises(discovery.DiscoveryScreenError, match="work"):
         discovery._extract_nested_list({"lists": []}, ("lists",))
+
+
+def test_screen_charges_probes_after_an_empty_alias(monkeypatch):
+    payload = {"lists": [], "discoveryLists": [{"id": "list-soup"}]}
+    keys = ("lists", "discoveryLists")
+    monkeypatch.setattr(discovery, "MAX_SCREEN_WORK", 2)
+    with pytest.raises(discovery.DiscoveryScreenError, match="work"):
+        discovery._extract_nested_list(payload, keys)
+    monkeypatch.setattr(discovery, "MAX_SCREEN_WORK", 3)
+    assert discovery._extract_nested_list(payload, keys) == [{"id": "list-soup"}]
 
 
 @pytest.mark.parametrize(

@@ -89,6 +89,30 @@ def test_discovery_screen_skips_blank_quick_search_aliases(mocker):
     ]
 
 
+@pytest.mark.parametrize("nested", [False, True], ids=["root", "nested"])
+def test_discovery_screen_prefers_nonempty_list_aliases(mocker, nested):
+    client = mocker.patch.object(workflows, "_kptncook_client").return_value
+    screen = {
+        "lists": [],
+        "discoveryLists": [{"id": "list-soup", "title": "Soup"}],
+        "items": [{"id": "list-later"}],
+        "quickSearchEntries": [],
+        "quickSearch": ["Bread"],
+        "quick_search": ["Ignored"],
+    }
+    client.get_discovery_screen.return_value = {"screen": screen} if nested else screen
+
+    result = runner.invoke(cli.app, ["discovery-screen"])
+
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines() == [
+        "Discovery lists:",
+        "- list-soup | Soup | -",
+        "Quick search:",
+        "- Bread",
+    ]
+
+
 @pytest.mark.parametrize(
     "command, method, payload, expected_rows",
     [

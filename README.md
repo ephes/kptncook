@@ -205,6 +205,10 @@ to 16 dictionary levels and 4,096 visited-value/key-probe operations per list
 search (lists and quick search). Cycles, depth and work overflow produce a short
 malformed-screen error with no partial listing; localized text, key precedence
 and entry order are retained. Screen entry lists are leaves for these searches.
+For lists and quick search, each dictionary uses its first nonempty supported
+list alias. If all its list aliases are empty, the search skips that dictionary's
+children and continues with its siblings. An explicit empty list at the root
+ends that search when the root has no nonempty alias.
 Localized discovery titles and quick-search labels skip empty and whitespace-only
 translations in the usual key order and preserve the selected text verbatim.
 A list with only blank title translations is shown without a title if it has an

@@ -32,8 +32,8 @@ class DiscoveryScreenError(ValueError):
 
 def _extract_nested_list(payload: object, keys: tuple[str, ...]) -> list[Any]:
     # Incremental DFS preserves supported-key and dictionary insertion order.
-    # Lists are leaves. Empty lists at nested nodes stop that node's search,
-    # but do not hide a later sibling's nonempty result.
+    # Lists are leaves. An empty list cuts off descent into that node when
+    # none of its aliases is nonempty. At nested nodes, siblings are still tried.
     stack: list[tuple[Iterator[object], int, frozenset[int]]] = [
         (iter((payload,)), 0, frozenset())
     ]
@@ -61,15 +61,20 @@ def _extract_nested_list(payload: object, keys: tuple[str, ...]) -> list[Any]:
             raise DiscoveryScreenError(
                 "Malformed discovery screen: cycle or depth limit exceeded"
             )
+        empty_list: list[Any] | None = None
         for key in keys:
             charge()
             value = node.get(key)
             if isinstance(value, list):
-                if value or depth == 0:
+                if value:
                     return value
-                break
-        else:
-            stack.append((iter(node.values()), depth + 1, ancestors | {id(node)}))
+                if empty_list is None:
+                    empty_list = value
+        if empty_list is not None:
+            if depth == 0:
+                return empty_list
+            continue
+        stack.append((iter(node.values()), depth + 1, ancestors | {id(node)}))
     return []
 
 
