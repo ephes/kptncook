@@ -204,23 +204,24 @@ def test_prepare_second_replace_failure_preserves_files(tmp_path, monkeypatch):
 
     changelog = tmp_path / "CHANGELOG.md"
     project = tmp_path / "pyproject.toml"
-    changelog.write_bytes(b"Unreleased\n==========\n\n- Keep notes.\r\n")
-    project.write_bytes(b'[project]\nversion = "0.0.29"\r\n')
+    changelog.write_bytes(b"Unreleased\r\n==========\r\n\r\n- Keep notes.\r\n")
+    project.write_bytes(b'[project]\r\nversion = "0.0.29"\r\n')
     originals = changelog.read_bytes(), project.read_bytes()
     replace = os.replace
     failed = []
 
     def fail_project(source, target):
         if target == project:
-            failed.append(True)
+            failed.append(changelog.read_bytes())
             raise OSError("injected second write failure")
         return replace(source, target)
 
     monkeypatch.setattr(os, "replace", fail_project)
     with pytest.raises(ReleaseError, match="injected second write failure"):
-        prepare_release(changelog, project, version="0.0.30")
-    assert failed == [True]
+        prepare_release(changelog, project, version="0.0.30", release_date="2026-10-12")
     assert (changelog.read_bytes(), project.read_bytes()) == originals
+    assert len(failed) == 1
+    assert b"0.0.30 - 2026-10-12\r\n" in failed[0]
     assert sorted(path.name for path in tmp_path.iterdir()) == [
         ".kptncook-release.lock",
         "CHANGELOG.md",
@@ -228,16 +229,24 @@ def test_prepare_second_replace_failure_preserves_files(tmp_path, monkeypatch):
     ]
 
 
-def test_prepare_accepts_crlf_changelog(tmp_path):
+@pytest.mark.parametrize(
+    ("first_ending", "body_ending"),
+    [(b"\r\n", b"\r\n"), (b"\r", b"\r"), (b"\r\n", b"\n")],
+)
+def test_prepare_preserves_changelog_line_ending(tmp_path, first_ending, body_ending):
     changelog = tmp_path / "CHANGELOG.md"
     project = tmp_path / "pyproject.toml"
+    old_release = b"0.0.29 - 2026-02-11\n===================\n\n- Previous.\n"
     changelog.write_bytes(
-        b"Unreleased\r\n==========\r\n\r\n- Keep notes.\r\n\r\n0.0.29 - 2026-02-11\r\n===================\r\n\r\n- Previous.\r\n"
+        b"Unreleased"
+        + first_ending
+        + (b"==========\n\n- Keep notes.\n\n" + old_release).replace(b"\n", body_ending)
     )
     project.write_bytes(b'[project]\r\nversion = "0.0.29"\r\n')
     prepare_release(changelog, project, version="0.0.30", release_date="2026-10-12")
-    text = changelog.read_text()
-    assert "0.0.30 - 2026-10-12" in text
-    assert "0.0.29 - 2026-02-11" in text
-    assert "- Keep notes." in text
-    assert 'version = "0.0.30"' in project.read_text()
+    expected = (
+        b"Unreleased\n==========\n\n"
+        b"0.0.30 - 2026-10-12\n===================\n\n- Keep notes.\n\n" + old_release
+    )
+    assert changelog.read_bytes() == expected.replace(b"\n", first_ending)
+    assert project.read_bytes() == b'[project]\r\nversion = "0.0.30"\r\n'

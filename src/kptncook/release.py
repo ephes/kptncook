@@ -26,6 +26,7 @@ RELEASE_HEADING_PATTERN = re.compile(
     re.MULTILINE,
 )
 UNRELEASED_PREFIX = "Unreleased\n==========\n"
+NEWLINE_PATTERN = re.compile(r"\r\n|\r|\n")
 RELEASE_LOCK_TIMEOUT_SECONDS = 30.0
 MAX_RELEASE_INPUT_BYTES = 1024 * 1024
 
@@ -105,6 +106,9 @@ def _updated_changelog(
 ) -> str:
     _validate_version(version)
     normalized_date = _validate_release_date(release_date)
+    first_newline = NEWLINE_PATTERN.search(changelog_text)
+    newline = first_newline.group() if first_newline else "\n"
+    changelog_text = NEWLINE_PATTERN.sub("\n", changelog_text)
     unreleased_body, trailing = _split_changelog(changelog_text)
     if not unreleased_body:
         raise ReleaseError("Unreleased changelog section is empty.")
@@ -123,7 +127,7 @@ def _updated_changelog(
     parts = [UNRELEASED_PREFIX, "\n", release_notes.render()]
     if trailing:
         parts.extend(["\n", trailing, "" if trailing.endswith("\n") else "\n"])
-    return "".join(parts)
+    return "".join(parts).replace("\n", newline)
 
 
 def _updated_pyproject(
@@ -224,16 +228,12 @@ def _generation(path: Path) -> _Generation:
     return _Generation(content, after.st_dev, after.st_ino, after.st_mtime_ns)
 
 
-def _read_release_text(path: Path) -> str:
+def _read_release_text(path: Path, *, normalize_newlines: bool = True) -> str:
     try:
-        return (
-            _generation(path)
-            .content.decode("utf-8")
-            .replace("\r\n", "\n")
-            .replace("\r", "\n")
-        )
+        text = _generation(path).content.decode("utf-8")
     except (OSError, UnicodeError) as exc:
         raise ReleaseError(f"Could not read release source {path} as UTF-8.") from exc
+    return NEWLINE_PATTERN.sub("\n", text) if normalize_newlines else text
 
 
 def _require_generation(path: Path, expected: _Generation) -> None:
@@ -302,7 +302,7 @@ def update_changelog_for_release(
     changelog_path: Path, *, version: str, release_date: str
 ) -> None:
     text = _updated_changelog(
-        _read_release_text(changelog_path),
+        _read_release_text(changelog_path, normalize_newlines=False),
         changelog_path,
         version=version,
         release_date=release_date,
@@ -365,9 +365,7 @@ def prepare_release(
             original_changelog = _generation(changelog_path)
             original_project = _generation(pyproject_path)
             changelog = _updated_changelog(
-                original_changelog.content.decode("utf-8")
-                .replace("\r\n", "\n")
-                .replace("\r", "\n"),
+                original_changelog.content.decode("utf-8"),
                 changelog_path,
                 version=version,
                 release_date=normalized_date,

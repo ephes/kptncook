@@ -1238,6 +1238,8 @@ Use the helper commands below from a clean worktree:
    Preparation reads regular UTF-8 files only. Each source and each replacement
    may be at most 1 MiB. Preparation checks the input type and size and
    validates both replacement texts before publishing either file.
+   The changelog keeps its line-ending style (LF, CRLF or CR). A changelog
+   with mixed line endings uses its first line ending throughout the prepared file.
    Preparations sharing a changelog directory serialize on the stable
    `.kptncook-release.lock` (30-second wait; keep this file). Both source
    generations are checked before publication and each atomic replacement.

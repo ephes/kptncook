@@ -2,6 +2,7 @@ Unreleased
 ==========
 
 ### Fixes
+- Preserve the changelog's line-ending style during release preparation.
 - Keep the Mealie sync receipt or original error when local lock release fails.
 - Preserve the favorites backup receipt or the original backup error when
   logging a client cleanup warning fails.
