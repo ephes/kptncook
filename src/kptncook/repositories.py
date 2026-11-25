@@ -118,10 +118,12 @@ class RecipeRepository:
 
     def create_backup(self, *, snapshot: _StoreSnapshot | None = None) -> None:
         """Back up the primary while holding the repository writer lock."""
-        with self._write_lock():
-            self._create_backup_locked(snapshot=snapshot)
+        with self._write_lock() as lock_info:
+            self._create_backup_locked(snapshot=snapshot, lock_info=lock_info)
 
-    def _create_backup_locked(self, *, snapshot: _StoreSnapshot | None) -> None:
+    def _create_backup_locked(
+        self, *, snapshot: _StoreSnapshot | None, lock_info: os.stat_result
+    ) -> None:
         if snapshot is None:
             snapshot = self._read_store()
         self._check_snapshot(snapshot)
@@ -143,6 +145,7 @@ class RecipeRepository:
                     target.flush()
                     os.fsync(target.fileno())
             self._check_snapshot(snapshot)
+            self._check_lock_identity(lock_info)
             os.replace(temp_path, self.backup_path)
             published = True
             self._fsync_directory()
@@ -193,7 +196,7 @@ class RecipeRepository:
         fsync_directory(self.path.parent)
 
     @contextmanager
-    def _write_lock(self) -> Iterator[None]:
+    def _write_lock(self) -> Iterator[os.stat_result]:
         self._ensure_parent_dir()
 
         @contextmanager
@@ -259,7 +262,7 @@ class RecipeRepository:
                         "Retry after the current writer finishes."
                     )
                 self._check_lock_identity(opened)
-                yield
+                yield opened
             finally:
                 portalocker.unlock(lock_file)
 
@@ -277,7 +280,9 @@ class RecipeRepository:
         ):
             raise RepositoryError("Repository lock must be a stable regular file.")
 
-    def _write_models(self, locked, *, snapshot: _StoreSnapshot | None):
+    def _write_models(
+        self, locked, *, snapshot: _StoreSnapshot | None, lock_info: os.stat_result
+    ):
         self._ensure_parent_dir()
         models = RecipeListInDb.model_validate(locked.values())
         payload = models.model_dump_json().encode("utf-8")
@@ -310,8 +315,9 @@ class RecipeRepository:
                 for ancestor in self.path.parent.resolve(strict=True).parents:
                     fsync_directory(ancestor, skip_unreadable=True)
             else:
-                self._create_backup_locked(snapshot=snapshot)
+                self._create_backup_locked(snapshot=snapshot, lock_info=lock_info)
             self._check_snapshot(snapshot)
+            self._check_lock_identity(lock_info)
             os.replace(temp_path, self.path)
             published = True
             self._fsync_directory()
@@ -423,11 +429,11 @@ class RecipeRepository:
 
     def add(self, recipe: RecipeInDb):
         incoming = self._build_by_id([recipe], source="Incoming")
-        with self._write_lock():
+        with self._write_lock() as lock_info:
             models, snapshot = self._read_models()
             locked = self._build_by_id(models)
             locked.update(incoming)
-            self._write_models(locked, snapshot=snapshot)
+            self._write_models(locked, snapshot=snapshot, lock_info=lock_info)
 
     def add_list(
         self,
@@ -436,7 +442,7 @@ class RecipeRepository:
         expected: dict[str, RecipeInDb] | None = None,
     ):
         incoming = self._build_by_id(recipes, source="Incoming")
-        with self._write_lock():
+        with self._write_lock() as lock_info:
             models, snapshot = self._read_models()
             locked = self._build_by_id(models)
             if expected is not None and any(
@@ -447,12 +453,12 @@ class RecipeRepository:
                     "Fetch again before retrying; no recipes were saved."
                 )
             locked.update(incoming)
-            self._write_models(locked, snapshot=snapshot)
+            self._write_models(locked, snapshot=snapshot, lock_info=lock_info)
 
     def delete_by_ids(
         self, ids: list[str], *, expected: dict[str, RecipeInDb] | None = None
     ) -> tuple[list[str], list[str]]:
-        with self._write_lock():
+        with self._write_lock() as lock_info:
             models, snapshot = self._read_models()
             locked = self._build_by_id(models)
             requested_ids = list(dict.fromkeys(str(value) for value in ids))
@@ -475,7 +481,7 @@ class RecipeRepository:
                 locked.pop(key)
                 deleted.append(str(oid))
             if deleted:
-                self._write_models(locked, snapshot=snapshot)
+                self._write_models(locked, snapshot=snapshot, lock_info=lock_info)
             return deleted, missing
 
     def list(self):

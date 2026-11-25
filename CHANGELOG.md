@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Recheck the recipe repository writer lock before publishing the backup and
+  primary, and stop publication when the lock has been replaced.
 - Close the recipe repository lock descriptor if stream setup fails and report
   the original failure as a repository lock error.
 - Reject incomplete recipe repository reads before parsing JSON, while

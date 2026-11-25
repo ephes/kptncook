@@ -91,6 +91,56 @@ def test_waiting_writer_refuses_replaced_lock_inode(tmp_path):
             process.join(5)
 
 
+@pytest.mark.parametrize("operation", ["add", "create_backup"])
+def test_replaced_lock_during_staging_preserves_both_snapshots(
+    tmp_path, monkeypatch, operation
+):
+    repo = RecipeRepository(tmp_path)
+    repo.path.write_bytes(b"[]")
+    repo.backup_path.write_bytes(b"previous recovery")
+    replacement = tmp_path / "replacement-lock"
+    replacement.write_bytes(b"replacement")
+    fsync = os.fsync
+
+    def replace_after_sync(fd):
+        fsync(fd)
+        if replacement.exists():
+            replacement.replace(repo.lock_path)
+
+    monkeypatch.setattr(repositories.os, "fsync", replace_after_sync)
+    with pytest.raises(RepositoryError, match="Repository lock"):
+        if operation == "add":
+            repo.add(RecipeInDb(date=date(2026, 1, 1), data={"_id": {"$oid": "new"}}))
+        else:
+            repo.create_backup()
+    assert repo.path.read_bytes() == b"[]"
+    assert repo.backup_path.read_bytes() == b"previous recovery"
+    assert repo.lock_path.read_bytes() == b"replacement"
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_replaced_lock_after_backup_preserves_primary(tmp_path, monkeypatch):
+    repo = RecipeRepository(tmp_path)
+    repo.path.write_bytes(b"[]")
+    repo.backup_path.write_bytes(b"previous recovery")
+    replacement = tmp_path / "replacement-lock"
+    replacement.write_bytes(b"replacement")
+    sync_directory = repo._fsync_directory
+
+    def replace_after_sync():
+        sync_directory()
+        if replacement.exists():
+            replacement.replace(repo.lock_path)
+
+    monkeypatch.setattr(repo, "_fsync_directory", replace_after_sync)
+    with pytest.raises(RepositoryError, match="Repository lock"):
+        repo.add(RecipeInDb(date=date(2026, 1, 1), data={"_id": {"$oid": "new"}}))
+    assert repo.path.read_bytes() == b"[]"
+    assert repo.backup_path.read_bytes() == b"[]"
+    assert repo.lock_path.read_bytes() == b"replacement"
+    assert not list(tmp_path.glob("*.tmp"))
+
+
 @pytest.mark.parametrize("close_fails", [False, True])
 def test_lock_stream_failure_closes_descriptor_once(tmp_path, monkeypatch, close_fails):
     repo = RecipeRepository(tmp_path)

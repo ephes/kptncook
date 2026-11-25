@@ -706,10 +706,13 @@ a monotonic deadline, then report a busy repository without modifying data or
 backup. Retry after the current writer finishes. Use a local filesystem with working advisory locks,
 and retain lock files while writers may run. Lock admission opens without following
 symlinks or waiting on special files, requires a regular descriptor, and verifies
-that its inode still owns the stable name after acquiring the lock. A replaced
-lock is refused before reading or mutating recipes; lock names are never unlinked
-by the application. If opening the lock stream fails, the writer closes the
-descriptor and reports a repository lock error before touching either snapshot.
+that its inode still owns the stable name after acquiring the lock. The writer
+rechecks the lock identity immediately before replacing the recovery backup and
+again before replacing the primary. A lock change detected before backup
+publication preserves both snapshots. If detected after backup publication,
+the refreshed backup remains and the primary stays unchanged. The application
+retains the lock file after use. If opening the lock stream fails, the writer
+closes the descriptor and reports a repository lock error before touching either snapshot.
 Read-only recipe/export access remains available when locking fails.
 
 Repository-backed commands now warn if `kptncook.json` contains stored entries
