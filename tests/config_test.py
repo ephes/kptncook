@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
@@ -205,10 +206,16 @@ def test_runtime_rejects_incomplete_dotenv_before_parsing(
             before = env_path.stat()
             env_path.write_bytes(new_key + b"KPTNCOOK_LANG=es\n")
             if interruption == "in-place edit, mtime restored":
-                # Only the ctime check can notice this edit.
-                os.utime(
-                    env_path, ns=(before.st_atime_ns, before.st_mtime_ns)
-                )
+                # Only the ctime check can notice this edit. Coarse ctime
+                # clocks can stamp both writes in one tick, so wait for a
+                # visible ctime change before handing the read back.
+                deadline = time.monotonic() + 5
+                while True:
+                    os.utime(env_path, ns=(before.st_atime_ns, before.st_mtime_ns))
+                    if env_path.stat().st_ctime_ns != before.st_ctime_ns:
+                        break
+                    assert time.monotonic() < deadline
+                    time.sleep(0.001)
             else:
                 os.utime(env_path, (1, 1))
             return first_line + read(limit - len(first_line))
