@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+### Security
+- Update the notebook Mistune lock to 3.3.4 for CVE-2026-97698 and
+  CVE-2026-97699, keeping the frozen runtime/development dependency audit clean.
+
 ### Fixes
 - Report oversized integers rejected by the recipe repository JSON decoder as
   invalid JSON without exposing the value.
