@@ -6,6 +6,8 @@ Unreleased
   CVE-2026-97699, keeping the frozen runtime/development dependency audit clean.
 
 ### Fixes
+- Preserve recipe image transfer results and report response and client close
+  failures separately.
 - Refuse recipe image bodies whose declared size exceeds the remaining export
   asset allowance before downloading them.
 - Report oversized integers rejected by the recipe repository JSON decoder as

@@ -1,12 +1,16 @@
 """Bounded downloads for optional recipe images."""
 
 import asyncio
+import logging
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import suppress
 
 import httpx
 
 from .image_origin import is_allowed_image_url
 from .exporter_utils import ExportBudget
+
+logger = logging.getLogger(__name__)
 
 MAX_IMAGE_REDIRECTS = 5
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
@@ -21,14 +25,16 @@ async def _download_image(
     if budget:
         budget.check_asset_capacity()
     # Redirects are followed by hand so every target passes the origin check.
-    async with httpx.AsyncClient(
+    client = httpx.AsyncClient(
         timeout=IMAGE_DOWNLOAD_TIMEOUT,
         follow_redirects=False,
         trust_env=False,
         headers={"Accept-Encoding": "identity"},
-    ) as client:
+    )
+    try:
         for _ in range(MAX_IMAGE_REDIRECTS + 1):
-            async with client.stream("GET", url) as response:
+            response = await client.send(client.build_request("GET", url), stream=True)
+            try:
                 if follow_redirects and response.is_redirect:
                     location = response.headers.get("location")
                     if not location:
@@ -55,7 +61,16 @@ async def _download_image(
                 if budget is not None and declared_length is not None:
                     budget.check_asset_capacity(declared_length)
                 body = bytearray()
-                async for chunk in response.aiter_bytes():
+                # Identity encoding lets us read the stream directly. HTTPX's
+                # response iterators close the stream at EOF, before our verdict.
+                stream = response.stream
+                chunks = (
+                    stream
+                    if isinstance(stream, httpx.AsyncByteStream)
+                    and not response.is_stream_consumed
+                    else response.aiter_bytes()
+                )
+                async for chunk in chunks:
                     if budget:
                         budget.charge_asset(len(chunk))
                     if len(body) + len(chunk) > MAX_IMAGE_BYTES:
@@ -68,7 +83,21 @@ async def _download_image(
                         "Image response is not a complete representation"
                     )
                 return bytes(body)
+            finally:
+                await _close_image_resource(response, "response")
         raise httpx.RequestError("Image exceeded redirect limit")
+    finally:
+        await _close_image_resource(client, "client")
+
+
+async def _close_image_resource(
+    resource: httpx.AsyncClient | httpx.Response, label: str
+) -> None:
+    try:
+        await resource.aclose()
+    except Exception:
+        with suppress(Exception):
+            logger.warning("Could not close recipe image %s", label)
 
 
 def _declared_length(response: httpx.Response) -> int | None:
@@ -118,7 +147,8 @@ def download_image(
     The image client connects directly and ignores HTTPX proxy and CA settings
     from the environment. An optional export budget charges every streamed
     chunk, including chunks from failed images. An oversized declaration is
-    refused before reading the body. Exhaustion stops the batch.
+    refused before reading the body. Exhaustion stops the batch. Close errors
+    are logged separately from the transfer result.
     """
     try:
         asyncio.get_running_loop()

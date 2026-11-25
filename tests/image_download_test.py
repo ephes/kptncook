@@ -8,7 +8,7 @@ from zipfile import ZipFile
 import httpx
 import pytest
 
-from kptncook import image_download
+from kptncook import exporter_utils, image_download
 from kptncook.markdown_exporter import MarkdownExporter
 from kptncook.mealie import MealieApiClient, RecipeStep, RecipeWithImage
 from kptncook.models import Image, Recipe
@@ -260,3 +260,78 @@ def test_download_inside_running_loop(monkeypatch, outcome):
     assert requests[0].headers["Accept-Encoding"] == "identity"
     assert stream.closed
     assert stream.cancelled == (outcome == "timeout")
+
+
+@pytest.mark.parametrize(
+    "outcome", ["ok", "redirect", "status", "budget", "short", "read"]
+)
+def test_retirement_preserves_transfer_verdict(monkeypatch, caplog, outcome):
+    requests = []
+    closed_responses = []
+    closed_clients = []
+
+    class FaultyStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b"1234"
+            if outcome == "read":
+                raise httpx.ReadError("synthetic read failure")
+
+        async def aclose(self):
+            closed_responses.append(True)
+            raise httpx.CloseError("secret-close-details")
+
+    class FaultyTransport(httpx.MockTransport):
+        async def aclose(self):
+            closed_clients.append(True)
+            raise httpx.CloseError("secret-close-details")
+
+    def handle(request):
+        requests.append(request.url.path)
+        stream = FaultyStream()
+        if outcome == "redirect" and request.url.path == "/first":
+            return httpx.Response(302, headers={"Location": "/second"}, stream=stream)
+        if outcome == "status":
+            return httpx.Response(503, stream=stream)
+        headers = {"Content-Length": "5"} if outcome == "short" else {}
+        return httpx.Response(200, headers=headers, stream=stream)
+
+    transport = FaultyTransport(handle)
+    client_class = httpx.AsyncClient
+    monkeypatch.setattr(
+        image_download.httpx,
+        "AsyncClient",
+        lambda **kw: client_class(transport=transport, **kw),
+    )
+    if outcome == "budget":
+        monkeypatch.setattr(exporter_utils, "MAX_BATCH_ASSET_BYTES", 3)
+
+    def download():
+        return image_download.download_image(
+            "https://images.example/first?key=secret-image-url",
+            follow_redirects=True,
+            budget=exporter_utils.ExportBudget(),
+        )
+
+    if outcome == "status":
+        with pytest.raises(httpx.HTTPStatusError) as caught:
+            download()
+        assert caught.value.response.status_code == 503
+    elif outcome == "budget":
+        with pytest.raises(exporter_utils.ExportLimitError, match="asset.*allowance"):
+            download()
+    elif outcome == "short":
+        with pytest.raises(httpx.RequestError, match="not a complete representation"):
+            download()
+    elif outcome == "read":
+        with pytest.raises(httpx.ReadError, match="synthetic read failure"):
+            download()
+    else:
+        assert download() == b"1234"
+
+    assert requests == (["/first", "/second"] if outcome == "redirect" else ["/first"])
+    assert closed_responses == [True] * len(requests)
+    assert closed_clients == [True]
+    assert caplog.text.count("Could not close recipe image response") == len(requests)
+    assert "Could not close recipe image client" in caplog.text
+    assert "secret-close-details" not in caplog.text
+    assert "secret-image-url" not in caplog.text

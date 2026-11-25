@@ -406,7 +406,9 @@ The image downloader requires direct HTTPS access to the allowed hosts. It
 ignores HTTPX environment settings for proxies and CA certificates, including
 `HTTPS_PROXY`, `ALL_PROXY`, `SSL_CERT_FILE` and `SSL_CERT_DIR`.
 Deployments that require a forward proxy will skip images if direct access is
-unavailable.
+unavailable. Recipe image response and client close failures are reported as
+short warnings. The transfer result still reflects the received body and its
+validation, and a valid redirect can still be followed.
 
 Sync requires a complete, validated remote recipe inventory, including every
 recipe detail. An invalid recipe or unreadable imported identity stops the run
