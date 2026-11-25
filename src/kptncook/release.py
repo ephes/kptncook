@@ -375,7 +375,12 @@ def _restore_changelog(
             if recovery is not None:
                 recovery.unlink(missing_ok=True)
             raise
-        _sync_release_names(f"Changelog recovery copy {recovery} is", path)
+        try:
+            _sync_release_names(f"Changelog recovery copy {recovery} is", path)
+        except _ReleaseDurabilityError as uncertain:
+            raise _ReleaseDurabilityError(
+                f"Could not restore changelog (changed or unavailable); {uncertain}"
+            ) from exc
         raise ReleaseError(
             f"Could not restore changelog (changed or unavailable); recovery copy: {recovery}"
         ) from exc
@@ -668,21 +673,32 @@ def prepare_release(
                     _require_generation(pyproject_path, original_project)
                     intent.project.stage_generation(project_temp)
                     os.replace(project_temp, pyproject_path)
-                except (OSError, ReleaseError, KeyboardInterrupt):
-                    if _names_replacement(pyproject_path, owned_project):
-                        _sync_release_names(
-                            "Prepared release files are", changelog_path, pyproject_path
-                        )
-                    elif changelog_published or _names_replacement(
-                        changelog_path, owned_changelog
-                    ):
-                        _restore_changelog(
-                            changelog_path,
-                            original_changelog,
-                            owned_changelog,
-                            register_rollback,
-                        )
-                    _retire_intent(record)
+                except (OSError, ReleaseError, KeyboardInterrupt) as failure:
+                    try:
+                        if _names_replacement(pyproject_path, owned_project):
+                            _sync_release_names(
+                                "Prepared release files are",
+                                changelog_path,
+                                pyproject_path,
+                            )
+                        elif changelog_published or _names_replacement(
+                            changelog_path, owned_changelog
+                        ):
+                            _restore_changelog(
+                                changelog_path,
+                                original_changelog,
+                                owned_changelog,
+                                register_rollback,
+                            )
+                        _retire_intent(record)
+                    except _ReleaseDurabilityError as uncertain:
+                        # Keep the primary failure; Ctrl-C still interrupts.
+                        if isinstance(failure, KeyboardInterrupt):
+                            print(f"Warning: {uncertain}", file=sys.stderr)
+                            raise failure from uncertain
+                        raise _ReleaseDurabilityError(
+                            f"Release preparation failed: {failure}. {uncertain}"
+                        ) from uncertain
                     raise
                 _sync_release_names(
                     "Prepared release files are", changelog_path, pyproject_path

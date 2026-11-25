@@ -481,6 +481,8 @@ def test_release_requires_directory_sync(tmp_path, monkeypatch, scenario):
             recovery = next(tmp_path.glob("CHANGELOG.md.recovery-*"))
             assert recovery.read_bytes() == originals[0]
             assert str(recovery) in str(error.value)
+            assert "Could not restore changelog" in str(error.value)
+            assert "injected project failure" in str(error.value)
         else:
             assert not list(tmp_path.glob("CHANGELOG.md.recovery-*"))
 
@@ -696,4 +698,46 @@ def test_stage_sync_failure_reports_unchanged_sources(tmp_path, monkeypatch):
     assert "durability" not in str(error.value)
     assert (changelog.read_bytes(), project.read_bytes()) == originals
     assert not (tmp_path / release.RELEASE_INTENT_NAME).exists()
+    assert not list(tmp_path.glob(release.RELEASE_STAGE_PREFIX + "*"))
+
+
+@pytest.mark.parametrize("failure", [OSError, KeyboardInterrupt])
+def test_failed_record_retirement_sync_keeps_primary_failure(
+    tmp_path, monkeypatch, capsys, failure
+):
+    changelog, project = files(tmp_path)
+    originals = changelog.read_bytes(), project.read_bytes()
+    record = tmp_path / release.RELEASE_INTENT_NAME
+    replace = release.os.replace
+    fsync = release.os.fsync
+    published = []
+
+    def publish(source, target):
+        if target == project:
+            raise failure("injected project failure")
+        replace(source, target)
+        if target == changelog:
+            published.append(target)
+
+    def sync(fd):
+        if stat.S_ISDIR(os.fstat(fd).st_mode) and published and not record.exists():
+            raise OSError("injected record removal sync failure")
+        fsync(fd)
+
+    monkeypatch.setattr(release.os, "replace", publish)
+    monkeypatch.setattr(release.os, "fsync", sync)
+    if failure is KeyboardInterrupt:
+        with pytest.raises(KeyboardInterrupt):
+            release.prepare_release(changelog, project, version="0.0.2")
+        assert "removal is visible but durability" in capsys.readouterr().err
+    else:
+        with pytest.raises(
+            release.ReleaseError,
+            match="injected project failure.*removal is visible but durability",
+        ):
+            release.prepare_release(changelog, project, version="0.0.2")
+
+    assert len(published) == 2
+    assert (changelog.read_bytes(), project.read_bytes()) == originals
+    assert not record.exists()
     assert not list(tmp_path.glob(release.RELEASE_STAGE_PREFIX + "*"))
