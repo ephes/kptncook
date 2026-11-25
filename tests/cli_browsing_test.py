@@ -90,6 +90,52 @@ def test_discovery_screen_skips_blank_quick_search_aliases(mocker):
 
 
 @pytest.mark.parametrize(
+    "command, method, payload, expected_rows",
+    [
+        (
+            "discovery-screen",
+            "get_discovery_screen",
+            {
+                "lists": [
+                    {"id": None, "listId": "list-soup"},
+                    {"id": {"$oid": None}, "listId": "list-bread"},
+                    {"id": "list-first", "listId": "list-later"},
+                ]
+            },
+            ["- list-soup | - | -", "- list-bread | - | -", "- list-first | - | -"],
+        ),
+        (
+            "ingredients-popular",
+            "list_popular_ingredients",
+            [
+                {"_id": None, "ingredientId": "ingredient-salt"},
+                {"_id": {"$oid": None}, "ingredientId": "ingredient-pepper"},
+                {"_id": "ingredient-first", "ingredientId": "ingredient-later"},
+            ],
+            [
+                "- ingredient-salt | -",
+                "- ingredient-pepper | -",
+                "- ingredient-first | -",
+            ],
+        ),
+    ],
+)
+def test_selector_display_skips_null_id_aliases(
+    mocker, command, method, payload, expected_rows
+):
+    client = mocker.patch.object(workflows, "_kptncook_client").return_value
+    mocker.patch.object(workflows, "_require_access_token")
+    getattr(client, method).return_value = payload
+
+    result = runner.invoke(cli.app, [command])
+
+    assert result.exit_code == 0, result.output
+    assert [line for line in result.output.splitlines() if line.startswith("- ")] == (
+        expected_rows
+    )
+
+
+@pytest.mark.parametrize(
     "ingredients, expected_lines",
     [
         (

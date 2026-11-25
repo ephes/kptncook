@@ -113,8 +113,8 @@ def _extract_discovery_list_entries(payload: object) -> list[Any]:
 
 def _extract_discovery_list_id(entry: dict[str, Any]) -> str | None:
     for key in ("id", "_id", "listId", "list_id", "oid"):
-        if key in entry:
-            return _coerce_discovery_list_id(entry.get(key))
+        if (list_id := _coerce_discovery_list_id(entry.get(key))) is not None:
+            return list_id
     return None
 
 
@@ -133,8 +133,8 @@ def _coerce_ingredient_id(value: object) -> str | None:
 
 def _extract_ingredient_id(entry: dict[str, Any]) -> str | None:
     for key in ("_id", "id", "ingredientId", "ingredient_id", "oid"):
-        if key in entry:
-            return _coerce_ingredient_id(entry.get(key))
+        if (ingredient_id := _coerce_ingredient_id(entry.get(key))) is not None:
+            return ingredient_id
     return None
 
 

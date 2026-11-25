@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Show discovery list and popular ingredient IDs from later aliases when a
+  preferred alias resolves to null.
 - Apply the 365-day duration limit to both step timer endpoints during recipe
   validation.
 - Recover recipe labels and step units from later legacy variants when an

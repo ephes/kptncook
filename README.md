@@ -802,8 +802,9 @@ storage, including when another favorite is valid; no partial backup is saved.
 Use `--no-quick-search` if you only want discovery list ids, and add `--save`
 to `discovery-list` to store the resolved recipes locally.
 Discovery screen entries are printed as `id | title | type` so you can copy the
-list id into `discovery-list`. Discovery list entries are recipe summaries; the
-CLI resolves them to full recipes before printing or saving.
+list id into `discovery-list`. The screen uses the first non-null ID from `id`,
+`_id`, `listId`, `list_id` and `oid`, in that order. Discovery list entries are
+recipe summaries, which the CLI resolves to full recipes before printing or saving.
 If `discovery-screen` receives unreadable JSON, including duplicate object
 members, it exits with status 1 and a short error without rendering any entries.
 
@@ -820,10 +821,10 @@ $ kptncook discovery-list --list-type automated --list-id 67890
 ## Ingredients
 
 Ingredient discovery and ingredient-based recipes require
-`KPTNCOOK_ACCESS_TOKEN`. Ingredient ids can be repeated or comma-separated; use
-the `_id.$oid` value from `kptncook ingredients-popular` (output is `id | name`
-for easy copy/paste). Use `kptncook kptncook-access-token` if you need to
-generate one.
+`KPTNCOOK_ACCESS_TOKEN`. Ingredient ids can be repeated or comma-separated. Copy
+the ID from `kptncook ingredients-popular`, which prints `id | name` and selects
+the first non-null ID from `_id`, `id`, `ingredientId`, `ingredient_id` and `oid`,
+in that order. Use `kptncook kptncook-access-token` to generate a token.
 Popular ingredient replies may be a list of objects or contain such a list
 under `ingredients`, `items` or `data`. The first list in that order is used.
 An empty list reports "No popular ingredients found." Unreadable JSON, a
