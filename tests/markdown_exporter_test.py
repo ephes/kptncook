@@ -168,6 +168,25 @@ def test_tag_filtering_and_transforms(exporter):
     assert front_matter["simple"] is True
 
 
+@pytest.mark.parametrize(
+    ("active_tags", "recipe_type", "expected_tags", "expected_simple"),
+    [
+        ([], None, [], None),
+        (None, None, [], None),
+        (["under_five_ingredient"], None, [], True),
+        (None, "Vegan", ["vegan"], None),
+    ],
+)
+def test_tags_are_a_yaml_list(
+    exporter, active_tags, recipe_type, expected_tags, expected_simple
+):
+    recipe = build_recipe(activeTags=active_tags, rtype=recipe_type)
+    md = exporter.render_recipe(recipe)
+    front_matter = yaml.safe_load(md.split("---", 2)[1])
+    assert front_matter["tags"] == expected_tags
+    assert front_matter.get("simple") is expected_simple
+
+
 def test_link_falls_back_to_recipe_id_when_uid_missing(exporter):
     recipe = build_recipe(uid=None, _id={"$oid": "deadbeef"})
     md = exporter.render_recipe(recipe)

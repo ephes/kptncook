@@ -316,12 +316,12 @@ class MarkdownExporter:
         if image_path:
             lines.append(f"image: {_yaml_string(image_path)}")
 
-        lines.append("tags:")
-
         active_tags = recipe.active_tags or []
         tags = ["vegan"] if recipe.rtype == "Vegan" else []
         tags.extend(self._transform_tags(active_tags))
-        for tag in dict.fromkeys(tags):
+        tags = list(dict.fromkeys(tags))
+        lines.append("tags:" if tags else "tags: []")
+        for tag in tags:
             lines.append(f"  - {_yaml_string(tag)}")
 
         if (

@@ -7,6 +7,7 @@ Unreleased
 
 ### Fixes
 - Deduplicate normalized Markdown recipe tags while keeping their display order.
+- Write an empty YAML tag list in Markdown exports when no display tags remain.
 - Recover interrupted release preparation on retry and preserve conflicting edits.
 - Sync release file directories after renames and report uncertain durability.
 - Reject incomplete release staging and changelog recovery writes.

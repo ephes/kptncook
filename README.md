@@ -495,6 +495,7 @@ Markdown front-matter string values are quoted as YAML scalars,
 so punctuation and newlines in tags and URLs retain their string values.
 Tags are normalized and deduplicated in first-occurrence order, with the
 `vegan` tag first for recipes of type Vegan.
+Front matter uses `tags: []` when no display tags remain after filtering.
 
 The Markdown export (`export-recipes-to-markdown`) writes one `.md` file per
 recipe into an `export_md` directory under the KptnCook home, with YAML front
