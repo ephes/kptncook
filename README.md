@@ -708,8 +708,9 @@ and retain lock files while writers may run. Lock admission opens without follow
 symlinks or waiting on special files, requires a regular descriptor, and verifies
 that its inode still owns the stable name after acquiring the lock. A replaced
 lock is refused before reading or mutating recipes; lock names are never unlinked
-by the application. Read-only recipe/export access
-remains available when locking fails.
+by the application. If opening the lock stream fails, the writer closes the
+descriptor and reports a repository lock error before touching either snapshot.
+Read-only recipe/export access remains available when locking fails.
 
 Repository-backed commands now warn if `kptncook.json` contains stored entries
 that can no longer be parsed into full recipes. The command continues with the

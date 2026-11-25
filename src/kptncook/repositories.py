@@ -13,11 +13,12 @@ import shutil
 import stat
 import tempfile
 from time import monotonic, sleep
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import List  # noqa F401
+from typing import TextIO
 from collections.abc import Iterator
 
 import portalocker
@@ -194,30 +195,43 @@ class RecipeRepository:
     @contextmanager
     def _write_lock(self) -> Iterator[None]:
         self._ensure_parent_dir()
-        opened: os.stat_result | None = None
 
-        def open_lock(path, flags):
-            nonlocal opened
-            if self.lock_path.is_symlink():
-                raise RepositoryError("Repository lock must be a regular file.")
-            fd = os.open(
-                path,
-                flags | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0),
-                0o600,
-            )
+        @contextmanager
+        def open_lock() -> Iterator[tuple[TextIO, os.stat_result]]:
+            fd = None
             try:
+                if self.lock_path.is_symlink():
+                    raise RepositoryError("Repository lock must be a regular file.")
+                fd = os.open(
+                    self.lock_path,
+                    os.O_RDWR
+                    | os.O_CREAT
+                    | getattr(os, "O_NONBLOCK", 0)
+                    | getattr(os, "O_NOFOLLOW", 0),
+                    0o600,
+                )
                 opened = os.fstat(fd)
                 self._check_lock_identity(opened)
-                return fd
-            except BaseException:
-                os.close(fd)
+                # The stream may fail after wrapping the descriptor. Keep a
+                # single owner responsible for closing it in either case.
+                lock_file = os.fdopen(fd, "a+", encoding="utf-8", closefd=False)
+            except BaseException as exc:
+                if fd is not None:
+                    with suppress(OSError):
+                        os.close(fd)
+                if isinstance(exc, Exception) and not isinstance(exc, RepositoryError):
+                    raise RepositoryError(
+                        "Could not open repository lock safely."
+                    ) from exc
                 raise
 
-        try:
-            fd = open_lock(self.lock_path, os.O_RDWR | os.O_CREAT)
-        except OSError as exc:
-            raise RepositoryError("Could not open repository lock safely.") from exc
-        with os.fdopen(fd, "a+", encoding="utf-8") as lock_file:
+            try:
+                with lock_file:
+                    yield lock_file, opened
+            finally:
+                os.close(fd)
+
+        with open_lock() as (lock_file, opened):
             deadline = monotonic() + STORE_LOCK_TIMEOUT_SECONDS
             while True:
                 try:
@@ -244,7 +258,6 @@ class RecipeRepository:
                         "Repository is busy; writer lock wait budget exceeded. "
                         "Retry after the current writer finishes."
                     )
-                assert opened is not None
                 self._check_lock_identity(opened)
                 yield
             finally:

@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Close the recipe repository lock descriptor if stream setup fails and report
+  the original failure as a repository lock error.
 - Reject incomplete recipe repository reads before parsing JSON, while
   preserving complete snapshots across atomic replacement.
 - Use one settings snapshot per Mealie recipe conversion, including translations,

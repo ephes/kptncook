@@ -89,3 +89,49 @@ def test_waiting_writer_refuses_replaced_lock_inode(tmp_path):
         if process.pid is not None and process.is_alive():
             process.terminate()
             process.join(5)
+
+
+@pytest.mark.parametrize("close_fails", [False, True])
+def test_lock_stream_failure_closes_descriptor_once(tmp_path, monkeypatch, close_fails):
+    repo = RecipeRepository(tmp_path)
+    repo.path.write_bytes(b"[]")
+    repo.backup_path.write_bytes(b"previous recovery")
+    recipe = RecipeInDb(date=date(2026, 1, 1), data={"_id": {"$oid": "new"}})
+    fdopen = os.fdopen
+    close = os.close
+    failure = OSError("synthetic lock stream failure")
+    lock_fd = None
+    closed = []
+
+    def fail_lock_stream(fd, mode, **kwargs):
+        nonlocal lock_fd
+        if mode == "a+" and os.path.samestat(os.fstat(fd), repo.lock_path.stat()):
+            lock_fd = fd
+            raise failure
+        return fdopen(fd, mode, **kwargs)
+
+    def track_close(fd):
+        if fd != lock_fd:
+            return close(fd)
+        closed.append(fd)
+        close(fd)
+        if close_fails:
+            raise OSError("synthetic lock cleanup failure")
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(repositories.os, "fdopen", fail_lock_stream)
+            patch.setattr(repositories.os, "close", track_close)
+            with pytest.raises(RepositoryError, match="open repository lock") as error:
+                repo.add(recipe)
+        assert error.value.__cause__ is failure
+        assert lock_fd is not None
+        assert closed == [lock_fd]
+        assert repo.path.read_bytes() == b"[]"
+        assert repo.backup_path.read_bytes() == b"previous recovery"
+    finally:
+        if lock_fd is not None and not closed:
+            close(lock_fd)
+
+    repo.add(recipe)
+    assert repo.list() == [recipe]
