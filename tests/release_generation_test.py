@@ -608,3 +608,46 @@ release.prepare_release(changelog, project, version="0.0.2", release_date="2026-
             "project",
         }
         assert list(project_dir.iterdir()) == [project]
+
+
+def test_rollback_continues_when_rollback_record_sync_fails(tmp_path, monkeypatch):
+    changelog, project = files(tmp_path)
+    originals = changelog.read_bytes(), project.read_bytes()
+    replace = release.os.replace
+    fsync = release.os.fsync
+    state = {"published": False, "rollback_record": False, "failed": False}
+
+    def publish(source, target):
+        if target == project:
+            raise OSError("injected project failure")
+        replace(source, target)
+        if target == changelog:
+            state["published"] = True
+        elif Path(target).name == release.RELEASE_INTENT_NAME and state["published"]:
+            state["rollback_record"] = True
+
+    def sync(fd):
+        if (
+            stat.S_ISDIR(os.fstat(fd).st_mode)
+            and state["rollback_record"]
+            and not state["failed"]
+        ):
+            state["failed"] = True
+            raise OSError("injected rollback record directory sync failure")
+        fsync(fd)
+
+    monkeypatch.setattr(release.os, "replace", publish)
+    monkeypatch.setattr(release.os, "fsync", sync)
+    with pytest.raises(release.ReleaseError, match="restored.*visible.*durability"):
+        release.prepare_release(changelog, project, version="0.0.2")
+
+    assert state["failed"]
+    assert (changelog.read_bytes(), project.read_bytes()) == originals
+    assert not list(tmp_path.glob("CHANGELOG.md.recovery-*"))
+
+    monkeypatch.undo()
+    release.prepare_release(changelog, project, version="0.0.2")
+    assert b"0.0.2 - " in changelog.read_bytes()
+    assert b'"0.0.2"' in project.read_bytes()
+    assert not (tmp_path / release.RELEASE_INTENT_NAME).exists()
+    assert not list(tmp_path.glob(release.RELEASE_STAGE_PREFIX + "*"))

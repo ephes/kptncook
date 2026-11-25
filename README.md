@@ -1297,7 +1297,9 @@ Use the helper commands below from a clean worktree:
    already completed, the prepared files are kept. The helper syncs the
    containing directories after publication, rollback or creation of a recovery
    copy where directory sync is supported. If a sync fails, it reports the
-   visible change and uncertain durability. Inspect the named files before retrying.
+   visible change and uncertain durability; a rollback still restores the
+   changelog when only its recovery record cannot be synced. Inspect the named
+   files before retrying.
    Before the first rename, preparation records both source and staged
    generations in `.kptncook-release.intent`. After a process dies, rerun
    preparation with the same files and version. The helper finishes a matching

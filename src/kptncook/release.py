@@ -310,8 +310,14 @@ def _atomic_replace(
     register: Callable[[Path, _Generation], None] | None = None,
 ) -> None:
     with _stage_replacement(path, content) as (temporary, owned):
+        uncertain: _ReleaseDurabilityError | None = None
         if register is not None:
-            register(temporary, owned)
+            try:
+                register(temporary, owned)
+            except _ReleaseDurabilityError as exc:
+                # The record naming this stage is visible; finish the
+                # replacement and report the uncertain record afterwards.
+                uncertain = exc
         if expected is not None:
             _require_generation(path, expected)
         try:
@@ -324,6 +330,8 @@ def _atomic_replace(
                 _sync_release_names(f"Replacement of {path} is", path)
             raise
         _sync_release_names(f"Replacement of {path} is", path)
+        if uncertain is not None:
+            raise uncertain
 
 
 def _names_replacement(path: Path, staged: _Generation) -> bool:
@@ -345,8 +353,11 @@ def _restore_changelog(
     try:
         _require_generation(path, owned)
         _atomic_replace(path, original.content, expected=owned, register=register)
-    except _ReleaseDurabilityError:
-        raise
+    except _ReleaseDurabilityError as exc:
+        # Raised only after the rollback rename named the original content.
+        raise _ReleaseDurabilityError(
+            f"Changelog {path} was restored to its original content; {exc}"
+        ) from exc
     except (OSError, ReleaseError) as exc:
         recovery: Path | None = None
         try:
