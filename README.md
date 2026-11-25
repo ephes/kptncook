@@ -323,8 +323,8 @@ The summary means:
 The sync continues and retains its summary if a logging handler fails to deliver
 a recipe or cleanup warning.
 
-Client cleanup is attempted once even after a failed or interrupted sync. A close
-failure preserves the primary error or the completed result's created/failed
+Client cleanup is attempted once even after a failed or interrupted sync. A lock
+release or client close failure preserves the primary error or the result's created/failed
 counts. A completed result carries a separate `cleanup_warning`; the CLI displays
 it alongside those counts and exits with status 1. The count-only library wrapper
 also reports the warning with completed counts. Cleanup failure does not undo
@@ -343,8 +343,8 @@ It never repairs or replaces an unsafe lock file. An uncooperative process
 replacing lock names after admission is outside this advisory lock contract. A competing sync waits for the current
 owner to finish for at most 30 seconds, then reports that sync is busy. Retry after
 the current sync finishes. Timeout or interruption closes the authenticated client
-without reading or modifying recipes. Filesystem/locking errors stop sync; exceptions and process exit
-release ownership. This does not coordinate different machines or
+without reading or modifying recipes. Lock admission errors stop sync before
+inventory. This does not coordinate different machines or
 manual Mealie clients and does not promise exactly-once delivery.
 
 An organizer POST that returns Mealie's explicit uniqueness response (`409` with

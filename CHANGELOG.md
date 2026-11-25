@@ -2,6 +2,7 @@ Unreleased
 ==========
 
 ### Fixes
+- Keep the Mealie sync receipt or original error when local lock release fails.
 - Preserve the favorites backup receipt or the original backup error when
   logging a client cleanup warning fails.
 - Keep the original error when a recipe or discovery read and client close

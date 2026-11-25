@@ -392,7 +392,7 @@ def _require_access_token() -> None:
 
 
 @contextmanager
-def _mealie_sync_lock() -> Iterator[None]:
+def _mealie_sync_lock() -> Iterator[list[str]]:
     # Serialize all accounts at one target, including rotated-token logins.
     url = httpx.URL(str(get_settings().mealie_url))
     target = f"{url.scheme}://{url.host}:{url.port or (443 if url.scheme == 'https' else 80)}{url.path.rstrip('/')}"
@@ -444,6 +444,7 @@ def _mealie_sync_lock() -> Iterator[None]:
         raise UserFacingError("Could not acquire the local Mealie sync lock") from exc
     except OSError as exc:
         raise UserFacingError("Could not open the local Mealie sync lock") from exc
+    cleanup_warnings: list[str] = []
     try:
         try:
             named = lock_path.lstat()
@@ -458,9 +459,21 @@ def _mealie_sync_lock() -> Iterator[None]:
                 raise OSError("Mealie sync lock changed")
         except OSError as exc:
             raise UserFacingError("Could not use the local Mealie sync lock") from exc
-        yield
+        yield cleanup_warnings
     finally:
-        lock.release()
+        try:
+            lock.release()
+        except Exception:
+            # An unlock error can prevent portalocker from closing the handle.
+            with suppress(Exception):
+                handle.close()
+            warning = (
+                "Mealie sync lock release failed. Completed imports remain committed; "
+                "unresolved outcomes remain unknown. No automatic replay was attempted; "
+                "the next sync checks stored identity."
+            )
+            cleanup_warnings.append(warning)
+            _warn_best_effort("%s", warning)
 
 
 def _warn_best_effort(message: str, *args: str) -> None:
@@ -472,7 +485,7 @@ def sync_with_mealie_result() -> SyncWithMealieResult:
     client = get_mealie_client()
     result: SyncWithMealieResult | None = None
     try:
-        with _mealie_sync_lock():
+        with _mealie_sync_lock() as cleanup_warnings:
             kptncook_recipes_from_mealie = get_kptncook_recipes_from_mealie(client)
             repository_result = load_kptncook_recipes_from_repository()
             ids_in_mealie = {
@@ -522,8 +535,10 @@ def sync_with_mealie_result() -> SyncWithMealieResult:
                 "No automatic replay was attempted; the next sync checks stored identity."
             )
             if result is not None:
-                result = replace(result, cleanup_warning=warning)
+                cleanup_warnings.append(warning)
             _warn_best_effort("%s", warning)
+    if cleanup_warnings:
+        result = replace(result, cleanup_warning=" ".join(cleanup_warnings))
     return result
 
 

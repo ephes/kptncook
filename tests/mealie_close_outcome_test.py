@@ -134,3 +134,61 @@ def test_count_wrapper_does_not_hide_cleanup_warning(monkeypatch):
         workflows.UserFacingError, match="Created 2 recipes.*cleanup failed"
     ):
         workflows.sync_with_mealie()
+
+
+@pytest.mark.parametrize("inventory_fails", [False, True])
+def test_lock_release_failure_preserves_sync_outcome(
+    monkeypatch, tmp_path, minimal, caplog, inventory_fails
+):
+    real_lock = workflows.portalocker.Lock
+    release = Mock(side_effect=OSError("private lock detail"))
+
+    handles = []
+
+    def lock_with_failed_release(*args, **kwargs):
+        lock = real_lock(*args, **kwargs)
+
+        def acquire():
+            handle = lock.acquire()
+            handles.append(handle)
+            return handle
+
+        return SimpleNamespace(acquire=acquire, release=release)
+
+    primary = httpx.ReadTimeout("inventory failed")
+    inventory = Mock(return_value=[], side_effect=primary if inventory_fails else None)
+    recipe = Recipe.model_validate(minimal)
+    client = SimpleNamespace(
+        create_recipe=Mock(), close=Mock(side_effect=OSError("private close detail"))
+    )
+    monkeypatch.setattr(workflows, "SYNC_LOCK_DIR", tmp_path)
+    monkeypatch.setattr(workflows.portalocker, "Lock", lock_with_failed_release)
+    monkeypatch.setattr(workflows, "get_mealie_client", lambda: client)
+    monkeypatch.setattr(workflows, "get_kptncook_recipes_from_mealie", inventory)
+    monkeypatch.setattr(
+        workflows,
+        "load_kptncook_recipes_from_repository",
+        lambda: RepositoryRecipesResult([recipe], []),
+    )
+    monkeypatch.setattr(workflows, "kptncook_to_mealie", lambda recipe: recipe)
+
+    if inventory_fails:
+        with pytest.raises(httpx.ReadTimeout) as caught:
+            workflows.sync_with_mealie_result()
+        assert caught.value is primary
+        client.create_recipe.assert_not_called()
+    else:
+        result = workflows.sync_with_mealie_result()
+        assert result.created_count == 1
+        assert result.failed_recipes == []
+        assert result.cleanup_warning
+        assert "Mealie sync lock release failed" in result.cleanup_warning
+        assert "Mealie client cleanup failed" in result.cleanup_warning
+        assert "No automatic replay" in result.cleanup_warning
+        assert "private" not in result.cleanup_warning
+        client.create_recipe.assert_called_once_with(recipe)
+    release.assert_called_once_with()
+    assert handles[0].closed
+    client.close.assert_called_once_with()
+    assert "Mealie sync lock release failed" in caplog.text
+    assert "private" not in caplog.text
