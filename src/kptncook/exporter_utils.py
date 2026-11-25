@@ -196,13 +196,19 @@ def _hard_links_unsupported(directory: Path, reason: str) -> UserFacingError:
 
 
 class ExportPublicationUncertain(UserFacingError):
-    """A complete final file is visible, but its directory sync failed."""
+    """Publication could not be confirmed or a visible file could not be synced."""
 
-    def __init__(self, target: Path):
+    def __init__(self, target: Path, *, publication_confirmed: bool = True):
         self.target = target
+        self.publication_confirmed = publication_confirmed
+        outcome = (
+            f"Export published as {target}; durability is uncertain."
+            if publication_confirmed
+            else f"Publication could not be confirmed for {target}."
+        )
         super().__init__(
-            f"Export published as {target}; durability is uncertain. "
-            "Inspect the visible files before retrying; no published files were removed."
+            f"{outcome} Inspect the visible files before retrying; "
+            "no published files were removed."
         )
 
 
@@ -313,9 +319,15 @@ class BatchExportError(UserFacingError):
             ("Completed export", self.completed_paths),
             ("Completed asset", self.completed_assets),
             ("Retained current asset", self.retained_assets),
-            ("Export published; durability is uncertain", self.uncertain_paths),
         ):
             lines.extend(f"{label}: {path}" for path in paths)
+        if isinstance(cause, ExportPublicationUncertain):
+            label = (
+                "Export published; durability is uncertain"
+                if cause.publication_confirmed
+                else "Publication could not be confirmed"
+            )
+            lines.append(f"{label}: {cause.target}")
         lines.append(f"Unpublished recipes: {self.unpublished_count}.")
         lines.append(
             f"Untouched recipes: {remaining_count}. Inspect receipts before retrying."
@@ -360,7 +372,8 @@ def move_to_free_target(
     support is required: publication fails safely when unavailable. Existing
     files are never replaced and final names always contain complete data.
     Display stems are shortened to fit 240 UTF-8 bytes including each suffix
-    and extension; identity/counter suffixes remain intact.
+    and extension; identity/counter suffixes remain intact. After a link error,
+    the final name is compared with the staged inode before reporting failure.
     """
     directory = Path(directory)
     base_suffix = f"-{disambiguator}" if disambiguator else ""
@@ -393,6 +406,7 @@ def move_to_free_target(
                 )
                 staged.flush()
                 os.fsync(staged.fileno())
+                staged_identity = os.fstat(staged.fileno())
         for suffix in suffixes:
             target = directory / bounded_export_filename(stem, extension, suffix=suffix)
             try:
@@ -400,18 +414,29 @@ def move_to_free_target(
                 if link is None:
                     raise NotImplementedError("os.link is unavailable")
                 link(staging_path, target)
-            except FileExistsError:
-                continue
             except NotImplementedError as exc:
                 raise _hard_links_unsupported(directory, str(exc)) from exc
             except OSError as exc:
-                if exc.errno in _LINK_UNSUPPORTED_ERRNOS:
-                    raise _hard_links_unsupported(
-                        directory, exc.strerror or str(exc)
+                # A filesystem can install the link and still report an error.
+                # Check the directory entry itself, without following symlinks.
+                try:
+                    linked = os.path.samestat(staged_identity, target.lstat())
+                except FileNotFoundError:
+                    linked = False
+                except OSError:
+                    raise ExportPublicationUncertain(
+                        target, publication_confirmed=False
                     ) from exc
-                raise UserFacingError(
-                    f"Could not publish the export as {target}: {exc.strerror or exc}."
-                ) from exc
+                if not linked:
+                    if isinstance(exc, FileExistsError):
+                        continue
+                    if exc.errno in _LINK_UNSUPPORTED_ERRNOS:
+                        raise _hard_links_unsupported(
+                            directory, exc.strerror or str(exc)
+                        ) from exc
+                    raise UserFacingError(
+                        f"Could not publish the export as {target}: {exc.strerror or exc}."
+                    ) from exc
             try:
                 fsync_directory(directory)
             except BaseException as exc:

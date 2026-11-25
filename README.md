@@ -578,6 +578,10 @@ directory-sync operations retain the portability fallback; real I/O errors are
 reported. The destination filesystem must support
 hard links (FAT/exFAT and some network mounts do not); otherwise export stops
 with an error naming the directory and publishes no partial final file.
+If a link reports an error after installing the export's staging inode at the
+final name, the export verifies the link and proceeds with directory sync.
+When the final name cannot be inspected, the export reports that publication
+could not be confirmed and retains any assets the note may reference.
 Failures before note publication remove attempt-owned assets when safe and sync
 the asset directory after removal. If either operation raises an I/O error,
 the export attempts to log uncertain asset cleanup and reports the original note
@@ -590,8 +594,9 @@ path with uncertain durability, retaining all visible files and assets a
 visible note references.
 Tandoor and Markdown stop at the first failed recipe. Their CLI errors list
 completed exports and Markdown assets, the failing recipe ID, and the count of
-untouched recipes. Visible current files with uncertain durability and retained
-current assets are listed separately; earlier completed exports are never removed.
+untouched recipes. The error separately lists current paths with uncertain
+publication or durability and retained assets. Earlier completed exports are
+never removed.
 Library callers receive `BatchExportError` with `completed_paths`,
 `completed_assets`, `failed_recipe_id`, `remaining_count`, `uncertain_paths` and
 `retained_assets`; successful return types are unchanged. Counts exclude the

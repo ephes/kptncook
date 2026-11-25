@@ -13,8 +13,9 @@ from pathlib import Path
 
 import pytest
 
+from kptncook import exporter_utils
 from kptncook.config import get_settings
-from kptncook.exporter_utils import move_to_free_target
+from kptncook.exporter_utils import BatchExportError, move_to_free_target
 from kptncook.http_errors import UserFacingError
 from kptncook.markdown_exporter import MarkdownExporter
 from kptncook.models import Recipe
@@ -297,3 +298,66 @@ def test_other_link_failures_are_not_reported_as_missing_hard_links(
     assert "name.zip" in message
     assert list(out.iterdir()) == []
     assert source.exists()
+
+
+@pytest.mark.parametrize(
+    "outcome", ["linked", "linked-exists", "competing", "unreadable"]
+)
+def test_markdown_reconciles_ambiguous_hard_link(minimal, monkeypatch, outcome):
+    out = get_settings().root / "export_md"
+    note = out / "Minimal Recipe.md"
+    link, lstat, sync = os.link, Path.lstat, exporter_utils.fsync_directory
+    synced = []
+
+    def lose_link_reply(source, target):
+        if target != note:
+            return link(source, target)
+        if outcome == "competing":
+            target.write_bytes(b"unrelated note")
+        else:
+            link(source, target)
+        if outcome == "linked-exists":
+            raise FileExistsError(errno.EEXIST, "synthetic retried link")
+        raise OSError(errno.EIO, "synthetic link error")
+
+    def inspect(path):
+        if path == note and outcome == "unreadable":
+            raise OSError(errno.EIO, "synthetic stat error")
+        return lstat(path)
+
+    def record_sync(directory):
+        synced.append(directory)
+        sync(directory)
+
+    monkeypatch.setattr(os, "link", lose_link_reply)
+    monkeypatch.setattr(exporter_utils, "fsync_directory", record_sync)
+    monkeypatch.setattr(
+        "kptncook.markdown_exporter.download_image", lambda *a, **kw: b"synthetic"
+    )
+    exporter = MarkdownExporter()
+    recipe = Recipe.model_validate(minimal)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "lstat", inspect)
+        if outcome in {"competing", "unreadable"}:
+            with pytest.raises(BatchExportError) as caught:
+                exporter.export([recipe])
+        else:
+            assert exporter.export([recipe]) == [note]
+            assert synced == [out / "assets", out]
+
+    assets = list((out / "assets").iterdir())
+    assert list(out.glob("*.md")) == [note]
+    assert not list(out.glob(".kptncook-*"))
+    if outcome == "competing":
+        assert note.read_bytes() == b"unrelated note"
+        assert caught.value.uncertain_paths == ()
+        assert not assets
+    else:
+        [asset] = assets
+        assert asset.read_bytes() == b"synthetic"
+        assert f"assets/{asset.name}" in note.read_text(encoding="utf-8")
+        if outcome == "unreadable":
+            assert caught.value.uncertain_paths == (note,)
+            assert caught.value.retained_assets == (asset,)
+            assert "Publication could not be confirmed" in str(caught.value)

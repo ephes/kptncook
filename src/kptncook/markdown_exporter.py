@@ -213,8 +213,8 @@ class MarkdownExporter:
                             budget=budget,
                         )
                     except ExportPublicationUncertain:
-                        # The asset or its referring note is already visible. Keep
-                        # both, even when the caller cannot claim durable success.
+                        # The asset or its referring note may be visible.
+                        # Keep referenced assets while publication is uncertain.
                         raise
                     except BaseException:
                         if asset_path is not None:
