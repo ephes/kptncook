@@ -179,7 +179,9 @@ def test_cli_refuses_invalid_dotenv_before_constructing_client(tmp_path, monkeyp
     create_client.assert_not_called()
 
 
-@pytest.mark.parametrize("interruption", ["in-place edit", "short read"])
+@pytest.mark.parametrize(
+    "interruption", ["in-place edit", "in-place edit, mtime restored", "short read"]
+)
 def test_runtime_rejects_incomplete_dotenv_before_parsing(
     tmp_path, monkeypatch, mocker, interruption
 ):
@@ -200,8 +202,15 @@ def test_runtime_rejects_incomplete_dotenv_before_parsing(
             first_line = read(len(old_key))
             if interruption == "short read":
                 return first_line
+            before = env_path.stat()
             env_path.write_bytes(new_key + b"KPTNCOOK_LANG=es\n")
-            os.utime(env_path, (1, 1))
+            if interruption == "in-place edit, mtime restored":
+                # Only the ctime check can notice this edit.
+                os.utime(
+                    env_path, ns=(before.st_atime_ns, before.st_mtime_ns)
+                )
+            else:
+                os.utime(env_path, (1, 1))
             return first_line + read(limit - len(first_line))
 
         handle.read = interrupted_read

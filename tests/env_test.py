@@ -9,6 +9,7 @@ from pathlib import Path
 from kptncook.env import ENV_TEMPLATE as MAIN_ENV_TEMPLATE
 from kptncook.env import (
     _default_env_dir,
+    _tighten_env_permissions,
     read_env_values,
     scaffold_env_file,
     upsert_env_value,
@@ -67,6 +68,18 @@ def test_upsert_env_value_tightens_permissions(tmp_path):
 
     if os.name != "nt":
         assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits")
+def test_tighten_env_permissions_skips_owner_only_file(tmp_path, mocker):
+    env_path = tmp_path / ".env"
+    env_path.write_text("KPTNCOOK_API_KEY=abc\n")
+    env_path.chmod(0o600)
+    chmod = mocker.patch.object(Path, "chmod")
+
+    _tighten_env_permissions(env_path)
+
+    chmod.assert_not_called()
 
 
 def test_env_templates_are_kept_in_sync():

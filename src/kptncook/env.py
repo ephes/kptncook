@@ -94,9 +94,14 @@ KPTNCOOK_ACCESS_TOKEN=
 
 
 def _tighten_env_permissions(env_path: Path) -> None:
-    """Best-effort hardening for secret-bearing env files."""
+    """Best-effort hardening for secret-bearing env files.
+
+    Skip the chmod when the mode is already owner-only: a same-mode chmod still
+    bumps the inode's ctime, which runtime readers treat as an in-place edit.
+    """
     try:
-        env_path.chmod(ENV_FILE_MODE)
+        if stat.S_IMODE(env_path.stat().st_mode) != ENV_FILE_MODE:
+            env_path.chmod(ENV_FILE_MODE)
     except OSError:
         pass
 

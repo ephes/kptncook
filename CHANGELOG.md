@@ -4,6 +4,8 @@ Unreleased
 ### Fixes
 - Reject short dotenv reads and detected in-place edits before parsing and
   preserve complete reads across atomic replacement.
+- Skip the permission fix-up on dotenv files that are already owner-only, so
+  writers do not touch a freshly published file that readers may be checking.
 - Retry a settings load whose failure was superseded by a cache clear, or
   return the settings already cached by another caller.
 - Prevent in-flight settings loads from republishing values after a cache clear.
