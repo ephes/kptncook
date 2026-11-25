@@ -267,6 +267,11 @@ the complete recipe with those identity extras already present. Distinct
 KptnCook recipes with the same title can both be imported: Mealie assigns a
 unique name and slug, which subsequent updates preserve.
 
+Each Mealie recipe conversion uses one settings snapshot for its translations,
+ingredient grouping, image host allowlist and default KptnCook API key.
+A settings reload can affect the next recipe. Missing translations use the
+usual fallback, and library callers can supply an explicit image API key.
+
 Ingredient names are split at the first comma only: the food name precedes it,
 and the complete remaining preparation note retains subsequent commas and
 internal whitespace, with outer whitespace trimmed. Grouping and locale fallback

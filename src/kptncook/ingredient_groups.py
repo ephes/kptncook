@@ -2,7 +2,7 @@ from collections.abc import Iterable
 
 from pydantic_core import PydanticCustomError
 
-from kptncook.config import get_settings
+from kptncook.config import Settings, get_settings
 from kptncook.models import Ingredient
 
 DEFAULT_INGREDIENT_GROUP_LABELS = {
@@ -47,9 +47,12 @@ def _format_group_label(key: str, label_map: dict[str, str]) -> str:
 
 def iter_ingredient_groups(
     ingredients: Iterable[Ingredient],
+    *,
+    settings: Settings | None = None,
 ) -> list[tuple[str | None, list[Ingredient]]]:
     items = list(ingredients)
-    settings = get_settings()
+    if settings is None:
+        settings = get_settings()
     if not settings.kptncook_group_ingredients_by_typ:
         return [(None, items)]
     label_map = parse_ingredient_group_labels(settings.kptncook_ingredient_group_labels)

@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Use one settings snapshot per Mealie recipe conversion, including translations,
+  ingredient grouping and image URL preparation.
 - Reject short dotenv reads and detected in-place edits before parsing and
   preserve complete reads across atomic replacement.
 - Skip the permission fix-up on dotenv files that are already owner-only, so

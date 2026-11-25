@@ -88,11 +88,13 @@ class Image(BaseModel):
     type: str | None = None
     url: str
 
-    def get_image_with_api_key_url(self, api_key: str) -> "Image":
+    def get_image_with_api_key_url(
+        self, api_key: str, *, hosts: frozenset[str] | None = None
+    ) -> "Image":
         """Attach the API key; raise ImageOriginError for a disallowed host."""
         from .image_origin import check_image_url
 
-        check_image_url(self.url)
+        check_image_url(self.url, hosts=hosts)
         parts = urlsplit(self.url)
         query = (
             [
@@ -345,7 +347,9 @@ class Recipe(BaseModel):
                     values["localizedTitle"] = title
         return values
 
-    def get_image_url(self, api_key: str) -> str | None:
+    def get_image_url(
+        self, api_key: str, *, hosts: frozenset[str] | None = None
+    ) -> str | None:
         from .image_origin import ImageOriginError
 
         try:
@@ -353,7 +357,7 @@ class Recipe(BaseModel):
         except ValueError:
             return None
         try:
-            return image.get_image_with_api_key_url(api_key).url
+            return image.get_image_with_api_key_url(api_key, hosts=hosts).url
         except ImageOriginError:
             logger.warning("Skipping cover image: not on an allowed image host")
             return None

@@ -22,12 +22,12 @@ from pydantic.alias_generators import to_camel
 
 from .exporter_utils import get_step_text
 from .control_json import decode_control_json
-from .config import get_settings
+from .config import Settings, get_settings
 from .http_errors import extract_mealie_detail_message
 from .auth import validate_token
 from .http_client import BaseHttpClient, DEFAULT_REQUEST_TIMEOUT
 from .image_download import download_image
-from .image_origin import ImageOriginError, is_allowed_image_url
+from .image_origin import ImageOriginError, allowed_image_hosts, is_allowed_image_url
 from .ingredient_groups import iter_ingredient_groups
 from .models import (
     Image,
@@ -888,16 +888,23 @@ class MealieApiClient(BaseHttpClient):
 def kptncook_to_mealie_ingredients(
     kptncook_ingredients: list[Ingredient] | None,
     servings: int = 1,
+    *,
+    language: str | None = None,
+    settings: Settings | None = None,
 ) -> tuple[list[RecipeIngredient], dict[str, list[UUID4]]]:
+    if settings is None:
+        settings = get_settings()
+    if language is None:
+        language = settings.kptncook_lang
     mealie_ingredients = []
     ingredient_id_to_reference_ids: dict[str, list[UUID4]] = {}
-    groups = iter_ingredient_groups(kptncook_ingredients or [])
+    groups = iter_ingredient_groups(kptncook_ingredients or [], settings=settings)
     for group_label, ingredients in groups:
         for idx, ingredient in enumerate(ingredients):
             ingredient_title = (
                 localized_fallback(
                     ingredient.ingredient.localized_title,
-                    language=get_settings().kptncook_lang,
+                    language=language,
                 )
                 or ""
             )
@@ -936,11 +943,20 @@ def kptncook_to_mealie_steps(
     steps: list[KptnCookRecipeStep],
     api_key: str,
     ingredient_id_to_reference_ids: dict[str, list[UUID4]],
+    *,
+    language: str | None = None,
+    hosts: frozenset[str] | None = None,
 ):
+    if not steps:
+        return []
+    if language is None:
+        language = get_settings().kptncook_lang
     mealie_instructions = []
     for step in steps:
         try:
-            image: Image | None = step.image.get_image_with_api_key_url(api_key)
+            image: Image | None = step.image.get_image_with_api_key_url(
+                api_key, hosts=hosts
+            )
         except ImageOriginError:
             logger.warning("Skipping step image: not on an allowed image host")
             image = None
@@ -973,9 +989,7 @@ def kptncook_to_mealie_steps(
         mealie_instructions.append(
             RecipeStep(
                 title=None,
-                text=get_step_text(
-                    step, language=get_settings().kptncook_lang, markup=True
-                ),
+                text=get_step_text(step, language=language, markup=True),
                 image=image,
                 ingredientReferences=ingredient_references,
             )
@@ -1002,18 +1016,17 @@ def kptncook_to_mealie(
     kcin: KptnCookRecipe, api_key: str | None = None
 ) -> RecipeWithImage:
     kcin.validate_scaled_quantities()
+    settings = get_settings()
+    language = settings.kptncook_lang
+    hosts = allowed_image_hosts(settings=settings)
     if api_key is None:
-        api_key = get_settings().kptncook_api_key
+        api_key = settings.kptncook_api_key
     ingredients, ingredient_id_to_reference_ids = kptncook_to_mealie_ingredients(
-        kcin.ingredients, servings=kcin.servings
+        kcin.ingredients, servings=kcin.servings, language=language, settings=settings
     )
-    author_comment = localized_fallback(
-        kcin.author_comment, language=get_settings().kptncook_lang
-    )
+    author_comment = localized_fallback(kcin.author_comment, language=language)
     kwargs = {
-        "name": localized_fallback(
-            kcin.localized_title, language=get_settings().kptncook_lang
-        ),
+        "name": localized_fallback(kcin.localized_title, language=language),
         "notes": (
             [RecipeNote(title="author comment", text=author_comment)]
             if author_comment
@@ -1029,10 +1042,14 @@ def kptncook_to_mealie(
         "cook_time": kcin.cooking_time,
         "recipe_yield": f"{kcin.servings} Portionen",
         "recipe_instructions": kptncook_to_mealie_steps(
-            kcin.steps, api_key, ingredient_id_to_reference_ids
+            kcin.steps,
+            api_key,
+            ingredient_id_to_reference_ids,
+            language=language,
+            hosts=hosts,
         ),
         "recipe_ingredient": ingredients,
-        "image_url": kcin.get_image_url(api_key),
+        "image_url": kcin.get_image_url(api_key, hosts=hosts),
         "tags": kptncook_to_mealie_tags(kcin.active_tags),
         "extras": {"kptncook_id": kcin.id.oid, "source": "kptncook"},
     }

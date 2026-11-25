@@ -1,8 +1,83 @@
+from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
-from kptncook.config import settings
+import pytest
+
+from kptncook.config import get_settings, settings
 from kptncook.mealie import kptncook_to_mealie, kptncook_to_mealie_steps
 from kptncook.models import Recipe
+
+
+@pytest.mark.parametrize("api_key", [None, "override-key"])
+def test_conversion_uses_one_settings_snapshot(minimal, monkeypatch, api_key):
+    initial = get_settings().model_copy(
+        update={
+            "kptncook_lang": "en",
+            "kptncook_api_key": "snapshot-key",
+            "kptncook_group_ingredients_by_typ": True,
+            "kptncook_image_hosts": "example.test",
+        }
+    )
+    replacement = initial.model_copy(
+        update={
+            "kptncook_lang": "de",
+            "kptncook_api_key": "replacement-key",
+            "kptncook_group_ingredients_by_typ": False,
+            "kptncook_image_hosts": None,
+        }
+    )
+    lookups = []
+
+    def changing_settings():
+        snapshot = replacement if lookups else initial
+        lookups.append(snapshot)
+        return snapshot
+
+    for module in ("config", "mealie", "ingredient_groups"):
+        monkeypatch.setattr(f"kptncook.{module}.get_settings", changing_settings)
+
+    image_url = "https://example.test/recipe.jpg"
+    recipe = Recipe.model_validate(
+        {
+            **minimal,
+            "localizedTitle": {"de": "Suppe", "en": "Soup"},
+            "authorComment": {"de": "Geschmack", "en": "Season to taste"},
+            "ingredients": [
+                {
+                    "quantity": 1.0,
+                    "ingredient": {
+                        "typ": "regular",
+                        "localizedTitle": translations,
+                        "numberTitle": translations,
+                        "category": "spices",
+                    },
+                }
+                for translations in ({"de": "Salz", "en": "Salt"}, {"de": "Pfeffer"})
+            ],
+            "steps": [
+                {
+                    **minimal["steps"][0],
+                    "title": {"de": "Rühren", "en": "Stir"},
+                    "image": {**minimal["steps"][0]["image"], "url": image_url},
+                }
+            ],
+            "imageList": [{**minimal["imageList"][0], "url": image_url}],
+        }
+    )
+
+    converted = kptncook_to_mealie(recipe, api_key=api_key)
+
+    assert converted.name == "Soup"
+    assert converted.notes[0].text == "Season to taste"
+    assert [ingredient.food.name for ingredient in converted.recipe_ingredient] == [
+        "Salt",
+        "Pfeffer",
+    ]
+    assert converted.recipe_ingredient[0].title == "You need"
+    assert converted.recipe_instructions[0].text == "Stir"
+    for url in (converted.image_url, converted.recipe_instructions[0].image.url):
+        assert parse_qs(urlsplit(url).query)["kptnkey"] == [api_key or "snapshot-key"]
+    assert lookups == [initial]
 
 
 def test_step_reference_expansion_visits_each_source_mapping_once(minimal):

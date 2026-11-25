@@ -12,7 +12,11 @@ from __future__ import annotations
 import ipaddress
 import re
 import socket
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
+
+if TYPE_CHECKING:
+    from .config import Settings
 
 # KptnCook serves recipe images from its CloudFront distribution and from
 # images.kptncook.com.
@@ -72,10 +76,12 @@ def _is_numeric_address(host: str) -> bool:
     return True
 
 
-def allowed_image_hosts() -> frozenset[str]:
-    from .config import get_settings
+def allowed_image_hosts(*, settings: Settings | None = None) -> frozenset[str]:
+    if settings is None:
+        from .config import get_settings
 
-    extra = parse_image_hosts(get_settings().kptncook_image_hosts)
+        settings = get_settings()
+    extra = parse_image_hosts(settings.kptncook_image_hosts)
     return frozenset(DEFAULT_IMAGE_HOSTS + extra)
 
 
@@ -97,6 +103,6 @@ def is_allowed_image_url(url: str, hosts: frozenset[str] | None = None) -> bool:
     return host in (allowed_image_hosts() if hosts is None else hosts)
 
 
-def check_image_url(url: str) -> None:
-    if not is_allowed_image_url(url):
+def check_image_url(url: str, *, hosts: frozenset[str] | None = None) -> None:
+    if not is_allowed_image_url(url, hosts):
         raise ImageOriginError("Image URL is not on an allowed image host")
