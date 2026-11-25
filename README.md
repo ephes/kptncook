@@ -1281,7 +1281,8 @@ Use the helper commands below from a clean worktree:
    ```
    Preparation reads regular UTF-8 files only. Each source and each replacement
    may be at most 1 MiB. Preparation checks the input type and size and
-   validates both replacement texts before publishing either file.
+   validates both replacement texts before publishing either file. An incomplete
+   staging write aborts preparation before either source file changes.
    The changelog keeps its line-ending style (LF, CRLF or CR). A changelog
    with mixed line endings uses its first line ending throughout the prepared file.
    Preparations sharing a changelog directory serialize on the stable
@@ -1291,7 +1292,8 @@ Use the helper commands below from a clean worktree:
    and before the project file is replaced, only this attempt's changelog
    generation is restored. A conflicting edit is preserved and the error names
    a private `CHANGELOG.md.recovery-*` copy of the original for manual
-   reconciliation. Ctrl-C still interrupts the command. If both replacements
+   reconciliation if the copy was written in full. An incomplete recovery copy
+   is removed and reported as a failed write. Ctrl-C still interrupts the command. If both replacements
    already completed, the prepared files are kept.
    These checks detect edits before publication; editors do not honor the
    advisory lock, so a final check-to-replace race remains. This is not a

@@ -343,3 +343,50 @@ def test_prepare_refuses_growth_after_descriptor_size_check(tmp_path, monkeypatc
 
     assert changelog.read_bytes() == original_changelog
     assert project.read_bytes() == original_project + growth
+
+
+@pytest.mark.parametrize("short_write", ["changelog", "project", "recovery"])
+def test_prepare_rejects_short_writes(tmp_path, monkeypatch, short_write):
+    changelog, project = files(tmp_path)
+    originals = changelog.read_bytes(), project.read_bytes()
+    edited = b"Unreleased\n==========\n\n- Competing notes.\n"
+    temporary = release.tempfile.NamedTemporaryFile
+    replace = release.os.replace
+    stage_count = 0
+
+    def short_temporary(*args, **kwargs):
+        nonlocal stage_count
+        stream = temporary(*args, **kwargs)
+        stage_count += 1
+        if (
+            (short_write == "changelog" and stage_count == 1)
+            or (short_write == "project" and stage_count == 2)
+            or (
+                short_write == "recovery"
+                and kwargs.get("prefix", "").endswith(".recovery-")
+            )
+        ):
+            write = stream.write
+            stream.write = lambda data: write(data[:-1])
+        return stream
+
+    def fail_project(source, target):
+        if short_write == "recovery" and target == project:
+            changelog.write_bytes(edited)
+            raise OSError("injected project failure")
+        replace(source, target)
+
+    monkeypatch.setattr(release.tempfile, "NamedTemporaryFile", short_temporary)
+    monkeypatch.setattr(release.os, "replace", fail_project)
+    with pytest.raises(release.ReleaseError, match="Incomplete .*write"):
+        release.prepare_release(changelog, project, version="0.0.2")
+
+    assert changelog.read_bytes() == (
+        edited if short_write == "recovery" else originals[0]
+    )
+    assert project.read_bytes() == originals[1]
+    assert {path.name for path in tmp_path.iterdir()} == {
+        ".kptncook-release.lock",
+        "CHANGELOG.md",
+        "pyproject.toml",
+    }

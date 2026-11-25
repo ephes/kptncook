@@ -253,7 +253,8 @@ def _stage_replacement(
     try:
         with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
             temporary = Path(stream.name)
-            stream.write(content)
+            if stream.write(content) != len(content):
+                raise ReleaseError(f"Incomplete staged write for {path}.")
             stream.flush()
             os.fsync(stream.fileno())
         temporary.chmod(path.stat().st_mode & 0o777)
@@ -286,13 +287,22 @@ def _restore_changelog(path: Path, original: _Generation, owned: _Generation) ->
     try:
         _atomic_replace(path, original.content, expected=owned)
     except (OSError, ReleaseError) as exc:
-        with tempfile.NamedTemporaryFile(
-            dir=path.parent, prefix=path.name + ".recovery-", delete=False
-        ) as stream:
-            stream.write(original.content)
-            stream.flush()
-            os.fsync(stream.fileno())
-            recovery = stream.name
+        recovery: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                dir=path.parent, prefix=path.name + ".recovery-", delete=False
+            ) as stream:
+                recovery = Path(stream.name)
+                if stream.write(original.content) != len(original.content):
+                    raise ReleaseError(
+                        "Incomplete recovery write; could not restore changelog."
+                    )
+                stream.flush()
+                os.fsync(stream.fileno())
+        except BaseException:
+            if recovery is not None:
+                recovery.unlink(missing_ok=True)
+            raise
         raise ReleaseError(
             f"Could not restore changelog (changed or unavailable); recovery copy: {recovery}"
         ) from exc
