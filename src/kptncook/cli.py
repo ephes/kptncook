@@ -536,6 +536,9 @@ def search_kptncook_recipe_by_id(id_: str):
     result = _run_or_exit(search_recipe_by_id_workflow, id_)
     rprint(result.id_type, result.id_value)
     rprint(f"Added recipe {result.id_type} {result.id_value} to local repository")
+    if result.cleanup_warning:
+        rprint(f"[yellow]{escape(result.cleanup_warning)}[/yellow]")
+        raise typer.Exit(code=1)
 
 
 OptionalId = Optional[str]

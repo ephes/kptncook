@@ -153,6 +153,9 @@ to log the cleanup warning in either case.
 When a recipe or discovery read fails, the CLI reports the original error,
 even if closing the client also fails. A close failure after a successful
 read reports `KptnCook client cleanup failed.` and exits with status 1.
+`search-by-id` behaves like `backup-favorites`: after a close failure that
+follows a successful save it prints the added recipe and the cleanup warning,
+then exits with status 1. The recipe remains saved.
 
 When a library API client's context exits after an operation error, a failure
 to close its owned HTTP client produces a short warning and the original error

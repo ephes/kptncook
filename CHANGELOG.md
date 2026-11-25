@@ -6,6 +6,8 @@ Unreleased
   logging a client cleanup warning fails.
 - Keep the original error when a recipe or discovery read and client close
   both fail. Report standalone close failures with a short CLI error.
+- Keep the `search-by-id` receipt or its original error when closing the
+  KptnCook client fails.
 - Show discovery list and popular ingredient IDs from later aliases when a
   preferred alias resolves to null.
 - Show discovery lists and quick-search entries from the first nonempty alias

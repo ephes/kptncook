@@ -171,3 +171,51 @@ def test_backup_favorites_resolve_http_error(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "502" in out
     assert "resolving recipes" in out
+
+
+@pytest.mark.parametrize("fetch_fails", [False, True])
+@pytest.mark.parametrize("log_sink_fails", [False, True])
+def test_search_by_id_preserves_outcome_when_close_fails(
+    monkeypatch, tmp_path, minimal, fetch_fails, log_sink_fails
+):
+    repository = RecipeRepository(tmp_path)
+    monkeypatch.setattr(repository_service, "get_repository", lambda: repository)
+    recipe = RecipeInDb(date=workflows.date.today(), data=minimal)
+    request = httpx.Request("GET", "https://example.test/?kptnkey=private-key")
+    response = httpx.Response(503, request=request, json={"message": "private"})
+    client = SimpleNamespace(
+        get_by_ids=Mock(return_value=[recipe]),
+        close=Mock(side_effect=OSError("private-cleanup-detail")),
+    )
+    if fetch_fails:
+        client.get_by_ids.side_effect = httpx.HTTPStatusError(
+            str(request.url), request=request, response=response
+        )
+    monkeypatch.setattr(workflows, "KptnCookClient", lambda: client)
+    emit = Mock(
+        side_effect=OSError("private-log-sink-error") if log_sink_fails else None
+    )
+    handler = logging.Handler()
+    handler.emit = emit
+
+    workflows.logger.addHandler(handler)
+    try:
+        result = CliRunner(env={"COLUMNS": "120"}).invoke(
+            app, ["search-by-id", "0123456789abcdef01234567"]
+        )
+    finally:
+        workflows.logger.removeHandler(handler)
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    client.close.assert_called_once_with()
+    emit.assert_called_once()
+    assert emit.call_args.args[0].getMessage() == "KptnCook client cleanup failed."
+    assert "private" not in result.output
+    if fetch_fails:
+        assert result.output.strip() == "HTTP 503 while fetching recipe"
+        assert repository.list() == []
+    else:
+        assert "Added recipe oid 0123456789abcdef01234567" in result.output
+        assert result.output.strip().endswith("KptnCook client cleanup failed.")
+        assert repository.list() == [recipe]

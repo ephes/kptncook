@@ -6,7 +6,7 @@ import logging
 import os
 import stat
 from collections.abc import Iterator, Sequence
-from contextlib import closing, contextmanager, suppress
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
@@ -80,6 +80,7 @@ class SearchResult:
     id_type: str
     id_value: str
     recipe: RecipeInDb
+    cleanup_warning: str | None = None
 
 
 @dataclass(frozen=True)
@@ -830,7 +831,9 @@ def search_recipe_by_id(id_: str) -> SearchResult:
         raise UserFacingError("Could not parse id")
 
     id_type, id_value = parsed
-    with closing(_kptncook_client()) as client:
+    client = _kptncook_client()
+    result: SearchResult | None = None
+    try:
         try:
             recipes = client.get_by_ids([(id_type, id_value)])
         except httpx.HTTPStatusError as exc:
@@ -845,7 +848,15 @@ def search_recipe_by_id(id_: str) -> SearchResult:
 
         recipe = recipes[0]
         _save_repository_entries([recipe], expected=expected)
-        return SearchResult(id_type=id_type, id_value=id_value, recipe=recipe)
+        result = SearchResult(id_type=id_type, id_value=id_value, recipe=recipe)
+    finally:
+        try:
+            client.close()
+        except Exception:
+            if result is not None:
+                result = replace(result, cleanup_warning=KPTNCOOK_CLEANUP_MESSAGE)
+            _warn_best_effort(KPTNCOOK_CLEANUP_MESSAGE)
+    return result
 
 
 def get_recipe_by_id(id_: str):
