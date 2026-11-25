@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Reject short dotenv reads and detected in-place edits before parsing and
+  preserve complete reads across atomic replacement.
 - Retry a settings load whose failure was superseded by a cache clear, or
   return the settings already cached by another caller.
 - Prevent in-flight settings loads from republishing values after a cache clear.

@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from typer.testing import CliRunner
 
 import kptncook.config as config
+from kptncook import env
 from kptncook.cli import app
 from kptncook.config import Settings, SettingsError, clear_settings_cache, get_settings
 from kptncook.env import ENV_TEMPLATE, MAX_ENV_BYTES, scaffold_env_file
@@ -176,6 +177,72 @@ def test_cli_refuses_invalid_dotenv_before_constructing_client(tmp_path, monkeyp
     assert "64 KiB" in result.output
     assert "private" not in result.output
     create_client.assert_not_called()
+
+
+@pytest.mark.parametrize("interruption", ["in-place edit", "short read"])
+def test_runtime_rejects_incomplete_dotenv_before_parsing(
+    tmp_path, monkeypatch, mocker, interruption
+):
+    env_path = tmp_path / ".env"
+    old_key = b"KPTNCOOK_API_KEY=synthetic-old\n"
+    new_key = b"KPTNCOOK_API_KEY=synthetic-new\n"
+    env_path.write_bytes(old_key + b"KPTNCOOK_LANG=fr\n")
+    monkeypatch.delenv("KPTNCOOK_API_KEY")
+    monkeypatch.delenv("KPTNCOOK_LANG", raising=False)
+    parse = mocker.spy(DotEnv, "dict")
+    original_fdopen = env.os.fdopen
+
+    def interrupt_read(fd, mode):
+        handle = original_fdopen(fd, mode, buffering=0)
+        read = handle.read
+
+        def interrupted_read(limit):
+            first_line = read(len(old_key))
+            if interruption == "short read":
+                return first_line
+            env_path.write_bytes(new_key + b"KPTNCOOK_LANG=es\n")
+            os.utime(env_path, (1, 1))
+            return first_line + read(limit - len(first_line))
+
+        handle.read = interrupted_read
+        return handle
+
+    with monkeypatch.context() as patch:
+        patch.setattr(env.os, "fdopen", interrupt_read)
+        with pytest.raises(SettingsError) as caught:
+            get_settings()
+
+    parse.assert_not_called()
+    assert caught.value.diagnostics == (env.ENV_READ_ERROR,)
+    loaded = get_settings()
+    if interruption == "short read":
+        assert loaded.kptncook_api_key == "synthetic-old"
+        assert loaded.kptncook_lang == "fr"
+    else:
+        assert loaded.kptncook_api_key == "synthetic-new"
+        assert loaded.kptncook_lang == "es"
+
+
+def test_runtime_accepts_open_dotenv_during_atomic_replacement(tmp_path, monkeypatch):
+    env_path = tmp_path / ".env"
+    env_path.write_text("KPTNCOOK_API_KEY=synthetic-old\n")
+    replacement = tmp_path / "new.env"
+    replacement.write_text("KPTNCOOK_API_KEY=synthetic-new\n")
+    monkeypatch.delenv("KPTNCOOK_API_KEY")
+    inode = env_path.stat().st_ino
+    original_fstat = env.os.fstat
+
+    def replace_after_stat(fd):
+        info = original_fstat(fd)
+        if info.st_ino == inode and replacement.exists():
+            replacement.replace(env_path)
+        return info
+
+    monkeypatch.setattr(env.os, "fstat", replace_after_stat)
+    assert get_settings().kptncook_api_key == "synthetic-old"
+    assert not replacement.exists()
+    clear_settings_cache()
+    assert get_settings().kptncook_api_key == "synthetic-new"
 
 
 def test_settings_preserve_dotenv_mapping_and_precedence(tmp_path, monkeypatch):

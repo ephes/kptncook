@@ -254,7 +254,7 @@ def _parse_env_values(content: str) -> dict[str, str]:
 
 
 def _read_env_content(env_path: Path) -> str:
-    """Only absence counts as empty; admit one regular, bounded descriptor."""
+    """Read a complete snapshot from one regular, bounded descriptor."""
     try:
         target = env_path.resolve()
         try:
@@ -268,11 +268,24 @@ def _read_env_content(env_path: Path) -> str:
         except FileNotFoundError:
             return ""
         with os.fdopen(fd, "rb") as handle:
-            info = os.fstat(handle.fileno())
-            if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_ENV_BYTES:
+            opened = os.fstat(handle.fileno())
+            if not stat.S_ISREG(opened.st_mode) or opened.st_size > MAX_ENV_BYTES:
                 raise OSError
             content = handle.read(MAX_ENV_BYTES + 1)
-            if len(content) > MAX_ENV_BYTES:
+            current = os.fstat(handle.fileno())
+            if (
+                len(content) != opened.st_size
+                or current.st_size != opened.st_size
+                or current.st_mtime_ns != opened.st_mtime_ns
+                or current.st_mode != opened.st_mode
+            ):
+                raise OSError
+            # Atomic replacement can drop a link and update ctime on the
+            # opened inode while leaving its content intact.
+            if (
+                current.st_ctime_ns != opened.st_ctime_ns
+                and current.st_nlink >= opened.st_nlink
+            ):
                 raise OSError
         return content.decode("utf-8")
     except (OSError, UnicodeError, RuntimeError):

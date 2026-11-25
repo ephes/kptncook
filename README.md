@@ -919,10 +919,12 @@ Pydantic's programmatic `errors()` data remains sensitive and should not be logg
 Runtime settings read `.env` only from a regular UTF-8 file of at most 64 KiB,
 the same admission rule used by setup. An unreadable, oversized, invalid UTF-8
 or special file stops runtime configuration with a short error before client
-setup. Missing files are treated as empty. For library callers,
-`Settings(_env_file=path)` selects a different file and `_env_file=None` disables
-dotenv. Constructor values take precedence over shell variables, which take
-precedence over dotenv values.
+setup. A short read or a detected in-place change is refused before parsing.
+When an atomic replacement leaves the already-open file intact, the reader
+can still use that complete snapshot. Missing files are treated as empty.
+For library callers, `Settings(_env_file=path)` selects a different file and
+`_env_file=None` disables dotenv. Constructor values take precedence over shell
+variables, which take precedence over dotenv values.
 
 Library callers can use `clear_settings_cache()` to reload settings on the next
 access through `get_settings()`. An in-flight load reuses settings already
