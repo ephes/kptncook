@@ -300,6 +300,46 @@ def test_create_response_for_other_name_stops_before_import():
     assert "archive" not in server.writes
 
 
+@pytest.mark.parametrize("inventory", ["unique", "missing", "idless", "ambiguous"])
+def test_idless_create_requires_one_proven_inventory_match(inventory):
+    endpoint = "organizers/tags"
+    tag_id = str(uuid4())
+    rows = {
+        "unique": [{"name": "Vegan", "id": tag_id}],
+        "missing": [{"name": "Unrelated", "id": tag_id}],
+        "idless": [{"name": "Vegan"}],
+        "ambiguous": [
+            {"name": "Vegan", "id": tag_id},
+            {"name": "vegan", "id": str(uuid4())},
+        ],
+    }
+    server = FakeMealie()
+
+    def handle(request):
+        if request.method == "POST" and request.url.path == f"/api/{endpoint}":
+            server.writes.append(endpoint)
+            server.organizers[endpoint] = rows[inventory]
+            return httpx.Response(201, json={"name": "vegan"})
+        return server.handle(request)
+
+    with httpx.Client(transport=httpx.MockTransport(handle)) as http:
+        client = MealieApiClient("https://mealie.example/api", client=http)
+        if inventory == "unique":
+            client.create_recipe(_recipe(tags=["vegan"]))
+            assert server.writes == [endpoint, "archive"]
+            assert server.imported[0]["tags"][0]["id"] == tag_id
+        else:
+            with pytest.raises(ValueError, match="organizer ID"):
+                client.create_recipe(_recipe(tags=["vegan"]))
+            assert server.writes == [endpoint]
+        assert server.requests[("GET", endpoint)] == 2
+
+        if inventory == "idless":
+            with pytest.raises(ValueError, match="organizer ID"):
+                client.create_recipe(_recipe(tags=["vegan"]))
+            assert server.writes == [endpoint]
+
+
 def test_failed_conflict_refresh_still_replaces_cached_inventory():
     dessert_id = str(uuid4())
     server = FakeMealie({"organizers/tags": [{"id": dessert_id, "name": "Dessert"}]})

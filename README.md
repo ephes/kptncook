@@ -361,10 +361,14 @@ An organizer POST that returns Mealie's explicit uniqueness response (`409` with
 refresh. A single matching organizer ID is reused (casefolded for tags, exact
 names for foods/units). Ambiguous or absent matches, generic conflicts, legacy
 400 responses and transport failures remain failures; the POST is never retried.
+A successful organizer POST with the expected name but no ID also triggers one
+read-only inventory refresh. The recipe archive is submitted only if that
+refresh finds one matching organizer with a valid ID. Existing matches
+without IDs also stop the recipe before import.
 
 Units, foods and tags are listed once per sync, not once per recipe. The lookup
 is built only from a complete inventory and then updated with organizers this
-sync created (or found through the conflict refresh above); each new sync,
+sync created (or found through an inventory refresh); each new sync,
 login or token change reads Mealie again. A recipe creation failure retires the
 cached organizer inventories: the next independent recipe rereads them, allowing
 remotely removed/recreated organizers to recover. The failed recipe/import is

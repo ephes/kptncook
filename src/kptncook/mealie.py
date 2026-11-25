@@ -536,6 +536,8 @@ class MealieApiClient(BaseHttpClient):
                 "entries with different IDs match. Merge or rename them in "
                 "Mealie, then sync again."
             )
+        if matches and matches[0].id is None:
+            raise ValueError("Mealie inventory entry is missing an organizer ID")
         return matches[0] if matches else None
 
     def _check_organizer_ambiguity(
@@ -604,8 +606,18 @@ class MealieApiClient(BaseHttpClient):
                         "requested; the recipe was not imported"
                     )
                 if created_item.id is None:
-                    # Do not cache an unproven identity; the next lookup rereads.
                     self._organizer_index.pop(endpoint_name, None)
+                    index = self._load_organizer_index(
+                        endpoint_name, model_class, normalize_name
+                    )
+                    matches = index.get(key, [])
+                    if len(matches) != 1 or matches[0].id is None:
+                        raise ValueError(
+                            "Mealie did not confirm a unique organizer ID after creation; "
+                            "the recipe was not imported"
+                        )
+                    created_item = matches[0]
+                    self._organizer_index[endpoint_name] = index
                 else:
                     index[key] = [created_item]
             resolved[key] = created_item

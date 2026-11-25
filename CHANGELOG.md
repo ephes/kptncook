@@ -6,6 +6,8 @@ Unreleased
   CVE-2026-97699, keeping the frozen runtime/development dependency audit clean.
 
 ### Fixes
+- Require a confirmed Mealie unit, food or tag ID before archive import. Check
+  the inventory once if the create reply omits the ID.
 - Deduplicate normalized Markdown recipe tags while keeping their display order.
 - Write an empty YAML tag list in Markdown exports when no display tags remain.
 - Recover interrupted release preparation on retry and preserve conflicting edits.

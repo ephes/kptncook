@@ -2,6 +2,7 @@
 
 import json
 from urllib.parse import parse_qs
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -180,7 +181,7 @@ def test_zero_pages_only_allows_empty_inventory(items):
         if request.method == "GET":
             return httpx.Response(200, json={"items": items, "total_pages": 0})
         writes.append(request)
-        return httpx.Response(201, json={"name": "new"})
+        return httpx.Response(201, json={"id": str(uuid4()), "name": "new"})
 
     with httpx.Client(transport=httpx.MockTransport(handle)) as http:
         client = MealieApiClient("https://mealie.example/api", client=http)
