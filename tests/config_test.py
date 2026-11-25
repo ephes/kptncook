@@ -240,3 +240,46 @@ def test_invalidation_fences_inflight_settings(monkeypatch, rebuild_before_relea
     assert config.settings.kptncook_api_key == "current-key"
     assert config.settings.kptncook_lang == current.kptncook_lang == "fr"
     assert build.call_count == 2
+
+
+@pytest.mark.parametrize(
+    ("invalidate", "publish"), [(True, True), (True, False), (False, True)]
+)
+def test_get_settings_recovers_from_superseded_failure(
+    monkeypatch, tmp_path, invalidate, publish
+):
+    started = Event()
+    release = Event()
+    current = Settings()
+    error = SettingsError(
+        None,
+        missing_fields={"kptncook_api_key"},
+        env_path=tmp_path / ".env",
+        scaffolded=False,
+    )
+
+    load = Mock(side_effect=[error, current])
+
+    def construct():
+        try:
+            return load()
+        except SettingsError:
+            started.set()
+            assert release.wait(10)
+            raise
+
+    monkeypatch.setattr(config, "_load_settings", construct)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        pending = executor.submit(get_settings)
+        try:
+            assert started.wait(10)
+            if invalidate:
+                clear_settings_cache()
+            if publish:
+                assert get_settings() is current
+        finally:
+            release.set()
+        assert pending.result(timeout=10) is current
+
+    assert get_settings() is current
+    assert load.call_count == 2

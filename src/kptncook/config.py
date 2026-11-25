@@ -270,7 +270,15 @@ def get_settings() -> Settings:
                 return _settings_cache
             generation = _settings_generation
 
-        loaded = _load_settings()
+        try:
+            loaded = _load_settings()
+        except SettingsError:
+            with _settings_lock:
+                if _settings_cache is not None:
+                    return _settings_cache
+                if generation != _settings_generation:
+                    continue
+            raise
 
         with _settings_lock:
             # Reuse a completed load before deciding whether to build again.

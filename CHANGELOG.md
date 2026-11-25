@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Retry a settings load whose failure was superseded by a cache clear, or
+  return the settings already cached by another caller.
 - Prevent in-flight settings loads from republishing values after a cache clear.
 - Apply the regular-file and 64 KiB UTF-8 checks to runtime dotenv reads.
 - Preserve the changelog's line-ending style during release preparation.

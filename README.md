@@ -925,10 +925,12 @@ dotenv. Constructor values take precedence over shell variables, which take
 precedence over dotenv values.
 
 Library callers can use `clear_settings_cache()` to reload settings on the next
-access through `get_settings()`. When a load started before the clear succeeds,
-it returns the new cached instance if another caller has populated it, or
-reloads if the cache is still empty. Overrides on the lazy `settings` proxy
-carry over to the current cached instance.
+access through `get_settings()`. An in-flight load reuses settings already
+cached by another caller, even if its own load raised `SettingsError`. After a
+cache clear, an in-flight load retries if the cache is still empty. A
+`SettingsError` from the current generation reaches the caller when the cache
+is empty. Overrides on the lazy `settings` proxy carry over to the current
+cached instance.
 
 Then set environment variables in the `~/.kptncook/.env` file (or directly in your shell). You'll need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie, set `MEALIE_API_TOKEN` or `MEALIE_USERNAME`/`MEALIE_PASSWORD`.
 
