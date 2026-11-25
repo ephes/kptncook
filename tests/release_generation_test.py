@@ -489,6 +489,23 @@ def test_release_requires_directory_sync(tmp_path, monkeypatch, scenario):
         else:
             assert b"0.0.2 - " in changelog.read_bytes()
 
+    record = tmp_path / release.RELEASE_INTENT_NAME
+    if scenario in {"pair", "single"}:
+        assert not record.exists()
+        return
+    assert str(record) in str(error.value)
+    assert record.exists()
+    monkeypatch.undo()
+    if scenario == "recovery":
+        with pytest.raises(release.ReleaseError, match="recovery conflict"):
+            release.prepare_release(changelog, project, version="0.0.2")
+        assert changelog.read_bytes() == edited
+        return
+    release.prepare_release(changelog, project, version="0.0.2")
+    assert not record.exists()
+    assert b"0.0.2 - " in changelog.read_bytes()
+    assert b'"0.0.2"' in project.read_bytes()
+
 
 @pytest.mark.parametrize(
     "interruption",

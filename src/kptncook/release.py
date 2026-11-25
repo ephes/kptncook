@@ -686,6 +686,12 @@ def prepare_release(
                     "Prepared release files are", changelog_path, pyproject_path
                 )
                 _retire_intent(record)
+    except _ReleaseDurabilityError as exc:
+        if not os.path.lexists(record):
+            raise
+        raise _ReleaseDurabilityError(
+            f"{exc} Rerun preparation to settle the release recovery record {record}."
+        ) from exc
     except portalocker.exceptions.LockException as exc:
         raise ReleaseError(
             "Release preparation is busy or the lock is unavailable."

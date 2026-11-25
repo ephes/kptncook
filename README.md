@@ -1299,7 +1299,8 @@ Use the helper commands below from a clean worktree:
    copy where directory sync is supported. If a sync fails, it reports the
    visible change and uncertain durability; a rollback still restores the
    changelog when only its recovery record cannot be synced. Inspect the named
-   files before retrying.
+   files before retrying. If the error names `.kptncook-release.intent`, rerun
+   preparation to settle it before editing either file.
    Before the first rename, preparation records both source and staged
    generations in `.kptncook-release.intent`. After a process dies, rerun
    preparation with the same files and version. The helper finishes a matching
@@ -1309,7 +1310,9 @@ Use the helper commands below from a clean worktree:
    the helper preserves the files and reports a recovery conflict. Inspect the
    named files and retained stages, reconcile the pair manually, then remove
    the intent before retrying. An interruption before the intent is written
-   can leave unused `.kptncook-release-stage-*` files.
+   can leave unused `.kptncook-release-stage-*` files. Recovery compares
+   device and inode numbers, so a filesystem that renumbers them after a
+   reboot reports a recovery conflict instead.
    The advisory lock coordinates release helpers. Editors can still write
    between the final generation check and a rename.
    The TOML parser validates `project.version`; only an ordinary single-line
