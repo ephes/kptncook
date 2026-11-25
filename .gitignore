@@ -28,5 +28,7 @@ __pycache__
 
 specs/
 
-# Stable release preparation lock
+# Local release preparation state
 .kptncook-release.lock
+.kptncook-release.intent
+.kptncook-release-stage-*

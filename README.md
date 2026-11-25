@@ -1285,8 +1285,8 @@ Use the helper commands below from a clean worktree:
    staging write aborts preparation before either source file changes.
    The changelog keeps its line-ending style (LF, CRLF or CR). A changelog
    with mixed line endings uses its first line ending throughout the prepared file.
-   Preparations sharing a changelog directory serialize on the stable
-   `.kptncook-release.lock` (30-second wait; keep this file). Both source
+   Preparations sharing the named changelog's directory serialize on the
+   stable `.kptncook-release.lock` (30-second wait; keep this file). Both source
    generations are checked before publication and each atomic replacement.
    If publication fails or Ctrl-C interrupts it after the changelog is replaced
    and before the project file is replaced, only this attempt's changelog
@@ -1298,9 +1298,18 @@ Use the helper commands below from a clean worktree:
    containing directories after publication, rollback or creation of a recovery
    copy where directory sync is supported. If a sync fails, it reports the
    visible change and uncertain durability. Inspect the named files before retrying.
-   These checks detect edits before publication; editors do not honor the
-   advisory lock, so a final check-to-replace race remains. This is not a
-   two-file transaction or crash recovery mechanism.
+   Before the first rename, preparation records both source and staged
+   generations in `.kptncook-release.intent`. After a process dies, rerun
+   preparation with the same files and version. The helper finishes a matching
+   partial release under the lock and reports its recorded date. If publication
+   never started or rollback already restored the pair, preparation starts
+   again. If a source or required stage differs from the recorded generations,
+   the helper preserves the files and reports a recovery conflict. Inspect the
+   named files and retained stages, reconcile the pair manually, then remove
+   the intent before retrying. An interruption before the intent is written
+   can leave unused `.kptncook-release-stage-*` files.
+   The advisory lock coordinates release helpers. Editors can still write
+   between the final generation check and a rename.
    The TOML parser validates `project.version`; only an ordinary single-line
    string assignment in an explicit `[project]` table is supported. Quoted
    keys/strings and inline comments are preserved. Other layouts are refused

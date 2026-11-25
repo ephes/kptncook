@@ -385,11 +385,13 @@ def test_prepare_rejects_short_writes(tmp_path, monkeypatch, short_write):
         edited if short_write == "recovery" else originals[0]
     )
     assert project.read_bytes() == originals[1]
-    assert {path.name for path in tmp_path.iterdir()} == {
-        ".kptncook-release.lock",
-        "CHANGELOG.md",
-        "pyproject.toml",
-    }
+    assert not list(tmp_path.glob("CHANGELOG.md.recovery-*"))
+    if short_write != "recovery":
+        assert {path.name for path in tmp_path.iterdir()} == {
+            ".kptncook-release.lock",
+            "CHANGELOG.md",
+            "pyproject.toml",
+        }
 
 
 @pytest.mark.parametrize(
@@ -422,12 +424,24 @@ def test_release_requires_directory_sync(tmp_path, monkeypatch, scenario):
                 changelog.write_bytes(edited)
             raise OSError("injected project failure")
         replace(source, target)
-        directory_changes.append(target.parent)
+        if target in (changelog, project):
+            directory_changes.append(target.parent)
 
     def sync(fd):
         info = os.fstat(fd)
         if stat.S_ISDIR(info.st_mode):
             directory = directories[info.st_ino]
+            if scenario.startswith("pair"):
+                after_publication = directory_changes == [tmp_path, project_dir]
+            elif scenario == "rollback":
+                after_publication = directory_changes == [tmp_path, tmp_path]
+            elif scenario == "recovery":
+                after_publication = any(tmp_path.glob("CHANGELOG.md.recovery-*"))
+            else:
+                after_publication = directory_changes == [tmp_path]
+            if not after_publication:
+                fsync(fd)
+                return
             directory_syncs.append(directory)
             if scenario == "pair_project_sync" and directory == project_dir:
                 raise OSError("injected project directory sync failure")
@@ -462,7 +476,7 @@ def test_release_requires_directory_sync(tmp_path, monkeypatch, scenario):
             assert not list(tmp_path.glob("CHANGELOG.md.recovery-*"))
 
     if scenario.startswith("pair"):
-        assert directory_changes == directory_syncs == [tmp_path, project_dir]
+        assert directory_changes == directory_syncs[:2] == [tmp_path, project_dir]
         assert b"0.0.2 - " in changelog.read_bytes()
         assert b'"0.0.2"' in project.read_bytes()
     else:
@@ -474,3 +488,123 @@ def test_release_requires_directory_sync(tmp_path, monkeypatch, scenario):
             assert changelog.read_bytes() == edited
         else:
             assert b"0.0.2 - " in changelog.read_bytes()
+
+
+@pytest.mark.parametrize(
+    "interruption",
+    [
+        "before_first",
+        "after_first",
+        "after_second",
+        "after_rollback",
+        "edit",
+        "replace_changelog",
+        "edit_stage",
+    ],
+)
+def test_prepare_recovers_after_process_death(tmp_path, interruption):
+    changelog, project = files(tmp_path)
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    project = project.rename(project_dir / project.name)
+    original_project = project.read_bytes()
+
+    crashed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+import os
+import signal
+import sys
+from pathlib import Path
+
+from kptncook import release
+
+changelog, project = map(Path, sys.argv[1:3])
+interruption = sys.argv[3]
+replace = os.replace
+
+changelog_renames = 0
+
+def crash(source, target):
+    global changelog_renames
+    if target == changelog and interruption == "before_first":
+        os.kill(os.getpid(), signal.SIGKILL)
+    if target == project and interruption == "after_rollback":
+        raise OSError("injected project failure")
+    replace(source, target)
+    if interruption == "after_rollback":
+        if target == changelog:
+            changelog_renames += 1
+            if changelog_renames == 2:
+                os.kill(os.getpid(), signal.SIGKILL)
+        return
+    stop_after = project if interruption == "after_second" else changelog
+    if target == stop_after:
+        os.kill(os.getpid(), signal.SIGKILL)
+
+release.os.replace = crash
+release.prepare_release(changelog, project, version="0.0.2", release_date="2026-11-24")
+""",
+            str(changelog),
+            str(project),
+            interruption,
+        ],
+        capture_output=True,
+        timeout=10,
+    )
+    assert crashed.returncode == -9, crashed.stderr.decode()
+    canceled = interruption in {"before_first", "after_rollback"}
+    assert (b"0.0.2 - " in changelog.read_bytes()) == (not canceled)
+    assert (project.read_bytes() != original_project) == (
+        interruption == "after_second"
+    )
+    if interruption == "edit":
+        project.write_bytes(original_project + b"# intervening edit\n")
+    elif interruption == "replace_changelog":
+        replacement = changelog.with_suffix(".edited")
+        replacement.write_bytes(changelog.read_bytes())
+        replacement.replace(changelog)
+    elif interruption == "edit_stage":
+        stage = next(project_dir.glob(".kptncook-release-stage-*"))
+        stage.write_bytes(b"edited stage\n")
+    before_retry = changelog.read_bytes(), project.read_bytes()
+
+    resumed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "kptncook.release",
+            "--changelog",
+            str(changelog),
+            "--pyproject",
+            str(project),
+            "prepare",
+            "0.0.2",
+            "--date",
+            "2026-11-25",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    if interruption in {"edit", "replace_changelog", "edit_stage"}:
+        assert resumed.returncode == 1
+        assert "recovery conflict" in resumed.stderr
+        assert ".kptncook-release.intent" in resumed.stderr
+        assert (changelog.read_bytes(), project.read_bytes()) == before_retry
+        assert (tmp_path / ".kptncook-release.intent").is_file()
+    else:
+        assert resumed.returncode == 0, resumed.stderr
+        expected_date = "2026-11-25" if canceled else "2026-11-24"
+        assert f"Prepared release 0.0.2 dated {expected_date}." in resumed.stdout
+        assert f"0.0.2 - {expected_date}" in changelog.read_text()
+        assert project.read_bytes() == b'[project]\nversion = "0.0.2"\n'
+        assert {path.name for path in tmp_path.iterdir()} == {
+            ".kptncook-release.lock",
+            "CHANGELOG.md",
+            "project",
+        }
+        assert list(project_dir.iterdir()) == [project]

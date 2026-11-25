@@ -6,6 +6,7 @@ Unreleased
   CVE-2026-97699, keeping the frozen runtime/development dependency audit clean.
 
 ### Fixes
+- Recover interrupted release preparation on retry and preserve conflicting edits.
 - Sync release file directories after renames and report uncertain durability.
 - Reject incomplete release staging and changelog recovery writes.
 - Verify final export links after a filesystem error and keep Markdown assets

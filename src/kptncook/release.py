@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import re
 import stat
 import subprocess
 import sys
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import date
 from pathlib import Path
 
@@ -31,6 +33,8 @@ UNRELEASED_PREFIX = "Unreleased\n==========\n"
 NEWLINE_PATTERN = re.compile(r"\r\n|\r|\n")
 RELEASE_LOCK_TIMEOUT_SECONDS = 30.0
 MAX_RELEASE_INPUT_BYTES = 1024 * 1024
+RELEASE_STAGE_PREFIX = ".kptncook-release-stage-"
+RELEASE_INTENT_NAME = ".kptncook-release.intent"
 
 
 class ReleaseError(Exception):
@@ -187,6 +191,11 @@ class _Generation:
     device: int
     inode: int
     modified: int
+    mode: int
+
+    def fingerprint(self) -> str:
+        digest = hashlib.sha256(self.content).hexdigest()
+        return f"{self.device}:{self.inode}:{self.modified}:{self.mode}:{digest}"
 
 
 def _generation(path: Path) -> _Generation:
@@ -231,7 +240,9 @@ def _generation(path: Path) -> _Generation:
             or identity(after) != identity(path.stat())
         ):
             raise ReleaseError(changed_error)
-    return _Generation(content, after.st_dev, after.st_ino, after.st_mtime_ns)
+    return _Generation(
+        content, after.st_dev, after.st_ino, after.st_mtime_ns, after.st_mode
+    )
 
 
 def _read_release_text(path: Path, *, normalize_newlines: bool = True) -> str:
@@ -249,7 +260,11 @@ def _require_generation(path: Path, expected: _Generation) -> None:
 
 @contextmanager
 def _stage_replacement(
-    path: Path, content: bytes
+    path: Path,
+    content: bytes,
+    *,
+    retain_for: Path | None = None,
+    private: bool = False,
 ) -> Iterator[tuple[Path, _Generation]]:
     if len(content) > MAX_RELEASE_INPUT_BYTES:
         raise ReleaseError(
@@ -257,16 +272,19 @@ def _stage_replacement(
         )
     temporary: Path | None = None
     try:
-        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
+        with tempfile.NamedTemporaryFile(
+            dir=path.parent, prefix=RELEASE_STAGE_PREFIX, delete=False
+        ) as stream:
             temporary = Path(stream.name)
             if stream.write(content) != len(content):
                 raise ReleaseError(f"Incomplete staged write for {path}.")
             stream.flush()
-            temporary.chmod(path.stat().st_mode & 0o777)
+            if not private:
+                temporary.chmod(path.stat().st_mode & 0o777)
             os.fsync(stream.fileno())
         yield temporary, _generation(temporary)
     finally:
-        if temporary is not None:
+        if temporary is not None and (retain_for is None or not retain_for.exists()):
             temporary.unlink(missing_ok=True)
 
 
@@ -285,9 +303,15 @@ def _sync_release_names(outcome: str, *paths: Path) -> None:
 
 
 def _atomic_replace(
-    path: Path, content: bytes, *, expected: _Generation | None = None
+    path: Path,
+    content: bytes,
+    *,
+    expected: _Generation | None = None,
+    register: Callable[[Path, _Generation], None] | None = None,
 ) -> None:
     with _stage_replacement(path, content) as (temporary, owned):
+        if register is not None:
+            register(temporary, owned)
         if expected is not None:
             _require_generation(path, expected)
         try:
@@ -312,9 +336,15 @@ def _names_replacement(path: Path, staged: _Generation) -> bool:
     return (named.st_dev, named.st_ino) == (staged.device, staged.inode)
 
 
-def _restore_changelog(path: Path, original: _Generation, owned: _Generation) -> None:
+def _restore_changelog(
+    path: Path,
+    original: _Generation,
+    owned: _Generation,
+    register: Callable[[Path, _Generation], None],
+) -> None:
     try:
-        _atomic_replace(path, original.content, expected=owned)
+        _require_generation(path, owned)
+        _atomic_replace(path, original.content, expected=owned, register=register)
     except _ReleaseDurabilityError:
         raise
     except (OSError, ReleaseError) as exc:
@@ -359,6 +389,152 @@ def update_pyproject_version(pyproject_path: Path, *, version: str) -> None:
     _atomic_replace(pyproject_path, text.encode("utf-8"))
 
 
+@dataclass(frozen=True)
+class _IntentFile:
+    target: str
+    temporary: str
+    previous: str
+    staged: str
+
+    @classmethod
+    def capture(
+        cls, target: Path, temporary: Path, previous: _Generation, staged: _Generation
+    ) -> _IntentFile:
+        return cls(
+            str(target.parent.resolve() / target.name),
+            temporary.name,
+            previous.fingerprint(),
+            staged.fingerprint(),
+        )
+
+    @classmethod
+    def load(cls, record: dict[str, str], path: Path) -> _IntentFile:
+        entry = cls(**record)
+        if (
+            entry.target != str(path.parent.resolve() / path.name)
+            or Path(entry.temporary).name != entry.temporary
+            or not entry.temporary.startswith(RELEASE_STAGE_PREFIX)
+            or entry.temporary == path.name
+            or not all(
+                isinstance(value, str) for value in (entry.previous, entry.staged)
+            )
+        ):
+            raise ValueError("Invalid release intent file entry")
+        return entry
+
+    def stage_generation(self, path: Path) -> _Generation:
+        generation = _generation(path)
+        if generation.fingerprint() != self.staged or not _names_replacement(
+            path, generation
+        ):
+            raise ReleaseError(f"Staged release file {path} changed.")
+        return generation
+
+
+@dataclass(frozen=True)
+class _ReleaseIntent:
+    version: str
+    date: str
+    changelog: _IntentFile
+    project: _IntentFile
+    rollback: _IntentFile | None = None
+
+
+def _write_intent(path: Path, intent: _ReleaseIntent) -> None:
+    with _stage_replacement(
+        path, json.dumps(asdict(intent)).encode("utf-8"), private=True
+    ) as (temporary, _):
+        os.replace(temporary, path)
+        _sync_release_names(f"Release recovery record {path} is", path)
+
+
+def _retire_intent(path: Path) -> None:
+    path.unlink()
+    _sync_release_names("Release recovery record removal is", path)
+
+
+def _recover_release(
+    record: Path, changelog: Path, project: Path
+) -> tuple[str, str] | None:
+    try:
+        info = record.lstat()
+    except FileNotFoundError:
+        return None
+
+    conflict = (
+        f"Release recovery conflict at {record}; inspect {changelog} and "
+        f"{project} and reconcile them before removing the record."
+    )
+    try:
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError("Release intent must be a regular file")
+        data = json.loads(_generation(record).content)
+        first = _IntentFile.load(data["changelog"], changelog)
+        second = _IntentFile.load(data["project"], project)
+        rollback = (
+            _IntentFile.load(data["rollback"], changelog)
+            if data["rollback"] is not None
+            else None
+        )
+        version, release_date = data["version"], data["date"]
+        _validate_version(version)
+        _validate_release_date(release_date)
+        entries = {changelog: first, project: second}
+        current = {path: _generation(path) for path in entries}
+        current_changelog, current_project = (
+            current[changelog].fingerprint(),
+            current[project].fingerprint(),
+        )
+        canceled = current_project == second.previous and (
+            current_changelog == first.previous
+            or (rollback is not None and current_changelog == rollback.staged)
+        )
+        replacements: dict[Path, Path] = {}
+        if not canceled:
+            # Validate the entire pair before changing either surviving file.
+            for path, entry in entries.items():
+                fingerprint = current[path].fingerprint()
+                if fingerprint == entry.staged and _names_replacement(
+                    path, current[path]
+                ):
+                    continue
+                if fingerprint != entry.previous:
+                    raise ReleaseError(f"Release file {path} changed.")
+                temporary = path.parent / entry.temporary
+                replacements[path] = temporary
+    except (OSError, ValueError, TypeError, KeyError, ReleaseError) as exc:
+        raise ReleaseError(conflict) from exc
+
+    for path, temporary in replacements.items():
+        try:
+            for target, generation in current.items():
+                _require_generation(target, generation)
+            entries[path].stage_generation(temporary)
+        except (OSError, ReleaseError) as exc:
+            raise ReleaseError(conflict) from exc
+        try:
+            os.replace(temporary, path)
+        except OSError as exc:
+            raise ReleaseError(
+                f"Could not resume release renames; retry preparation with {record} in place."
+            ) from exc
+
+    _sync_release_names("Release files after recovery are", changelog, project)
+    # Retain any foreign files occupying a stage name.
+    stages = list(entries.items())
+    if rollback is not None:
+        stages.append((changelog, rollback))
+    for path, entry in stages:
+        temporary = path.parent / entry.temporary
+        try:
+            entry.stage_generation(temporary)
+        except (OSError, ReleaseError):
+            continue
+        temporary.unlink()
+    _retire_intent(record)
+    return None if canceled else (version, release_date)
+
+
 def prepare_release(
     changelog_path: Path,
     pyproject_path: Path,
@@ -368,7 +544,11 @@ def prepare_release(
 ) -> str:
     normalized_date = _validate_release_date(release_date or date.today().isoformat())
     # Keep this inode: unlinking a lock lets later waiters lock a different file.
-    lock_path = changelog_path.resolve().parent / ".kptncook-release.lock"
+    lock_path = changelog_path.parent.resolve() / ".kptncook-release.lock"
+    record = lock_path.with_name(RELEASE_INTENT_NAME)
+    for source in (changelog_path, pyproject_path):
+        if source.parent.resolve() / source.name in (lock_path, record):
+            raise ReleaseError(f"Reserved path for release source: {source}.")
 
     def open_lock(path: str, flags: int) -> int:
         if lock_path.is_symlink():
@@ -404,6 +584,15 @@ def prepare_release(
                 or (opened.st_dev, opened.st_ino) != (named.st_dev, named.st_ino)
             ):
                 raise ReleaseError("Release lock changed; retry preparation.")
+            recovered = _recover_release(record, changelog_path, pyproject_path)
+            if recovered is not None:
+                recovered_version, recovered_date = recovered
+                if recovered_version != version:
+                    raise ReleaseError(
+                        f"Recovered release {recovered_version} dated {recovered_date}. "
+                        f"Review the prepared files before requesting {version} again."
+                    )
+                return recovered_date
             original_changelog = _generation(changelog_path)
             original_project = _generation(pyproject_path)
             changelog = _updated_changelog(
@@ -418,23 +607,47 @@ def prepare_release(
                 version=version,
             )
             with (
-                _stage_replacement(changelog_path, changelog.encode("utf-8")) as (
-                    changelog_temp,
-                    owned_changelog,
-                ),
-                _stage_replacement(pyproject_path, project.encode("utf-8")) as (
-                    project_temp,
-                    owned_project,
-                ),
+                _stage_replacement(
+                    changelog_path, changelog.encode("utf-8"), retain_for=record
+                ) as (changelog_temp, owned_changelog),
+                _stage_replacement(
+                    pyproject_path, project.encode("utf-8"), retain_for=record
+                ) as (project_temp, owned_project),
             ):
-                _require_generation(pyproject_path, original_project)
-                _require_generation(changelog_path, original_changelog)
+                intent = _ReleaseIntent(
+                    version,
+                    normalized_date,
+                    _IntentFile.capture(
+                        changelog_path,
+                        changelog_temp,
+                        original_changelog,
+                        owned_changelog,
+                    ),
+                    _IntentFile.capture(
+                        pyproject_path, project_temp, original_project, owned_project
+                    ),
+                )
+                _sync_release_names(
+                    "Staged release files are", changelog_temp, project_temp
+                )
+                _write_intent(record, intent)
+
+                def register_rollback(temporary: Path, owned: _Generation) -> None:
+                    rollback = _IntentFile.capture(
+                        changelog_path, temporary, owned_changelog, owned
+                    )
+                    _write_intent(record, replace(intent, rollback=rollback))
+
                 changelog_published = False
                 try:
+                    _require_generation(pyproject_path, original_project)
+                    _require_generation(changelog_path, original_changelog)
+                    intent.changelog.stage_generation(changelog_temp)
                     os.replace(changelog_temp, changelog_path)
                     changelog_published = True
                     _require_generation(changelog_path, owned_changelog)
                     _require_generation(pyproject_path, original_project)
+                    intent.project.stage_generation(project_temp)
                     os.replace(project_temp, pyproject_path)
                 except (OSError, ReleaseError, KeyboardInterrupt):
                     if _names_replacement(pyproject_path, owned_project):
@@ -445,12 +658,17 @@ def prepare_release(
                         changelog_path, owned_changelog
                     ):
                         _restore_changelog(
-                            changelog_path, original_changelog, owned_changelog
+                            changelog_path,
+                            original_changelog,
+                            owned_changelog,
+                            register_rollback,
                         )
+                    _retire_intent(record)
                     raise
                 _sync_release_names(
                     "Prepared release files are", changelog_path, pyproject_path
                 )
+                _retire_intent(record)
     except portalocker.exceptions.LockException as exc:
         raise ReleaseError(
             "Release preparation is busy or the lock is unavailable."
