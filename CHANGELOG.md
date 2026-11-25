@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Report oversized integers rejected by the recipe repository JSON decoder as
+  invalid JSON without exposing the value.
 - Recheck the recipe repository writer lock before publishing the backup and
   primary, and stop publication when the lock has been replaced.
 - Close the recipe repository lock descriptor if stream setup fails and report

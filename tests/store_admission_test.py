@@ -4,6 +4,7 @@ import io
 import json
 import os
 import stat
+import sys
 from datetime import date
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -47,6 +48,34 @@ def test_invalid_utf8_is_private_and_preserves_snapshots(
                 repo.delete_by_ids(["old"])
             else:
                 service.list_repository_entries()
+    assert repo.path.read_bytes() == payload
+    assert repo.backup_path.read_bytes() == b"recovery"
+
+
+def test_integer_decoder_limit_is_reported_as_invalid_store_json(tmp_path, monkeypatch):
+    if not hasattr(sys, "set_int_max_str_digits"):
+        pytest.skip("Python does not enforce an integer conversion limit")
+
+    repo = RecipeRepository(tmp_path)
+    previous_limit = sys.get_int_max_str_digits()
+    limit = sys.int_info.str_digits_check_threshold
+    payload = (
+        b'[{"date":"2026-01-01","data":{"_id":{"$oid":"synthetic"},"number":'
+        + b"9" * (limit + 1)
+        + b"}}]"
+    )
+    repo.path.write_bytes(payload)
+    repo.backup_path.write_bytes(b"recovery")
+    monkeypatch.setattr(service, "get_repository", lambda: repo)
+
+    try:
+        sys.set_int_max_str_digits(limit)
+        result = CliRunner().invoke(cli, ["list-recipes"])
+    finally:
+        sys.set_int_max_str_digits(previous_limit)
+
+    assert result.exit_code == 1
+    assert "Repository contains invalid JSON data." in result.output
     assert repo.path.read_bytes() == payload
     assert repo.backup_path.read_bytes() == b"recovery"
 

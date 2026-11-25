@@ -405,9 +405,10 @@ class RecipeRepository:
             raise RepositoryError("Repository contains invalid UTF-8 data.") from exc
         try:
             decoded = json.loads(raw_data, object_pairs_hook=_unique_members)
-            return RecipeListInDb.model_validate(decoded), snapshot
-        except (json.JSONDecodeError, RecursionError):
+        except (ValueError, RecursionError):
             raise RepositoryError("Repository contains invalid JSON data.") from None
+        try:
+            return RecipeListInDb.model_validate(decoded), snapshot
         except ValidationError as exc:
             raise RepositoryError(
                 f"Repository file {self.path} contains invalid data: "
