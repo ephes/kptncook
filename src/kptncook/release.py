@@ -15,6 +15,8 @@ from pathlib import Path
 
 import portalocker
 
+from kptncook.durability import fsync_directory
+
 if sys.version_info >= (3, 11):
     import tomllib
 else:
@@ -33,6 +35,10 @@ MAX_RELEASE_INPUT_BYTES = 1024 * 1024
 
 class ReleaseError(Exception):
     """Raised when the release workflow inputs are invalid."""
+
+
+class _ReleaseDurabilityError(ReleaseError):
+    """A name change is visible, but its durability could not be confirmed."""
 
 
 @dataclass(frozen=True)
@@ -256,21 +262,44 @@ def _stage_replacement(
             if stream.write(content) != len(content):
                 raise ReleaseError(f"Incomplete staged write for {path}.")
             stream.flush()
+            temporary.chmod(path.stat().st_mode & 0o777)
             os.fsync(stream.fileno())
-        temporary.chmod(path.stat().st_mode & 0o777)
         yield temporary, _generation(temporary)
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
 
 
+def _sync_release_names(outcome: str, *paths: Path) -> None:
+    failures: dict[Path, OSError] = {}
+    for parent in dict.fromkeys(path.parent.resolve() for path in paths):
+        try:
+            fsync_directory(parent)
+        except OSError as exc:
+            failures[parent] = exc
+    if failures:
+        directories = ", ".join(map(str, failures))
+        raise _ReleaseDurabilityError(
+            f"{outcome} visible but durability is uncertain; could not sync {directories}."
+        ) from next(iter(failures.values()))
+
+
 def _atomic_replace(
     path: Path, content: bytes, *, expected: _Generation | None = None
 ) -> None:
-    with _stage_replacement(path, content) as (temporary, _):
+    with _stage_replacement(path, content) as (temporary, owned):
         if expected is not None:
             _require_generation(path, expected)
-        os.replace(temporary, path)
+        try:
+            os.replace(temporary, path)
+        except OSError:
+            if not _names_replacement(path, owned):
+                raise
+        except KeyboardInterrupt:
+            if _names_replacement(path, owned):
+                _sync_release_names(f"Replacement of {path} is", path)
+            raise
+        _sync_release_names(f"Replacement of {path} is", path)
 
 
 def _names_replacement(path: Path, staged: _Generation) -> bool:
@@ -286,6 +315,8 @@ def _names_replacement(path: Path, staged: _Generation) -> bool:
 def _restore_changelog(path: Path, original: _Generation, owned: _Generation) -> None:
     try:
         _atomic_replace(path, original.content, expected=owned)
+    except _ReleaseDurabilityError:
+        raise
     except (OSError, ReleaseError) as exc:
         recovery: Path | None = None
         try:
@@ -303,6 +334,7 @@ def _restore_changelog(path: Path, original: _Generation, owned: _Generation) ->
             if recovery is not None:
                 recovery.unlink(missing_ok=True)
             raise
+        _sync_release_names(f"Changelog recovery copy {recovery} is", path)
         raise ReleaseError(
             f"Could not restore changelog (changed or unavailable); recovery copy: {recovery}"
         ) from exc
@@ -405,14 +437,20 @@ def prepare_release(
                     _require_generation(pyproject_path, original_project)
                     os.replace(project_temp, pyproject_path)
                 except (OSError, ReleaseError, KeyboardInterrupt):
-                    if (
-                        changelog_published
-                        or _names_replacement(changelog_path, owned_changelog)
-                    ) and not _names_replacement(pyproject_path, owned_project):
+                    if _names_replacement(pyproject_path, owned_project):
+                        _sync_release_names(
+                            "Prepared release files are", changelog_path, pyproject_path
+                        )
+                    elif changelog_published or _names_replacement(
+                        changelog_path, owned_changelog
+                    ):
                         _restore_changelog(
                             changelog_path, original_changelog, owned_changelog
                         )
                     raise
+                _sync_release_names(
+                    "Prepared release files are", changelog_path, pyproject_path
+                )
     except portalocker.exceptions.LockException as exc:
         raise ReleaseError(
             "Release preparation is busy or the lock is unavailable."

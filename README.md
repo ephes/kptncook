@@ -1294,7 +1294,10 @@ Use the helper commands below from a clean worktree:
    a private `CHANGELOG.md.recovery-*` copy of the original for manual
    reconciliation if the copy was written in full. An incomplete recovery copy
    is removed and reported as a failed write. Ctrl-C still interrupts the command. If both replacements
-   already completed, the prepared files are kept.
+   already completed, the prepared files are kept. The helper syncs the
+   containing directories after publication, rollback or creation of a recovery
+   copy where directory sync is supported. If a sync fails, it reports the
+   visible change and uncertain durability. Inspect the named files before retrying.
    These checks detect edits before publication; editors do not honor the
    advisory lock, so a final check-to-replace race remains. This is not a
    two-file transaction or crash recovery mechanism.

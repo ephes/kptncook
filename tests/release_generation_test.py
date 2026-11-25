@@ -390,3 +390,87 @@ def test_prepare_rejects_short_writes(tmp_path, monkeypatch, short_write):
         "CHANGELOG.md",
         "pyproject.toml",
     }
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        "pair",
+        "pair_changelog_sync",
+        "pair_project_sync",
+        "single",
+        "rollback",
+        "recovery",
+    ],
+)
+def test_release_requires_directory_sync(tmp_path, monkeypatch, scenario):
+    changelog, project = files(tmp_path)
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    project = project.rename(project_dir / project.name)
+    originals = changelog.read_bytes(), project.read_bytes()
+    edited = b"Unreleased\n==========\n\n- Competing notes.\n"
+    replace = release.os.replace
+    fsync = release.os.fsync
+    directory_changes = []
+    directory_syncs = []
+    directories = {path.stat().st_ino: path for path in (tmp_path, project_dir)}
+
+    def publish(source, target):
+        if target == project and scenario in {"rollback", "recovery"}:
+            if scenario == "recovery":
+                changelog.write_bytes(edited)
+            raise OSError("injected project failure")
+        replace(source, target)
+        directory_changes.append(target.parent)
+
+    def sync(fd):
+        info = os.fstat(fd)
+        if stat.S_ISDIR(info.st_mode):
+            directory = directories[info.st_ino]
+            directory_syncs.append(directory)
+            if scenario == "pair_project_sync" and directory == project_dir:
+                raise OSError("injected project directory sync failure")
+            if scenario not in {"pair", "pair_project_sync"} and directory == tmp_path:
+                if scenario == "rollback":
+                    assert directory_changes == [tmp_path, tmp_path]
+                    assert changelog.read_bytes() == originals[0]
+                raise OSError("injected changelog directory sync failure")
+        fsync(fd)
+
+    monkeypatch.setattr(release.os, "replace", publish)
+    monkeypatch.setattr(release.os, "fsync", sync)
+
+    def prepare():
+        if scenario == "single":
+            release.update_changelog_for_release(
+                changelog, version="0.0.2", release_date="2026-11-24"
+            )
+        else:
+            release.prepare_release(changelog, project, version="0.0.2")
+
+    if scenario == "pair":
+        prepare()
+    else:
+        with pytest.raises(release.ReleaseError, match="visible.*durability") as error:
+            prepare()
+        if scenario == "recovery":
+            recovery = next(tmp_path.glob("CHANGELOG.md.recovery-*"))
+            assert recovery.read_bytes() == originals[0]
+            assert str(recovery) in str(error.value)
+        else:
+            assert not list(tmp_path.glob("CHANGELOG.md.recovery-*"))
+
+    if scenario.startswith("pair"):
+        assert directory_changes == directory_syncs == [tmp_path, project_dir]
+        assert b"0.0.2 - " in changelog.read_bytes()
+        assert b'"0.0.2"' in project.read_bytes()
+    else:
+        assert directory_syncs == [tmp_path]
+        assert project.read_bytes() == originals[1]
+        if scenario == "rollback":
+            assert changelog.read_bytes() == originals[0]
+        elif scenario == "recovery":
+            assert changelog.read_bytes() == edited
+        else:
+            assert b"0.0.2 - " in changelog.read_bytes()
