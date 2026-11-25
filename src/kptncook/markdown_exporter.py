@@ -318,18 +318,17 @@ class MarkdownExporter:
 
         lines.append("tags:")
 
-        if recipe.rtype == "Vegan":
-            lines.append('  - "vegan"')
+        active_tags = recipe.active_tags or []
+        tags = ["vegan"] if recipe.rtype == "Vegan" else []
+        tags.extend(self._transform_tags(active_tags))
+        for tag in dict.fromkeys(tags):
+            lines.append(f"  - {_yaml_string(tag)}")
 
-        if recipe.active_tags:
-            for tag in self._transform_tags(recipe.active_tags):
-                lines.append(f"  - {_yaml_string(tag)}")
-
-            if (
-                "cooking_time_under_20" in recipe.active_tags
-                or "under_five_ingredient" in recipe.active_tags
-            ):
-                lines.append("simple: true")
+        if (
+            "cooking_time_under_20" in active_tags
+            or "under_five_ingredient" in active_tags
+        ):
+            lines.append("simple: true")
 
         lines.append("---")
         lines.append("")

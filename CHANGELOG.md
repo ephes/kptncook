@@ -6,6 +6,7 @@ Unreleased
   CVE-2026-97699, keeping the frozen runtime/development dependency audit clean.
 
 ### Fixes
+- Deduplicate normalized Markdown recipe tags while keeping their display order.
 - Recover interrupted release preparation on retry and preserve conflicting edits.
 - Sync release file directories after renames and report uncertain durability.
 - Reject incomplete release staging and changelog recovery writes.

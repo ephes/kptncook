@@ -2,6 +2,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+import yaml
 
 from kptncook import exporter_utils
 from kptncook.config import get_settings, settings
@@ -152,6 +153,9 @@ def test_tag_filtering_and_transforms(exporter):
         activeTags=[
             "spring",
             "comfort_foot",
+            "vegan",
+            "comfort_food",
+            "vegan",
             "diet_vegetarian",
             "main_ingredient_pasta",
             "cooking_time_under_20",
@@ -159,14 +163,9 @@ def test_tag_filtering_and_transforms(exporter):
         ],
     )
     md = exporter.render_recipe(recipe)
-    assert '  - "vegan"' in md
-    assert '  - "season/spring"' in md
-    assert '  - "comfort_food"' in md  # upstream typo corrected
-    assert "simple: true" in md
-    # filtered-out tags
-    assert "diet_vegetarian" not in md
-    assert "main_ingredient_pasta" not in md
-    assert "kid_friendly" not in md
+    front_matter = yaml.safe_load(md.split("---", 2)[1])
+    assert front_matter["tags"] == ["vegan", "season/spring", "comfort_food"]
+    assert front_matter["simple"] is True
 
 
 def test_link_falls_back_to_recipe_id_when_uid_missing(exporter):

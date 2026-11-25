@@ -493,6 +493,8 @@ Tandoor and Markdown use numeric `servings`,
 Paprika uses a decimal string, and Mealie uses the string `<count> Portionen`.
 Markdown front-matter string values are quoted as YAML scalars,
 so punctuation and newlines in tags and URLs retain their string values.
+Tags are normalized and deduplicated in first-occurrence order, with the
+`vegan` tag first for recipes of type Vegan.
 
 The Markdown export (`export-recipes-to-markdown`) writes one `.md` file per
 recipe into an `export_md` directory under the KptnCook home, with YAML front
