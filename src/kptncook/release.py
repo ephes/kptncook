@@ -578,6 +578,7 @@ def prepare_release(
             os.close(fd)
             raise
 
+    record_written = False
     try:
         with portalocker.Lock(
             lock_path,
@@ -647,6 +648,7 @@ def prepare_release(
                     raise ReleaseError(
                         "Could not sync staged release files; neither source changed."
                     ) from exc
+                record_written = True
                 _write_intent(record, intent)
 
                 def register_rollback(temporary: Path, owned: _Generation) -> None:
@@ -686,18 +688,28 @@ def prepare_release(
                     "Prepared release files are", changelog_path, pyproject_path
                 )
                 _retire_intent(record)
-    except _ReleaseDurabilityError as exc:
-        if not os.path.lexists(record):
-            raise
-        raise _ReleaseDurabilityError(
-            f"{exc} Rerun preparation to settle the release recovery record {record}."
-        ) from exc
     except portalocker.exceptions.LockException as exc:
         raise ReleaseError(
             "Release preparation is busy or the lock is unavailable."
         ) from exc
-    except (OSError, UnicodeError) as exc:
-        raise ReleaseError(f"Could not prepare release: {exc}") from exc
+    except (OSError, UnicodeError, ReleaseError) as exc:
+        message = (
+            str(exc)
+            if isinstance(exc, ReleaseError)
+            else f"Could not prepare release: {exc}"
+        )
+        durability = isinstance(exc, _ReleaseDurabilityError)
+        # Recovery conflicts already name the record; other failures that
+        # leave it behind say how to settle it.
+        if (record_written or durability) and os.path.lexists(record):
+            error = _ReleaseDurabilityError if durability else ReleaseError
+            raise error(
+                f"{message} Rerun preparation to settle the release recovery "
+                f"record {record}."
+            ) from exc
+        if isinstance(exc, ReleaseError):
+            raise
+        raise ReleaseError(message) from exc
     return normalized_date
 
 

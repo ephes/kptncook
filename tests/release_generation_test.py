@@ -59,6 +59,15 @@ def test_failed_second_write_cannot_compensate_external_edit(tmp_path, monkeypat
     assert len(recovery) == 1
     assert recovery[0].read_bytes() == original_changelog
     assert str(recovery[0]) in str(error.value)
+    record = tmp_path / release.RELEASE_INTENT_NAME
+    assert str(record) in str(error.value)
+    assert len(list(tmp_path.glob(release.RELEASE_STAGE_PREFIX + "*"))) == 1
+
+    monkeypatch.undo()
+    with pytest.raises(release.ReleaseError, match="recovery conflict"):
+        release.prepare_release(changelog, project, version="0.0.2")
+    assert changelog.read_bytes() == edited
+    assert record.exists()
 
 
 def prepare_process(directory, started, entered, resume, results):

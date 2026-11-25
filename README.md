@@ -1303,8 +1303,10 @@ Use the helper commands below from a clean worktree:
    preparation to settle it before editing either file.
    Before the first rename, preparation records both source and staged
    generations in `.kptncook-release.intent`. After a process dies, rerun
-   preparation with the same files and version. The helper finishes a matching
-   partial release under the lock and reports its recorded date. If publication
+   preparation with the same files and version. The helper first finishes the
+   recorded partial release under the lock. With the same version it reports the
+   recorded date; with another version it names the recovered release and
+   stops so you can review it. If publication
    never started or rollback already restored the pair, preparation starts
    again. If a source or required stage differs from the recorded generations,
    the helper preserves the files and reports a recovery conflict. Inspect the
