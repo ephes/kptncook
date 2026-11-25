@@ -2,6 +2,8 @@ Unreleased
 ==========
 
 ### Fixes
+- Reject incomplete recipe repository reads before parsing JSON, while
+  preserving complete snapshots across atomic replacement.
 - Use one settings snapshot per Mealie recipe conversion, including translations,
   ingredient grouping and image URL preparation.
 - Omit local exception messages from Mealie batch sync results and logs while

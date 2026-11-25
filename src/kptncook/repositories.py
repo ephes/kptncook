@@ -358,15 +358,16 @@ class RecipeRepository:
                     raw_bytes = source.read(MAX_STORE_BYTES + 1)
                 if len(raw_bytes) > MAX_STORE_BYTES:
                     raise RepositoryError("Repository exceeds the 64 MiB size limit.")
-                snapshot = _StoreSnapshot(raw_bytes, info)
-                if _content_generation(os.fstat(fd)) != _content_generation(info):
+                if len(raw_bytes) != info.st_size or _content_generation(
+                    os.fstat(fd)
+                ) != _content_generation(info):
                     raise RepositoryError("Repository changed while being read; retry.")
                 # Readers keep the complete generation they opened even if a
                 # writer atomically replaces the name meanwhile; mutations bind
                 # the snapshot to the pathname before publishing.
+                return _StoreSnapshot(raw_bytes, info)
             finally:
                 os.close(fd)
-            return snapshot
         except FileNotFoundError:
             return None
         except OSError as exc:

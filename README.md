@@ -668,6 +668,9 @@ Store reads accept regular files only (symlinks are refused) and are limited to
 64 MiB of UTF-8 JSON, including files that grow while being read. Invalid encoding,
 nonregular files and oversized stores stop reads and mutations without replacing
 the primary or recovery snapshot. A missing store remains an empty repository.
+Before parsing JSON, the reader verifies that the byte count matches the size of
+the opened file. An incomplete read stops listings and mutations. A complete
+read can still use the opened snapshot if a writer atomically replaces the file.
 Duplicate JSON object member names at every nesting level (including escaped
 spellings) are refused before model validation, with no member names or values
 in the diagnostic. Repeated array values are unaffected.

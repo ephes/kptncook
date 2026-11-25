@@ -1,6 +1,8 @@
 """Synthetic store faults exercise the repository, service and CLI boundaries."""
 
+import io
 import json
+import os
 import stat
 from datetime import date
 from types import SimpleNamespace
@@ -84,6 +86,48 @@ def test_growth_after_stat_is_bounded_and_refuses_mutation(tmp_path, monkeypatch
     assert observed
     assert repo.path.read_bytes() == b"[]" + b" " * 100
     assert repo.backup_path.read_bytes() == b"recovery"
+
+
+@pytest.mark.parametrize("operation", ["list", "merge"])
+def test_short_store_read_refuses_complete_json_prefix(
+    tmp_path, monkeypatch, operation
+):
+    repo = RecipeRepository(tmp_path)
+    original = b"[]\n"
+    repo.path.write_bytes(original)
+    repo.backup_path.write_bytes(b"recovery")
+    fdopen = os.fdopen
+
+    def short_read(fd, mode, **kwargs):
+        if mode == "rb":
+            return io.BytesIO(b"[]")
+        return fdopen(fd, mode, **kwargs)
+
+    monkeypatch.setattr(storage.os, "fdopen", short_read)
+    with pytest.raises(RepositoryError, match="Repository changed while being read"):
+        if operation == "list":
+            repo.list()
+        else:
+            repo.add_list([entry("new")])
+    assert repo.path.read_bytes() == original
+    assert repo.backup_path.read_bytes() == b"recovery"
+
+
+def test_complete_store_read_survives_atomic_replacement(tmp_path, monkeypatch):
+    repo = RecipeRepository(tmp_path)
+    repo.add(entry("old"))
+    replacement = tmp_path / "replacement.json"
+    replacement.write_bytes(b"[]")
+    fdopen = os.fdopen
+
+    def replace_after_open(fd, mode, **kwargs):
+        replacement.replace(repo.path)
+        return fdopen(fd, mode, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(storage.os, "fdopen", replace_after_open)
+        assert repo.list() == [entry("old")]
+    assert repo.list() == []
 
 
 @pytest.mark.parametrize("mode", [stat.S_IFIFO, stat.S_IFDIR, stat.S_IFSOCK])
