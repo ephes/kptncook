@@ -533,16 +533,19 @@ class MealieApiClient(BaseHttpClient):
     @staticmethod
     def _existing_organizer(index, endpoint_name, key: str, name: str):
         matches = index.get(key, [])
+        label = ORGANIZER_LABELS.get(endpoint_name, endpoint_name)
+        shown = name if len(name) <= 80 else name[:77] + "..."
         if len(matches) > 1:
-            label = ORGANIZER_LABELS.get(endpoint_name, endpoint_name)
-            shown = name if len(name) <= 80 else name[:77] + "..."
             raise MealieOrganizerAmbiguityError(
                 f"Ambiguous existing Mealie {label} {shown!r}: {len(matches)} "
                 "entries with different IDs match. Merge or rename them in "
                 "Mealie, then sync again."
             )
         if matches and matches[0].id is None:
-            raise ValueError("Mealie inventory entry is missing an organizer ID")
+            raise ValueError(
+                f"Existing Mealie {label} {shown!r} has no organizer ID. "
+                "Check or recreate it in Mealie, then sync again."
+            )
         return matches[0] if matches else None
 
     def _check_organizer_ambiguity(

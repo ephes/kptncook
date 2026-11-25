@@ -335,7 +335,7 @@ def test_idless_create_requires_one_proven_inventory_match(inventory):
         assert server.requests[("GET", endpoint)] == 2
 
         if inventory == "idless":
-            with pytest.raises(ValueError, match="organizer ID"):
+            with pytest.raises(ValueError, match="tag 'vegan' has no organizer ID"):
                 client.create_recipe(_recipe(tags=["vegan"]))
             assert server.writes == [endpoint]
 
