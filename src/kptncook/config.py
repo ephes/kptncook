@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 from contextvars import ContextVar
 from pathlib import Path
+from threading import Lock
 from typing import Any, cast
 
 from pydantic import AnyHttpUrl, DirectoryPath, Field, ValidationError, field_validator
@@ -26,6 +27,8 @@ from .env import ENV_PATH, ENV_READ_ERROR, read_dotenv, scaffold_env_file
 _MISSING_DEFAULT = object()
 _dotenv_files: ContextVar[DotenvType | None] = ContextVar("dotenv_files", default=None)
 _settings_cache: Settings | None = None
+_settings_generation = 0
+_settings_lock = Lock()
 _SAFE_VALIDATION_MESSAGES = {
     "missing": "Required setting is missing",
     "string_type": "Expected text",
@@ -241,12 +244,9 @@ class Settings(BaseSettings):
         return None if value == "" else value
 
 
-def get_settings() -> Settings:
-    global _settings_cache
-    if _settings_cache is not None:
-        return _settings_cache
+def _load_settings() -> Settings:
     try:
-        loaded = Settings()  # type: ignore
+        return Settings()
     except ValidationError as exc:
         # Keep only value-free data from the raw error. Anything raised while
         # the handler is active (including scaffold I/O failures) would retain
@@ -257,18 +257,37 @@ def get_settings() -> Settings:
             env_path=ENV_PATH,
             scaffolded=False,
         )
-    else:
-        settings._apply_overrides(loaded)
-        _settings_cache = loaded
-        return loaded
     if "kptncook_api_key" in error.missing_fields:
         error.scaffolded = scaffold_env_file(ENV_PATH)
     raise error from None
 
 
-def clear_settings_cache() -> None:
+def get_settings() -> Settings:
     global _settings_cache
-    _settings_cache = None
+    while True:
+        with _settings_lock:
+            if _settings_cache is not None:
+                return _settings_cache
+            generation = _settings_generation
+
+        loaded = _load_settings()
+
+        with _settings_lock:
+            # Reuse a completed load before deciding whether to build again.
+            if _settings_cache is not None:
+                return _settings_cache
+            if generation != _settings_generation:
+                continue
+            settings._apply_overrides(loaded)
+            _settings_cache = loaded
+            return loaded
+
+
+def clear_settings_cache() -> None:
+    global _settings_cache, _settings_generation
+    with _settings_lock:
+        _settings_cache = None
+        _settings_generation += 1
 
 
 class _LazySettingsProxy:
@@ -292,11 +311,12 @@ class _LazySettingsProxy:
             setattr(target, name, value)
 
     def __getattr__(self, name: str) -> Any:
-        overrides = object.__getattribute__(self, "_overrides")
-        if name in overrides:
-            return overrides[name]
-        if _settings_cache is not None:
-            return getattr(_settings_cache, name)
+        with _settings_lock:
+            overrides = object.__getattribute__(self, "_overrides")
+            if name in overrides:
+                return overrides[name]
+            if _settings_cache is not None:
+                return getattr(_settings_cache, name)
         defaults = object.__getattribute__(self, "_defaults")
         if name in defaults:
             if defaults[name] is _MISSING_DEFAULT:
@@ -307,12 +327,13 @@ class _LazySettingsProxy:
     def __setattr__(self, name: str, value: Any) -> None:
         overrides = object.__getattribute__(self, "_overrides")
         defaults = object.__getattribute__(self, "_defaults")
-        if name in defaults and defaults[name] == value and _settings_cache is None:
-            overrides.pop(name, None)
-        else:
-            overrides[name] = value
-        if _settings_cache is not None:
-            setattr(_settings_cache, name, value)
+        with _settings_lock:
+            if name in defaults and defaults[name] == value and _settings_cache is None:
+                overrides.pop(name, None)
+            else:
+                overrides[name] = value
+            if _settings_cache is not None:
+                setattr(_settings_cache, name, value)
 
 
 settings = _LazySettingsProxy()

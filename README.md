@@ -924,6 +924,12 @@ setup. Missing files are treated as empty. For library callers,
 dotenv. Constructor values take precedence over shell variables, which take
 precedence over dotenv values.
 
+Library callers can use `clear_settings_cache()` to reload settings on the next
+access through `get_settings()`. When a load started before the clear succeeds,
+it returns the new cached instance if another caller has populated it, or
+reloads if the cache is still empty. Overrides on the lazy `settings` proxy
+carry over to the current cached instance.
+
 Then set environment variables in the `~/.kptncook/.env` file (or directly in your shell). You'll need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie, set `MEALIE_API_TOKEN` or `MEALIE_USERNAME`/`MEALIE_PASSWORD`.
 
 When kptncook creates or updates `~/.kptncook/.env`, it applies owner-only read/write permissions (`0600`) where the platform supports it, because the file may contain access tokens, passwords, or trusted shell commands. Updates are written to an owner-only temporary file next to `.env`, synced and then moved into place. Failures before replacement leave the previous file intact.

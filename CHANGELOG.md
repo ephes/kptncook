@@ -2,6 +2,7 @@ Unreleased
 ==========
 
 ### Fixes
+- Prevent in-flight settings loads from republishing values after a cache clear.
 - Apply the regular-file and 64 KiB UTF-8 checks to runtime dotenv reads.
 - Preserve the changelog's line-ending style during release preparation.
 - Keep the Mealie sync receipt or original error when local lock release fails.

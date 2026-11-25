@@ -1,7 +1,10 @@
 import os
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
@@ -203,3 +206,37 @@ def test_settings_preserve_dotenv_mapping_and_precedence(tmp_path, monkeypatch):
     )
     assert Settings(KPTNCOOK_HOME=tmp_path).kptncook_lang == "es"
     assert Settings(_env_file=None, KPTNCOOK_HOME=tmp_path).kptncook_lang == "de"
+
+
+@pytest.mark.parametrize("rebuild_before_release", [True, False])
+def test_invalidation_fences_inflight_settings(monkeypatch, rebuild_before_release):
+    started = Event()
+    release = Event()
+    retired = SimpleNamespace(kptncook_api_key="retired-key")
+    current = SimpleNamespace(kptncook_api_key="current-key", kptncook_lang="de")
+    build = Mock(side_effect=[retired, current])
+
+    def construct():
+        candidate = build()
+        if candidate is retired:
+            started.set()
+            assert release.wait(10)
+        return candidate
+
+    monkeypatch.setattr(config, "Settings", construct)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        pending = executor.submit(get_settings)
+        try:
+            assert started.wait(10)
+            clear_settings_cache()
+            if rebuild_before_release:
+                assert get_settings() is current
+            monkeypatch.setattr(config.settings, "kptncook_lang", "fr")
+        finally:
+            release.set()
+        assert pending.result(timeout=10) is current
+
+    assert get_settings() is current
+    assert config.settings.kptncook_api_key == "current-key"
+    assert config.settings.kptncook_lang == current.kptncook_lang == "fr"
+    assert build.call_count == 2
