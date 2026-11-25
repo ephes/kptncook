@@ -198,7 +198,8 @@ def test_ambiguous_archive_outcome_never_retries_or_deletes(failure):
 
 
 @pytest.mark.parametrize(
-    "failed_operation", ["cover", "asset", "patch", "malformed-asset"]
+    "failed_operation",
+    ["cover", "unsupported-cover", "asset", "patch", "malformed-asset"],
 )
 def test_media_failures_leave_core_import_successful(failed_operation):
     calls = []
@@ -277,15 +278,21 @@ def test_media_failures_leave_core_import_successful(failed_operation):
         client = MealieApiClient("http://mealie.local/api", client=http)
         # Only the external image download is replaced; Mealie HTTP remains real.
         with pytest.MonkeyPatch.context() as patch:
-            patch.setattr("kptncook.mealie.download_image", lambda *a, **kw: b"image")
+            cover = (
+                b"<html>not an image</html>"
+                if failed_operation == "unsupported-cover"
+                else b"\xff\xd8\xff\xe0synthetic"
+            )
+            patch.setattr("kptncook.mealie.download_image", lambda *a, **kw: cover)
             result = client.create_recipe(recipe)
     assert result.slug == "test-1"
     assert result.extras["kptncook_id"] == "id"
     assert not any(method == "DELETE" for method, _ in calls)
     # The only PUT is the cover upload; the recipe itself is never replaced.
-    assert [path for method, path in calls if method == "PUT"] == [
-        "/api/recipes/test-1/image"
-    ]
+    expected_puts = (
+        [] if failed_operation == "unsupported-cover" else ["/api/recipes/test-1/image"]
+    )
+    assert [path for method, path in calls if method == "PUT"] == expected_puts
     if failed_operation in {"asset", "malformed-asset"}:
         assert not any(method == "PATCH" for method, _ in calls)
 

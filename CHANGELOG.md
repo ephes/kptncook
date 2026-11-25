@@ -8,6 +8,8 @@ Unreleased
 ### Fixes
 - Require a confirmed Mealie unit, food or tag ID before archive import. Check
   the inventory once if the create reply omits the ID.
+- Set the Mealie cover extension from the downloaded JPEG, PNG or WebP
+  signature and skip covers with unrecognized formats.
 - Deduplicate normalized Markdown recipe tags while keeping their display order.
 - Write an empty YAML tag list in Markdown exports when no display tags remain.
 - Recover interrupted release preparation on retry and preserve conflicting edits.

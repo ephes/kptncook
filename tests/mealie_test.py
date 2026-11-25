@@ -1,4 +1,3 @@
-import json
 from uuid import uuid4
 
 import httpx
@@ -126,17 +125,32 @@ def test_login_with_token_preserves_existing_headers():
     assert client.headers["authorization"] == "Bearer token-123"
 
 
-def test_cover_image_is_downloaded_and_uploaded(monkeypatch):
+@pytest.mark.parametrize(
+    ("source_path", "image_bytes", "extension"),
+    [
+        ("/cover", b"\x89PNG\r\n\x1a\nsynthetic", "png"),
+        ("/cover.jpg", b"RIFF\x10\x00\x00\x00WEBPVP8 synthetic", "webp"),
+        ("/cover.png", b"\xff\xd8\xff\xe0synthetic", "jpg"),
+    ],
+)
+def test_cover_image_is_downloaded_and_uploaded(
+    monkeypatch, source_path, image_bytes, extension
+):
     client = MealieApiClient("http://mealie.local/api")
     recipe = RecipeWithImage(
         name="Test recipe",
-        image_url="https://images.example/test.png?kptnkey=KEY",
+        image_url=f"https://images.example{source_path}?kptnkey=KEY",
     )
     downloads = []
-    monkeypatch.setattr(
-        "kptncook.mealie.download_image",
-        lambda url, **kw: downloads.append((url, kw)) or b"png-bytes",
-    )
+
+    def image_response(request):
+        downloads.append(str(request.url))
+        if request.url.path == source_path:
+            return httpx.Response(302, headers={"Location": "/download"})
+        return httpx.Response(200, content=image_bytes)
+
+    images = httpx.AsyncClient(transport=httpx.MockTransport(image_response))
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: images)
     seen = {}
 
     def fake_put(path, **kwargs):
@@ -150,11 +164,10 @@ def test_cover_image_is_downloaded_and_uploaded(monkeypatch):
 
     client._scrape_image_for_recipe(recipe, "recipe-slug")
 
-    assert downloads == [(recipe.image_url, {"follow_redirects": True})]
+    assert downloads == [recipe.image_url, "https://images.example/download"]
     assert seen["path"] == "/recipes/recipe-slug/image"
-    assert seen["kwargs"]["files"] == {"image": ("cover.png", b"png-bytes")}
-    assert seen["kwargs"]["data"] == {"extension": "png"}
-    assert "KEY" not in json.dumps(seen["kwargs"]["data"])
+    assert seen["kwargs"]["files"] == {"image": (f"cover.{extension}", image_bytes)}
+    assert seen["kwargs"]["data"] == {"extension": extension}
 
 
 def test_create_item_uses_json_content_type():

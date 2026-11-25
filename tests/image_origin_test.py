@@ -54,7 +54,7 @@ def no_network(monkeypatch):
 
     def handle(request):
         requests.append(str(request.url))
-        return httpx.Response(200, content=b"img")
+        return httpx.Response(200, content=b"\xff\xd8\xff\xe0synthetic")
 
     http = httpx.AsyncClient(transport=httpx.MockTransport(handle))
     monkeypatch.setattr(image_download.httpx, "AsyncClient", lambda **kw: http)
@@ -296,7 +296,7 @@ def test_mealie_allowed_cover_is_uploaded_not_scraped(default_hosts_only, no_net
     url = f"https://{CDN}/cover.jpg?kptnkey=KEY"
     client._scrape_image_for_recipe(RecipeWithImage(name="Ok", image_url=url), "ok")
     assert no_network == [url]
-    assert uploads == [("/recipes/ok/image", b"img")]
+    assert uploads == [("/recipes/ok/image", b"\xff\xd8\xff\xe0synthetic")]
 
 
 def test_mealie_cover_redirect_escape_is_never_followed(

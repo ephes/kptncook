@@ -9,7 +9,7 @@ import re
 import uuid
 from time import monotonic
 from html import escape
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote
 from collections.abc import Callable
 from getpass import getpass
 from pathlib import Path
@@ -41,7 +41,6 @@ from .models import Recipe as KptnCookRecipe
 logger = logging.getLogger(__name__)
 
 MAX_INVENTORY_PAGES = 1000
-COVER_IMAGE_EXTENSIONS = frozenset({"jpg", "jpeg", "png", "webp"})
 MAX_INVENTORY_ITEMS = 50_000
 DEFAULT_INVENTORY_TIMEOUT_SECONDS = 120.0
 
@@ -363,9 +362,15 @@ class MealieApiClient(BaseHttpClient):
             _warn_media("Skipping cover image: not on an allowed image host")
             return
         image_bytes = download_image(recipe.image_url, follow_redirects=True)
-        extension = Path(urlsplit(recipe.image_url).path).suffix.lstrip(".").lower()
-        if extension not in COVER_IMAGE_EXTENSIONS:
+        if image_bytes.startswith(b"\xff\xd8\xff"):
             extension = "jpg"
+        elif image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+            extension = "png"
+        elif image_bytes.startswith(b"RIFF") and image_bytes[8:12] == b"WEBP":
+            extension = "webp"
+        else:
+            _warn_media("Skipping cover image: unsupported image format")
+            return
         r = self.put(
             image_path,
             files={"image": (f"cover.{extension}", image_bytes)},

@@ -404,6 +404,9 @@ URL in recipe data are skipped with a warning that names neither the URL nor
 the key; recipe text is still exported or imported. Mealie covers are downloaded through the same
 checked downloader and uploaded as image bytes; Mealie is never asked to fetch
 a keyed URL itself, since its scraper would follow redirects unchecked.
+The downloaded JPEG, PNG or WebP signature determines both the cover filename
+and the upload extension, including after redirects. An unrecognized format
+is skipped and the imported recipe remains in Mealie.
 Configured hosts must be names, not IP addresses in any spelling.
 
 The image downloader requires direct HTTPS access to the allowed hosts. It
