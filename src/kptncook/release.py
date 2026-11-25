@@ -638,9 +638,15 @@ def prepare_release(
                         pyproject_path, project_temp, original_project, owned_project
                     ),
                 )
-                _sync_release_names(
-                    "Staged release files are", changelog_temp, project_temp
-                )
+                try:
+                    _sync_release_names(
+                        "Staged release files are", changelog_temp, project_temp
+                    )
+                except _ReleaseDurabilityError as exc:
+                    # No record names the stages yet, so they are removed.
+                    raise ReleaseError(
+                        "Could not sync staged release files; neither source changed."
+                    ) from exc
                 _write_intent(record, intent)
 
                 def register_rollback(temporary: Path, owned: _Generation) -> None:

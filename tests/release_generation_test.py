@@ -651,3 +651,23 @@ def test_rollback_continues_when_rollback_record_sync_fails(tmp_path, monkeypatc
     assert b'"0.0.2"' in project.read_bytes()
     assert not (tmp_path / release.RELEASE_INTENT_NAME).exists()
     assert not list(tmp_path.glob(release.RELEASE_STAGE_PREFIX + "*"))
+
+
+def test_stage_sync_failure_reports_unchanged_sources(tmp_path, monkeypatch):
+    changelog, project = files(tmp_path)
+    originals = changelog.read_bytes(), project.read_bytes()
+    fsync = release.os.fsync
+
+    def sync(fd):
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            raise OSError("injected stage directory sync failure")
+        fsync(fd)
+
+    monkeypatch.setattr(release.os, "fsync", sync)
+    with pytest.raises(release.ReleaseError, match="neither source changed") as error:
+        release.prepare_release(changelog, project, version="0.0.2")
+
+    assert "durability" not in str(error.value)
+    assert (changelog.read_bytes(), project.read_bytes()) == originals
+    assert not (tmp_path / release.RELEASE_INTENT_NAME).exists()
+    assert not list(tmp_path.glob(release.RELEASE_STAGE_PREFIX + "*"))
