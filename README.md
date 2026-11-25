@@ -325,6 +325,10 @@ The summary means:
   error). Other recipes are still synced, and the command exits with status 1.
   Name-collision errors are failures, not successful identity matches.
 
+Local processing failures appear as `Local processing error (<exception class>)`
+in sync results, CLI output and logs. These diagnostics omit exception messages,
+which may contain recipe values.
+
 The sync continues and retains its summary if a logging handler fails to deliver
 a recipe or cleanup warning.
 

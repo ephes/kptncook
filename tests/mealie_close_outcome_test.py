@@ -99,7 +99,7 @@ def test_failed_warning_delivery_preserves_sync_receipt(monkeypatch, minimal):
     ]
     [failure] = result.failed_recipes
     assert failure.recipe_id == recipes[1].id.oid
-    assert failure.reason == "ValueError: invalid conversion"
+    assert failure.reason == "Local processing error (ValueError)"
     assert result.cleanup_warning
     assert "Mealie client cleanup failed (OSError)" in result.cleanup_warning
     assert "private close detail" not in result.cleanup_warning

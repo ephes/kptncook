@@ -291,7 +291,7 @@ def test_sync_with_mealie_continues_after_connection_and_unexpected_errors(
     assert "Request failed: connection error" in result.failed_recipes[0].reason
     assert "outcome is unknown" in result.failed_recipes[0].reason
     assert result.failed_recipes[1] == workflows.MealieSyncFailure(
-        "recipe-2", "Minimal Recipe", "ValueError: unexpected payload"
+        "recipe-2", "Minimal Recipe", "Local processing error (ValueError)"
     )
 
 
@@ -396,17 +396,17 @@ def test_sync_result_defaults_do_not_share_failure_lists():
         (httpx.ReadTimeout("response timed out"), "ReadTimeout"),
         (httpx.ConnectError("connection refused"), "connection error"),
         (httpx.HTTPError("transport failed"), "HTTP error"),
-        (ValueError("invalid recipe payload"), "invalid recipe payload"),
-        (TypeError("not JSON serializable"), "not JSON serializable"),
+        (ValueError("invalid recipe payload"), "Local processing error (ValueError)"),
+        (TypeError("not JSON serializable"), "Local processing error (TypeError)"),
         (
             ValidationError.from_exception_data(
                 "MealieRecipe", [{"type": "missing", "loc": ("name",), "input": {}}]
             ),
-            "Field required",
+            "Local processing error (ValidationError)",
         ),
         (
             PydanticSerializationError("unsupported field type"),
-            "unsupported field type",
+            "Local processing error (PydanticSerializationError)",
         ),
     ],
 )
@@ -449,13 +449,17 @@ def test_sync_with_mealie_continues_after_create_failure(
         assert "unknown" in failure.reason.lower()
 
 
-def test_sync_with_mealie_continues_after_conversion_failure(monkeypatch, minimal):
+def test_sync_with_mealie_continues_without_exposing_conversion_error(
+    monkeypatch, minimal, caplog
+):
     recipes = [_recipe(minimal, oid=f"recipe-{index}") for index in (1, 2)]
     real_convert = workflows.kptncook_to_mealie
+    sentinel = "synthetic-private-recipe-value"
+    created_ids = []
 
     def convert(recipe):
         if recipe.id.oid == "recipe-1":
-            raise ValueError("invalid conversion")
+            Recipe.model_validate({**minimal, "preparationTime": sentinel})
         return real_convert(recipe)
 
     class FakeClient:
@@ -463,6 +467,7 @@ def test_sync_with_mealie_continues_after_conversion_failure(monkeypatch, minima
             pass
 
         def create_recipe(self, recipe):
+            created_ids.append(recipe.extras["kptncook_id"])
             return SimpleNamespace(slug="created-recipe-2")
 
     monkeypatch.setattr(workflows, "get_mealie_client", FakeClient)
@@ -477,9 +482,15 @@ def test_sync_with_mealie_continues_after_conversion_failure(monkeypatch, minima
     result = workflows.sync_with_mealie_result()
 
     assert result.created_count == 1
-    assert len(result.failed_recipes) == 1
-    assert result.failed_recipes[0].recipe_id == "recipe-1"
-    assert "invalid conversion" in result.failed_recipes[0].reason
+    assert created_ids == ["recipe-2"]
+    [failure] = result.failed_recipes
+    assert sentinel not in failure.reason
+    assert sentinel not in caplog.text
+    assert failure == workflows.MealieSyncFailure(
+        "recipe-1", "Minimal Recipe", "Local processing error (ValidationError)"
+    )
+    assert "Minimal Recipe (recipe-1)" in caplog.text
+    assert failure.reason in caplog.text
 
 
 def test_sync_with_mealie_count_wrapper_does_not_hide_failures(monkeypatch):

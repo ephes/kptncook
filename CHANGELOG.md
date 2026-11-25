@@ -4,6 +4,8 @@ Unreleased
 ### Fixes
 - Use one settings snapshot per Mealie recipe conversion, including translations,
   ingredient grouping and image URL preparation.
+- Omit local exception messages from Mealie batch sync results and logs while
+  retaining the exception class and recipe identity.
 - Reject short dotenv reads and detected in-place edits before parsing and
   preserve complete reads across atomic replacement.
 - Skip the permission fix-up on dotenv files that are already owner-only, so

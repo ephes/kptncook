@@ -542,26 +542,19 @@ def sync_with_mealie_result() -> SyncWithMealieResult:
     return result
 
 
-def _describe_mealie_error(exc: BaseException) -> str:
+def _describe_mealie_failure(exc: Exception) -> str:
     if isinstance(exc, httpx.HTTPStatusError):
         return format_http_status_error(
             exc.response, action="syncing recipe with Mealie"
         )
     if isinstance(exc, httpx.HTTPError):
-        return format_request_error(exc)
-    return f"{type(exc).__name__}: {exc}"
-
-
-def _describe_mealie_failure(exc: Exception) -> str:
-    reason = _describe_mealie_error(exc)
-    if isinstance(exc, httpx.HTTPError) and not isinstance(exc, httpx.HTTPStatusError):
         # A write may have succeeded even if its response never arrived.
-        reason = (
-            f"{type(exc).__name__}: {reason}. "
+        return (
+            f"{type(exc).__name__}: {format_request_error(exc)}. "
             "The sync outcome is unknown; the next sync checks stored identity "
             "before creating recipes. No automatic retry or deletion was attempted."
         )
-    return reason
+    return f"Local processing error ({type(exc).__name__})"
 
 
 def sync_with_mealie() -> int:
