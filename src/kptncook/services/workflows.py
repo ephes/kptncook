@@ -186,6 +186,7 @@ INVALID_CONFIGURED_TOKEN_MESSAGE = (
     "run kptncook-access-token to replace it."
 )
 INVALID_LOGIN_RESPONSE_MESSAGE = "Login response did not contain a valid access token."
+KPTNCOOK_CLEANUP_MESSAGE = "KptnCook client cleanup failed."
 
 
 def _kptncook_client() -> KptnCookClient:
@@ -196,6 +197,24 @@ def _kptncook_client() -> KptnCookClient:
         raise UserFacingError(INVALID_CONFIGURED_TOKEN_MESSAGE) from None
 
 
+@contextmanager
+def _read_kptncook_client() -> Iterator[KptnCookClient]:
+    client = _kptncook_client()
+    try:
+        yield client
+    except BaseException:
+        try:
+            client.close()
+        except Exception:
+            _warn_best_effort(KPTNCOOK_CLEANUP_MESSAGE)
+        raise
+    else:
+        try:
+            client.close()
+        except Exception:
+            raise UserFacingError(KPTNCOOK_CLEANUP_MESSAGE) from None
+
+
 def _recipe_list_shape_error(exc: ValueError) -> UserFacingError:
     # Only fixed envelope texts are shown; decoder/validation details stay hidden.
     if isinstance(exc, ResponseShapeError):
@@ -204,7 +223,7 @@ def _recipe_list_shape_error(exc: ValueError) -> UserFacingError:
 
 
 def get_today_recipes() -> list[RecipeInDb]:
-    with closing(_kptncook_client()) as client:
+    with _read_kptncook_client() as client:
         try:
             return client.list_today()
         except httpx.HTTPStatusError as exc:
@@ -348,7 +367,7 @@ def list_dailies(
     zone: str | None = None,
     is_subscribed: Literal[False] | None = None,
 ) -> list[RecipeInDb]:
-    with closing(_kptncook_client()) as client:
+    with _read_kptncook_client() as client:
         try:
             return client.list_dailies(
                 recipe_filter=recipe_filter,
@@ -636,7 +655,7 @@ def get_kptncook_access_token() -> str:
 
 
 def get_discovery_screen() -> DiscoveryScreenData:
-    with closing(_kptncook_client()) as client:
+    with _read_kptncook_client() as client:
         try:
             payload = client.get_discovery_screen()
         except ResponseShapeError:
@@ -658,7 +677,7 @@ def get_discovery_screen() -> DiscoveryScreenData:
 def get_discovery_list_recipes(
     *, list_type: str, list_id: str | None
 ) -> list[RecipeInDb]:
-    with closing(_kptncook_client()) as client:
+    with _read_kptncook_client() as client:
         try:
             items = client.get_discovery_list(list_type=list_type, list_id=list_id)
         except httpx.HTTPStatusError as exc:
@@ -674,7 +693,7 @@ def get_discovery_list_recipes(
 
 def list_popular_ingredients() -> list[dict[str, object]]:
     _require_access_token()
-    with closing(_kptncook_client()) as client:
+    with _read_kptncook_client() as client:
         try:
             return client.list_popular_ingredients()
         except ResponseShapeError:
@@ -691,7 +710,7 @@ def list_popular_ingredients() -> list[dict[str, object]]:
 
 def get_recipes_with_ingredients(ingredient_ids: list[str]) -> list[RecipeInDb]:
     _require_access_token()
-    with closing(_kptncook_client()) as client:
+    with _read_kptncook_client() as client:
         try:
             items = client.get_recipes_with_ingredients(ingredient_ids=ingredient_ids)
         except httpx.HTTPStatusError as exc:
@@ -709,7 +728,7 @@ def get_recipes_with_ingredients(ingredient_ids: list[str]) -> list[RecipeInDb]:
 
 
 def get_onboarding_recipes(tags: list[str]) -> list[RecipeInDb]:
-    with closing(_kptncook_client()) as client:
+    with _read_kptncook_client() as client:
         try:
             items = client.get_onboarding_recipes(tags=tags)
         except httpx.HTTPStatusError as exc:

@@ -149,6 +149,10 @@ prints the completed counts and a short cleanup warning, then exits with status
 counts and a `cleanup_warning`. If the backup itself fails, its primary error
 still reaches the caller and the cleanup warning goes to the log.
 
+When a recipe or discovery read fails, the CLI reports the original error,
+even if closing the client also fails. A close failure after a successful
+read reports `KptnCook client cleanup failed.` and exits with status 1.
+
 When a library API client's context exits after an operation error, a failure
 to close its owned HTTP client produces a short warning and the original error
 reaches the caller. A standalone close failure propagates to the caller.

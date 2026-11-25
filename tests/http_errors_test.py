@@ -1,6 +1,8 @@
 """Shared diagnostics and actual CLI catches never echo HTTP payloads."""
 
 from importlib import import_module
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import httpx
 import pytest
@@ -98,6 +100,47 @@ def test_redirect_hint_is_preserved():
     assert "endpoint may no longer be available" in format_http_status_error(
         httpx.Response(302), action="fetching favorites", unavailable_on_redirect=True
     )
+
+
+@pytest.mark.parametrize(
+    "command, method, action, payload",
+    [
+        (["kptncook-today"], "list_today", "fetching today's recipes", []),
+        (["discovery-screen"], "get_discovery_screen", "fetching discovery screen", {}),
+        (
+            ["discovery-list", "--list-type", "latest"],
+            "get_discovery_list",
+            "fetching discovery list",
+            [],
+        ),
+    ],
+)
+@pytest.mark.parametrize("request_fails", [True, False])
+def test_read_cli_shapes_close_failure(
+    monkeypatch, caplog, command, method, action, payload, request_fails
+):
+    request = httpx.Request("GET", "https://example.test/?kptnkey=private-request-key")
+    response = httpx.Response(503, request=request, json={"message": "private-payload"})
+    fetch = Mock(return_value=payload)
+    if request_fails:
+        fetch.side_effect = httpx.HTTPStatusError(
+            str(request.url), request=request, response=response
+        )
+    close = Mock(side_effect=OSError("private-close-detail"))
+    client = SimpleNamespace(close=close, **{method: fetch})
+    monkeypatch.setattr(workflows, "KptnCookClient", lambda: client)
+
+    result = CliRunner(env={"COLUMNS": "120"}).invoke(cli.app, command)
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    warning = "KptnCook client cleanup failed."
+    assert result.output.strip() == (
+        f"HTTP 503 while {action}" if request_fails else warning
+    )
+    assert caplog.messages == ([warning] if request_fails else [])
+    fetch.assert_called_once()
+    close.assert_called_once_with()
 
 
 @pytest.mark.parametrize(
