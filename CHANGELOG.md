@@ -6,6 +6,8 @@ Unreleased
   CVE-2026-97699, keeping the frozen runtime/development dependency audit clean.
 
 ### Fixes
+- Warn when a Mealie PATCH response fails to confirm step image attachments,
+  preserving the imported recipe without replaying the PATCH.
 - Use downloaded image signatures for Mealie step asset extensions and
   multipart filenames, skipping unsupported images with a warning.
 - Enforce Mealie inventory deadlines while streaming pages and sync details,

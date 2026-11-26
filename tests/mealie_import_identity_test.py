@@ -1,5 +1,7 @@
 """Import receipts bind all subsequent media work to one server object."""
 
+import json
+
 import httpx
 import pytest
 
@@ -49,23 +51,48 @@ def test_import_detail_cannot_redirect_media(monkeypatch, change):
     ]
 
 
-@pytest.mark.parametrize("change", ["slug", "id", "missing-id", "extras", "normal"])
-def test_step_patch_reply_cannot_replace_imported_identity(monkeypatch, caplog, change):
+@pytest.mark.parametrize(
+    "change",
+    [
+        "slug",
+        "id",
+        "missing-id",
+        "extras",
+        "normal",
+        "reordered",
+        "old-steps",
+        "moved-link",
+        "duplicate-step-id",
+        "plain-url",
+        "unchanged-link",
+    ],
+)
+def test_step_patch_reply_must_confirm_identity_and_attachments(
+    monkeypatch, caplog, change
+):
+    url = f"/api/media/recipes/{ID_A}/assets/step.jpg"
+    mix = f'Mix <img src="{url}">' if change == "unchanged-link" else "Mix"
     source = RecipeWithImage(
         name="Synthetic",
         extras={"source": "kptncook", "kptncook_id": "synthetic"},
         recipe_instructions=[
             RecipeStep(
-                text="Mix",
+                text=mix,
                 image=Image(name="step.jpg", url="https://example.test/step.jpg"),
-            )
+            ),
+            RecipeStep(text="Serve"),
         ],
     )
+    instructions = [{"text": mix}, {"text": "Serve"}]
+    if change != "normal":
+        instructions[0]["id"] = ID_A
+        instructions[1]["id"] = ID_B
     stored = {
         "id": ID_A,
         "slug": "receipt-a",
+        "name": "Imported",
         "extras": source.extras,
-        "recipeInstructions": [{"text": "Mix"}],
+        "recipeInstructions": instructions,
     }
     writes = []
 
@@ -79,7 +106,25 @@ def test_step_patch_reply_cannot_replace_imported_identity(monkeypatch, caplog, 
         if request.url.path.endswith("/assets"):
             return httpx.Response(200, json={"fileName": "step.jpg"})
         if request.method == "PATCH":
-            reply = dict(stored)
+            sent = json.loads(request.content)["recipeInstructions"]
+            assert sent[0]["text"].count(url) == (
+                2 if change == "unchanged-link" else 1
+            )
+            first, second = [dict(step) for step in instructions]
+            linked = f"<p>Mix</p><IMG width='100%' SRC='{url}'>"
+            if change in {"normal", "reordered", "duplicate-step-id"}:
+                first["text"] = linked
+            elif change == "moved-link":
+                second["text"] = linked
+            elif change == "plain-url":
+                first["text"] = f"Mix {url}"
+            if change == "duplicate-step-id":
+                second["id"] = ID_A
+            acknowledged = [second, first] if change == "reordered" else [first, second]
+            reply = stored | {
+                "name": "Acknowledged",
+                "recipeInstructions": acknowledged,
+            }
             if change == "slug":
                 reply["slug"] = "other-b"
             elif change == "id":
@@ -102,4 +147,13 @@ def test_step_patch_reply_cannot_replace_imported_identity(monkeypatch, caplog, 
     assert str(created.id) == ID_A
     assert created.extras == source.extras
     assert writes == ["POST", "POST", "PATCH"]
-    assert ("Skipping step image update" in caplog.text) == (change != "normal")
+    confirmed = change in {"normal", "reordered"}
+    assert caplog.text.count("Skipping step image update") == (0 if confirmed else 1)
+    assert created.name == ("Acknowledged" if confirmed else "Imported")
+    if confirmed:
+        assert any(
+            linked.text.endswith(f"SRC='{url}'>")
+            for linked in created.recipe_instructions
+        )
+    else:
+        assert [step.text for step in created.recipe_instructions] == [mix, "Serve"]

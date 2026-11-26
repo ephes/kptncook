@@ -322,7 +322,10 @@ GET and PATCH: the checked Mealie
 [v1.12](https://github.com/mealie-recipes/mealie/blob/v1.12.0/mealie/routes/recipe/recipe_crud_routes.py#L389)
 and [v3.28](https://github.com/mealie-recipes/mealie/blob/v3.28.0/mealie/routes/recipe/recipe_crud_routes.py#L624)
 PATCH routes expose no conditional revision/ETag contract. An ambiguous PATCH
-is never retried, and human edits are never rolled back.
+is never retried, and human edits are never rolled back. The PATCH response
+must confirm each new image reference on the expected step, using server
+step IDs when available. A missing or ambiguous acknowledgement produces a
+media warning and preserves the original import receipt.
 The summary means:
 
 * `Created N recipes`: recipes newly created in Mealie.

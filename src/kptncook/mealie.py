@@ -9,7 +9,9 @@ import re
 import uuid
 from time import monotonic
 from html import escape
+from html.parser import HTMLParser
 from urllib.parse import quote
+from collections import Counter
 from collections.abc import Callable
 from getpass import getpass
 from pathlib import Path
@@ -98,6 +100,80 @@ def _media_failure_reason(exc: BaseException) -> str:
     if isinstance(exc, _UnsupportedStepImageFormat):
         return "unsupported image format"
     return type(exc).__name__
+
+
+def _step_image_src(recipe_uuid: object, image_name: str) -> str:
+    components = [str(recipe_uuid), image_name]
+    if any(component in ("", ".", "..") for component in components):
+        raise ValueError("Invalid Mealie media path component")
+    recipe_path, image_path = (quote(component, safe="") for component in components)
+    return f"/api/media/recipes/{recipe_path}/assets/{image_path}"
+
+
+class _StepImageReferences(HTMLParser):
+    def __init__(self, src: str) -> None:
+        super().__init__()
+        self.src = src
+        self.count = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "img" and [value for key, value in attrs if key == "src"] == [
+            self.src
+        ]:
+            self.count += 1
+
+
+def _step_image_reference_count(text: str, src: str) -> int:
+    parser = _StepImageReferences(src)
+    parser.feed(text)
+    parser.close()
+    return parser.count
+
+
+def _step_images_acknowledged(
+    updated: dict[str, Any],
+    original: list[dict[str, Any]],
+    expected: list[tuple[int, str]],
+) -> bool:
+    steps = updated.get("recipeInstructions", updated.get("recipe_instructions"))
+    if not isinstance(steps, list) or len(steps) != len(original):
+        return False
+
+    by_id: dict[str, list[dict[str, Any]]] = {}
+    original_ids = Counter(
+        step["id"] for step in original if isinstance(step.get("id"), str)
+    )
+    for step in steps:
+        if not isinstance(step, dict) or not isinstance(step.get("text"), str):
+            return False
+        step_id = step.get("id")
+        if isinstance(step_id, str):
+            by_id.setdefault(step_id, []).append(step)
+
+    for position, src in expected:
+        before = original[position]
+        step_id = before.get("id")
+        if step_id is None:
+            acknowledged = steps[position]
+            received_id = acknowledged.get("id")
+            if received_id is not None and (
+                not isinstance(received_id, str)
+                or received_id in original_ids
+                or len(by_id[received_id]) != 1
+            ):
+                return False
+        else:
+            if not isinstance(step_id, str) or original_ids[step_id] != 1:
+                return False
+            matches = by_id.get(step_id, [])
+            if len(matches) != 1:
+                return False
+            acknowledged = matches[0]
+        if _step_image_reference_count(
+            acknowledged["text"], src
+        ) <= _step_image_reference_count(before["text"], src):
+            return False
+    return True
 
 
 def _same_name(name: str) -> str:
@@ -358,15 +434,7 @@ class MealieApiClient(BaseHttpClient):
 
     @staticmethod
     def _build_recipestep_text(recipe_uuid, text, image_name):
-        components = [str(recipe_uuid), image_name]
-        if any(component in ("", ".", "..") for component in components):
-            raise ValueError("Invalid Mealie media path component")
-        recipe_path, image_path = (
-            quote(component, safe="") for component in components
-        )
-        media_url = escape(
-            f"/api/media/recipes/{recipe_path}/assets/{image_path}", quote=True
-        )
+        media_url = escape(_step_image_src(recipe_uuid, image_name), quote=True)
         return f'{text} <img src="{media_url}" height="100%" width="100%"/>'
 
     def _scrape_image_for_recipe(self, recipe, slug):
@@ -806,24 +874,26 @@ class MealieApiClient(BaseHttpClient):
             return recipe
         original_instructions = deepcopy(instructions)
         instructions = deepcopy(instructions)
-        changed = False
-        for instruction, source_step in zip(instructions, source_steps):
+        expected_images: list[tuple[int, str]] = []
+        for position, (instruction, source_step) in enumerate(
+            zip(instructions, source_steps)
+        ):
             if source_step.image is None:
                 continue
             try:
-                asset = self.upload_asset(recipe.slug, source_step.image)
+                filename = self.upload_asset(recipe.slug, source_step.image)["fileName"]
                 # Keep server-assigned step IDs, references and other fields.
                 instruction["text"] = self._build_recipestep_text(
-                    recipe.id, instruction["text"], asset["fileName"]
+                    recipe.id, instruction["text"], filename
                 )
-                changed = True
+                expected_images.append((position, _step_image_src(recipe.id, filename)))
             except Exception as exc:
                 _warn_media(
                     "Skipping step image for recipe %s (%s)",
                     recipe.slug,
                     _media_failure_reason(exc),
                 )
-        if changed:
+        if expected_images:
             # Mealie v1.12/v3.28 PATCH accepts no conditional revision. Re-read
             # immediately before the write; never compensate or retry a PATCH.
             current_response = self.get(_recipe_path(recipe.slug))
@@ -852,6 +922,14 @@ class MealieApiClient(BaseHttpClient):
             _require_recipe_identity(updated, recipe.slug, recipe.id)
             if updated.get("extras") != stored.get("extras"):
                 raise ValueError("Mealie step-image response changed recipe identity")
+            if not _step_images_acknowledged(
+                updated, original_instructions, expected_images
+            ):
+                _warn_media(
+                    "Skipping step image update for recipe %s (PATCH response did not confirm attachment)",
+                    recipe.slug,
+                )
+                return recipe
             return Recipe.model_validate(updated)
         return recipe
 
