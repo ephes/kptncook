@@ -303,7 +303,8 @@ class RecipeRepository:
                 delete=False,
             ) as f:
                 temp_path = Path(f.name)
-                f.write(payload)
+                if f.write(payload) != len(payload):
+                    raise OSError("Incomplete repository staging write")
                 f.flush()
                 os.fsync(f.fileno())
             self._check_snapshot(snapshot)

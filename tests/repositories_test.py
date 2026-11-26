@@ -201,6 +201,33 @@ def test_add_recipe_uses_advisory_lock(tmpdir, monkeypatch):
     ]
 
 
+def test_short_store_stage_write_preserves_primary_and_backup(tmp_path, monkeypatch):
+    repo = RecipeRepository(tmp_path)
+    today = date.today()
+    repo.add(RecipeInDb(date=today, data={"_id": {"$oid": "1"}}))
+    repo.add(RecipeInDb(date=today, data={"_id": {"$oid": "2"}}))
+    main_bytes = repo.path.read_bytes()
+    backup_bytes = repo.backup_path.read_bytes()
+    temporary = repositories_module.tempfile.NamedTemporaryFile
+
+    def short_temporary(*args, **kwargs):
+        stream = temporary(*args, **kwargs)
+        if kwargs.get("prefix") == f".{repo.path.name}.":
+            write = stream.write
+            stream.write = lambda data: write(data[:-1])
+        return stream
+
+    monkeypatch.setattr(
+        repositories_module.tempfile, "NamedTemporaryFile", short_temporary
+    )
+    with pytest.raises(RepositoryError, match="Could not write repository file"):
+        repo.add(RecipeInDb(date=today, data={"_id": {"$oid": "3"}}))
+
+    assert repo.path.read_bytes() == main_bytes
+    assert repo.backup_path.read_bytes() == backup_bytes
+    assert list(tmp_path.glob(".*.tmp")) == []
+
+
 @pytest.mark.parametrize("failure", ["copy", "fsync", "replace"])
 def test_backup_failure_preserves_both_files(tmp_path, monkeypatch, failure):
     repo = RecipeRepository(tmp_path)

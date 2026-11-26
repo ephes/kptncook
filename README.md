@@ -754,7 +754,8 @@ recover, inspect `~/.kptncook/kptncook.json` and the previous snapshot in
 Writes serialize complete UTF-8 staging within the same 64 MiB limit as reads
 before touching the primary or recovery backup. Over-capacity additions fail
 without changing either snapshot; export and remove unneeded recipes, then retry
-the smaller batch. Every successful write remains reloadable.
+the smaller batch. An incomplete write to the staging file stops the mutation
+before either snapshot is replaced. Every successful write remains reloadable.
 
 Before replacing the repository, the exact bounded bytes admitted for the mutation
 are copied to a sibling temporary backup, flushed and fsynced, then atomically
