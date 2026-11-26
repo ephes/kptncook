@@ -432,15 +432,17 @@ same server ID (when the row carries one) and the requested slug. A detail for a
 different recipe, or a recipe renamed while the inventory is read, stops the run
 before any write; run the sync again to read a consistent inventory.
 Recipe and organizer inventories allow at most 1,000 pages and 50,000 items.
-Listing pages are streamed as uncompressed JSON. Each page may use up to 8 MiB,
-with at most 64 MiB of response bodies across all pages of one inventory. A page
-that exceeds either byte limit or uses compression aborts that acquisition before
-it can be used for creates.
-An acquisition defaults to a 120-second elapsed budget, checked before and after each
-response and before returning an inventory. Sync starts one deadline before pagination and shares it
-with every recipe page and detail read. Request socket timeouts are capped by the
-remaining budget; in-flight requests follow HTTPX's per-operation timeout rules.
-A successful reply observed after the deadline is discarded before any creates.
+Listing pages and sync detail responses are streamed as uncompressed JSON.
+Each page or detail may use up to 8 MiB, with at most 64 MiB across all
+pages of one listing. An oversized or compressed response stops acquisition
+before it can be used for creates.
+Sync starts one monotonic deadline before pagination and shares it with
+every recipe page and detail read. The default budget is 120 seconds.
+The client caps request timeouts by the remaining budget and checks again
+after headers, between body chunks and before accepting the inventory.
+If a chunk arrives after the deadline, the client closes the response
+without reading the rest. A blocking HTTPX operation can still take up
+to its socket timeout.
 Large libraries with sequential detail reads may need a larger budget: set
 `MEALIE_INVENTORY_TIMEOUT_SECONDS=7200`, for example. This setting must be finite,
 positive and at most 86,400 seconds. Rerunning a library that consistently exceeds

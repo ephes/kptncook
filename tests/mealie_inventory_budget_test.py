@@ -1,5 +1,7 @@
 """Acquisition budgets span successful pages and recipe detail reads."""
 
+import json
+
 import httpx
 import pytest
 
@@ -102,7 +104,7 @@ def test_remaining_inventory_time_bounds_each_page_request(monkeypatch):
     timeouts = []
 
     def handle(request):
-        timeouts.append(request.extensions["timeout"])
+        timeouts.append(request.extensions["timeout"].copy())
         now[0] += 2
         page = int(request.url.params["page"])
         return httpx.Response(
@@ -312,3 +314,75 @@ def test_delayed_paginator_uses_sync_deadline(monkeypatch, minimal):
     assert [item for item in requests if item[1] != "/api/app/about"] == [
         ("GET", "/api/recipes", "1")
     ]
+
+
+@pytest.mark.parametrize("target", ["page", "detail"])
+@pytest.mark.parametrize("budget", [5, 10])
+def test_inventory_stops_reading_a_staggered_response(
+    monkeypatch, minimal, target, budget
+):
+    now = [0.0]
+    monkeypatch.setattr(mealie, "monotonic", lambda: now[0])
+    events = []
+    requests = []
+    local = Recipe.model_validate(minimal)
+    row = {
+        "slug": "existing",
+        "extras": {"source": "kptncook", "kptncook_id": local.id.oid},
+    }
+    page = {"items": [row], "total_pages": 1}
+
+    class StaggeredBody(httpx.SyncByteStream):
+        def __init__(self, payload):
+            self.body = json.dumps(payload).encode()
+
+        def __iter__(self):
+            chunks = (self.body[:4], self.body[4:8], self.body[8:12], self.body[12:])
+            for index, chunk in enumerate(chunks, start=1):
+                now[0] += 2  # Each chunk arrives within the initial read timeout.
+                events.append(index)
+                yield chunk
+
+        def close(self):
+            events.append("closed")
+
+    def handle(request):
+        path = request.url.path
+        requests.append((request.method, path))
+        if path == "/api/app/about":
+            return httpx.Response(200, json={"version": "v3.28.0"})
+        if path == "/api/recipes" and target == "detail":
+            return httpx.Response(200, json=page)
+        if (target, path) in {
+            ("page", "/api/recipes"),
+            ("detail", "/api/recipes/existing"),
+        }:
+            return httpx.Response(
+                200, stream=StaggeredBody(page if target == "page" else row)
+            )
+        assert path == "/api/recipes/existing" and request.method == "GET"
+        return httpx.Response(200, json=row)
+
+    with httpx.Client(transport=httpx.MockTransport(handle)) as http:
+        monkeypatch.setattr(
+            workflows,
+            "get_mealie_client",
+            lambda: mealie.MealieApiClient(
+                "https://mealie.example/api", client=http, inventory_timeout=budget
+            ),
+        )
+        monkeypatch.setattr(
+            workflows,
+            "load_kptncook_recipes_from_repository",
+            lambda: RepositoryRecipesResult([local], []),
+        )
+        if budget == 5:
+            with pytest.raises(workflows.UserFacingError, match="inventory.*deadline"):
+                workflows.sync_with_mealie_result()
+        else:
+            assert workflows.sync_with_mealie_result().created_count == 0
+
+    assert events == ([1, 2, 3, "closed"] if budget == 5 else [1, 2, 3, 4, "closed"])
+    assert all(method == "GET" for method, _ in requests)
+    if budget == 5 and target == "page":
+        assert ("GET", "/api/recipes/existing") not in requests

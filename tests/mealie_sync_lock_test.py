@@ -107,7 +107,7 @@ def sync_process(
                 raise RuntimeError("synthetic inventory failure")
             return [SimpleNamespace(slug=row) for row in rows]
 
-        def get_via_slug(self, slug, **kwargs):
+        def get_inventory_detail(self, slug, *, deadline):
             return SimpleNamespace(
                 slug=slug, extras={"source": "kptncook", "kptncook_id": slug}
             )

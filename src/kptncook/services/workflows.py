@@ -38,6 +38,7 @@ from kptncook.markdown_exporter import DEFAULT_SERVINGS as DEFAULT_MARKDOWN_SERV
 from kptncook.markdown_exporter import MarkdownExporter
 from kptncook.mealie import (
     MealieApiClient,
+    MealieInventoryDeadlineError,
     MealieInventoryError,
     kptncook_to_mealie,
 )
@@ -311,18 +312,10 @@ def get_kptncook_recipes_from_mealie(client: MealieApiClient) -> list[Any]:
             )
         recipes_with_details = []
         for position, recipe in enumerate(recipes, start=1):
-            remaining = deadline - mealie.monotonic()
-            if remaining <= 0:
-                raise MealieInventoryError(
-                    "Incomplete Mealie inventory: acquisition deadline exceeded"
-                )
             try:
-                detail = client.get_via_slug(
-                    recipe.slug,
-                    timeout=httpx.Timeout(
-                        min(30.0, remaining), connect=min(10.0, remaining)
-                    ),
-                )
+                detail = client.get_inventory_detail(recipe.slug, deadline=deadline)
+            except MealieInventoryDeadlineError:
+                raise
             except MealieInventoryError:
                 raise MealieInventoryError(
                     f"Incomplete Mealie inventory: invalid detail at inventory position {position}"

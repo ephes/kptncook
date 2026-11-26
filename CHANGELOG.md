@@ -6,6 +6,8 @@ Unreleased
   CVE-2026-97699, keeping the frozen runtime/development dependency audit clean.
 
 ### Fixes
+- Enforce Mealie inventory deadlines while streaming pages and sync details,
+  closing expired responses before any sync writes.
 - Share one Mealie sync inventory deadline from the first recipe page through
   the last detail read.
 - Attempt each KptnCook recipe ID at most once per Mealie sync, keeping failed
