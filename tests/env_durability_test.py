@@ -1,4 +1,4 @@
-"""Synthetic credential publication outcomes at the directory-sync boundary."""
+"""Synthetic credential staging and publication outcomes."""
 
 import errno
 import os
@@ -13,6 +13,29 @@ from typer.testing import CliRunner
 from kptncook import config, env, setup
 
 SECRET = "synthetic-credential-r109"
+
+
+def test_short_env_stage_write_preserves_configuration(tmp_path, monkeypatch, mocker):
+    path = tmp_path / ".env"
+    original = "KPTNCOOK_API_KEY=synthetic-key\nKEEP=Grüne Bohnen\n".encode("utf-8")
+    path.write_bytes(original)
+    fdopen = env.os.fdopen
+
+    def short_fdopen(fd, mode, **kwargs):
+        handle = fdopen(fd, mode, **kwargs)
+        if mode == "w":
+            write = handle.write
+            handle.write = lambda content: write(content.splitlines(keepends=True)[0])
+        return handle
+
+    monkeypatch.setattr(env.os, "fdopen", short_fdopen)
+    set_key = mocker.spy(env, "set_key")
+    with pytest.raises(OSError, match="^Incomplete configuration staging write$"):
+        env.upsert_env_value(path, "KPTNCOOK_ACCESS_TOKEN", SECRET)
+
+    set_key.assert_not_called()
+    assert path.read_bytes() == original
+    assert list(tmp_path.glob(".*.tmp")) == []
 
 
 def fail_directory_sync(monkeypatch, error_number):

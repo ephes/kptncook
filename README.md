@@ -984,6 +984,8 @@ cached instance.
 Then set environment variables in the `~/.kptncook/.env` file (or directly in your shell). You'll need to set at least the `KPTNCOOK_API_KEY` variable. If you want to sync the recipes with mealie, set `MEALIE_API_TOKEN` or `MEALIE_USERNAME`/`MEALIE_PASSWORD`.
 
 When kptncook creates or updates `~/.kptncook/.env`, it applies owner-only read/write permissions (`0600`) where the platform supports it, because the file may contain access tokens, passwords, or trusted shell commands. Updates are written to an owner-only temporary file next to `.env`, synced and then moved into place. Failures before replacement leave the previous file intact.
+An incomplete write of the initial UTF-8 text stops the operation before any
+settings are applied to the temporary file.
 The containing directory is synced after replacement. Unsupported directory sync
 uses the shared portability fallback; real disk errors (such as I/O failure or
 full storage) exit with a value-free "Configuration was published; durability is

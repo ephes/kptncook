@@ -127,7 +127,8 @@ def _atomic_write_env(
     tmp_path = Path(tmp_name)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(content)
+            if handle.write(content) != len(content):
+                raise OSError("Incomplete configuration staging write")
         for key, value in (assignments or {}).items():
             # set_key escapes single quotes; also escape backslashes because
             # python-dotenv decodes doubled backslashes in single-quoted values.

@@ -8,6 +8,8 @@ Unreleased
 ### Fixes
 - Refuse incomplete recipe store staging writes and preserve both the current
   store and its recovery backup.
+- Stop configuration updates when the initial `.env` staging write is incomplete,
+  preserving the previous file.
 - Try the recipe cover when the final step image is unusable in Markdown
   exports. Each distinct image is tried once within the shared batch allowance.
 - Use the downloaded JPEG, PNG or WebP signature for Markdown image filenames
