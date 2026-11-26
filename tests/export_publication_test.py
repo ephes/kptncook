@@ -257,6 +257,51 @@ def test_paprika_mid_batch_failure_publishes_nothing(minimal, tmp_path, monkeypa
     assert not list(tmp_path.iterdir())
 
 
+@pytest.mark.parametrize("with_budget", [False, True])
+def test_paprika_short_zip_header_preserves_existing_archive(
+    minimal, tmp_path, monkeypatch, with_budget
+):
+    out = tmp_path / "out"
+    out.mkdir()
+    monkeypatch.chdir(out)
+    exporter = PaprikaExporter()
+    recipe = Recipe.model_validate(minimal)
+    export_data = {recipe.id.oid: "{}"}
+    filename = exporter.get_export_filename(export_data, [recipe])
+    existing = out / filename
+    existing.write_bytes(b"previous archive")
+    monkeypatch.setattr(exporter, "get_recipe_as_json_string", lambda *a, **kw: "{}")
+    zip_stage_name = filename if with_budget else "archive.zip"
+    original_open = Path.open
+    shortened = False
+
+    def open_stage(path, mode="r", *args, **kwargs):
+        stream = original_open(path, mode, *args, **kwargs)
+        if mode == "wb" and path.name == zip_stage_name:
+            write = stream.write
+
+            def short_header(data):
+                nonlocal shortened
+                if not shortened and data.startswith(b"PK\x03\x04"):
+                    shortened = True
+                    return write(data[:-1])
+                return write(data)
+
+            stream.write = short_header
+        return stream
+
+    monkeypatch.setattr(Path, "open", open_stage)
+    with pytest.raises(UserFacingError, match="Incomplete compressed export write"):
+        if with_budget:
+            exporter.export([recipe])
+        else:
+            exporter.save_recipes(export_data, filename, str(out))
+
+    assert shortened
+    assert list(out.iterdir()) == [existing]
+    assert existing.read_bytes() == b"previous archive"
+
+
 def test_failed_note_publication_removes_only_owned_asset(minimal, monkeypatch):
     import os
 

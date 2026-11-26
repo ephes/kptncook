@@ -587,8 +587,13 @@ names.
 Archives, Markdown notes and their images are fully copied and flushed in sibling
 staging before atomic no-clobber publication. An incomplete copy stops before
 any final name is linked for that file, and existing files remain unchanged.
-Markdown also checks the initial staged byte count
-of each image and note before publishing it. If a note write is incomplete,
+
+ZIP archive creation checks every container write, including library exports
+without a batch budget. Paprika's budgeted export also checks writes of its
+gzip-compressed members. An incomplete write aborts before archive publication.
+
+Markdown checks the initial staged byte count of each image and note before
+publishing it. If a note write is incomplete,
 the exporter attempts to remove that recipe's published image and reports
 the failed recipe while preserving earlier exports. The exporter publishes
 each Markdown asset and syncs its directory before publishing the note that

@@ -245,15 +245,20 @@ class ExportBudget:
 
 
 class BudgetedWriter(io.BufferedIOBase):
-    """Meter writes to an already-owned file; the caller closes that file."""
+    """Require complete writes and optionally charge them to an export budget."""
 
-    def __init__(self, raw: Any, budget: ExportBudget):
+    def __init__(self, raw: Any, budget: ExportBudget | None):
         self.raw = raw
         self.budget = budget
 
     def write(self, data: Any) -> int:
-        self.budget.charge_output(len(data))
-        return self.raw.write(data)
+        size = len(data)
+        if self.budget is not None:
+            self.budget.charge_output(size)
+        written = self.raw.write(data)
+        if written != size:
+            raise UserFacingError("Incomplete compressed export write")
+        return written
 
     def tell(self) -> int:
         return self.raw.tell()
@@ -472,7 +477,7 @@ def write_zip(
 ) -> None:
     with zip_path.open("wb") as output:
         with zipfile.ZipFile(
-            BudgetedWriter(output, budget) if budget else output,
+            BudgetedWriter(output, budget),
             "w",
             compression=zipfile.ZIP_DEFLATED,
             allowZip64=True,

@@ -8,6 +8,8 @@ Unreleased
 ### Fixes
 - Refuse incomplete sibling staging copies before publishing recipe exports,
   preserving existing files.
+- Abort recipe archive export on incomplete ZIP writes, including exports
+  without a batch budget. Paprika's budgeted gzip members use the same check.
 - Refuse incomplete recipe store staging writes and preserve both the current
   store and its recovery backup.
 - Stop configuration updates when the initial `.env` staging write is incomplete,
