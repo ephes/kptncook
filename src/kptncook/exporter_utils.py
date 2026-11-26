@@ -9,7 +9,6 @@ import logging
 import os
 import tempfile
 import re
-import shutil
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -401,9 +400,11 @@ def move_to_free_target(
                 dir=directory, prefix=".kptncook-", suffix=".tmp", delete=False
             ) as staged:
                 staging_path = Path(staged.name)
-                shutil.copyfileobj(
-                    src, BudgetedWriter(staged, budget) if budget else staged
-                )
+                while chunk := src.read(64 * 1024):
+                    if budget is not None:
+                        budget.charge_output(len(chunk))
+                    if staged.write(chunk) != len(chunk):
+                        raise UserFacingError("Incomplete export staging copy")
                 staged.flush()
                 os.fsync(staged.fileno())
                 staged_identity = os.fstat(staged.fileno())

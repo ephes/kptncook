@@ -6,6 +6,8 @@ Unreleased
   CVE-2026-97699, keeping the frozen runtime/development dependency audit clean.
 
 ### Fixes
+- Refuse incomplete sibling staging copies before publishing recipe exports,
+  preserving existing files.
 - Refuse incomplete recipe store staging writes and preserve both the current
   store and its recovery backup.
 - Stop configuration updates when the initial `.env` staging write is incomplete,

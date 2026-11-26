@@ -1,5 +1,6 @@
 import pytest
 
+from kptncook import exporter_utils
 from kptncook.exporter_utils import (
     expand_timer_placeholders,
     format_timer,
@@ -127,9 +128,14 @@ def test_move_to_free_target_removes_own_partial_target_on_copy_error(tmp_path, 
     existing.write_bytes(b"old")
     source = tmp_path / "src.bin"
     source.write_bytes(b"new")
-    mocker.patch(
-        "kptncook.exporter_utils.shutil.copyfileobj", side_effect=OSError("disk full")
-    )
+    open_stage = exporter_utils.tempfile.NamedTemporaryFile
+
+    def failing_stage(*args, **kwargs):
+        stage = open_stage(*args, **kwargs)
+        stage.write = mocker.Mock(side_effect=OSError("disk full"))
+        return stage
+
+    mocker.patch.object(exporter_utils.tempfile, "NamedTemporaryFile", failing_stage)
 
     with pytest.raises(OSError, match="disk full"):
         move_to_free_target(source, tmp_path, "name", ".zip", "id1")
@@ -137,3 +143,4 @@ def test_move_to_free_target_removes_own_partial_target_on_copy_error(tmp_path, 
     assert existing.read_bytes() == b"old"
     assert not (tmp_path / "name-id1.zip").exists()
     assert source.read_bytes() == b"new"
+    assert set(tmp_path.iterdir()) == {existing, source}

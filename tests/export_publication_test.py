@@ -5,7 +5,6 @@ import gc
 import gzip
 import json
 import os
-import shutil
 import weakref
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -15,7 +14,7 @@ import pytest
 
 from kptncook import exporter_utils
 from kptncook.config import get_settings
-from kptncook.exporter_utils import BatchExportError, move_to_free_target
+from kptncook.exporter_utils import BatchExportError, ExportBudget, move_to_free_target
 from kptncook.http_errors import UserFacingError
 from kptncook.markdown_exporter import MarkdownExporter
 from kptncook.models import Recipe
@@ -27,21 +26,55 @@ def test_archive_name_absent_during_copy(tmp_path, monkeypatch):
     source.write_bytes(b"complete synthetic archive")
     out = tmp_path / "out"
     out.mkdir()
-    copy = shutil.copyfileobj
+    open_stage = exporter_utils.tempfile.NamedTemporaryFile
     observed = []
 
-    def paused_copy(src, dst):
-        dst.write(src.read(3))
-        dst.flush()
-        observed.append(True)
-        assert not list(out.glob("*.zip"))
-        copy(src, dst)
+    def observe_stage(*args, **kwargs):
+        stage = open_stage(*args, **kwargs)
+        write = stage.write
 
-    monkeypatch.setattr(shutil, "copyfileobj", paused_copy)
+        def observe_write(data):
+            count = write(data[:3])
+            stage.flush()
+            observed.append(True)
+            assert not list(out.glob("*.zip"))
+            return count + write(data[3:])
+
+        stage.write = observe_write
+        return stage
+
+    monkeypatch.setattr(exporter_utils.tempfile, "NamedTemporaryFile", observe_stage)
     target = move_to_free_target(source, out, "name", ".zip")
     assert observed
     assert target.read_bytes() == b"complete synthetic archive"
     assert list(out.iterdir()) == [target]
+
+
+@pytest.mark.parametrize("with_budget", [False, True])
+def test_short_sibling_copy_preserves_existing_note(tmp_path, monkeypatch, with_budget):
+    source = tmp_path / "staged.md"
+    content = b"# Complete synthetic note\n" * 4096
+    source.write_bytes(content)
+    out = tmp_path / "out"
+    out.mkdir()
+    existing = out / "name.md"
+    existing.write_bytes(b"previous note")
+    open_stage = exporter_utils.tempfile.NamedTemporaryFile
+
+    def short_stage(*args, **kwargs):
+        stage = open_stage(*args, **kwargs)
+        write = stage.write
+        stage.write = lambda data: write(data[:-1])
+        return stage
+
+    monkeypatch.setattr(exporter_utils.tempfile, "NamedTemporaryFile", short_stage)
+    budget = ExportBudget() if with_budget else None
+    with pytest.raises(UserFacingError, match="Incomplete export staging copy"):
+        move_to_free_target(source, out, "name", ".md", "id1", budget=budget)
+
+    assert list(out.iterdir()) == [existing]
+    assert existing.read_bytes() == b"previous note"
+    assert source.read_bytes() == content
 
 
 def test_concurrent_archive_publishers_preserve_both(tmp_path):
