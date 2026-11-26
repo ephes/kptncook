@@ -266,6 +266,10 @@ recipe's extras (`source: kptncook`), not by name. A native ZIP import creates
 the complete recipe with those identity extras already present. Distinct
 KptnCook recipes with the same title can both be imported: Mealie assigns a
 unique name and slug, which subsequent updates preserve.
+Once Mealie acknowledges a creation, later rows with the same KptnCook ID are
+skipped in that run. A failed attempt is reported separately and also prevents
+another attempt for that ID in the same run. When the outcome is unknown, the
+next sync checks the remote inventory before deciding whether to create it.
 
 Each Mealie recipe conversion uses one settings snapshot for its translations,
 ingredient grouping, image host allowlist and default KptnCook API key.

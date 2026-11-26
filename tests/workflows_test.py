@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from pydantic_core import PydanticSerializationError
 
 from kptncook.models import Recipe
-from kptncook.repositories import RecipeInDb
+from kptncook.repositories import RecipeInDb, RecipeListInDb
 from kptncook.services import repository as repository_service
 from kptncook.services import workflows
 from kptncook.services.repository import InvalidStoredRecipe, RepositoryRecipesResult
@@ -380,6 +380,45 @@ def test_sync_with_mealie_prefilters_recipes_already_present_in_mealie(
     assert result.invalid_repository_entries == []
     assert seen_ids == ["recipe-2"]
     assert result.failed_recipes == []
+
+
+@pytest.mark.parametrize("unknown_outcome", [False, True])
+def test_sync_with_mealie_attempts_each_stored_identity_once(
+    monkeypatch, minimal, unknown_outcome
+):
+    recipes = RecipeListInDb(
+        [
+            _recipe_in_db(minimal, oid=oid)
+            for oid in ("recipe-1", "recipe-1", "recipe-2")
+        ]
+    )
+    store = repository_service.get_repository().path
+    store.parent.mkdir(parents=True, exist_ok=True)
+    store.write_text(recipes.model_dump_json(), encoding="utf-8")
+    attempted = []
+
+    def create_recipe(recipe):
+        oid = recipe.extras["kptncook_id"]
+        attempted.append(oid)
+        if unknown_outcome and len(attempted) == 1:
+            raise httpx.ReadTimeout("synthetic missing creation reply")
+        return SimpleNamespace(slug=f"created-{oid}")
+
+    client = SimpleNamespace(create_recipe=create_recipe, close=Mock())
+    monkeypatch.setattr(workflows, "get_mealie_client", lambda: client)
+    monkeypatch.setattr(workflows, "get_kptncook_recipes_from_mealie", lambda _: [])
+
+    result = workflows.sync_with_mealie_result()
+
+    assert attempted == ["recipe-1", "recipe-2"]
+    assert result.invalid_repository_entries == []
+    assert result.created_count == (1 if unknown_outcome else 2)
+    if unknown_outcome:
+        [failure] = result.failed_recipes
+        assert failure.recipe_id == "recipe-1"
+        assert "outcome is unknown" in failure.reason
+    else:
+        assert result.failed_recipes == []
 
 
 def test_sync_result_defaults_do_not_share_failure_lists():

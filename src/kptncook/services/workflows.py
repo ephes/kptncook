@@ -492,9 +492,11 @@ def sync_with_mealie_result() -> SyncWithMealieResult:
                 r.extras.get("kptncook_id") for r in kptncook_recipes_from_mealie
             }
             created_count = 0
+            failed_ids: set[str] = set()
             failed_recipes: list[MealieSyncFailure] = []
             for recipe in repository_result.recipes:
-                if recipe.id.oid in ids_in_mealie:
+                oid = recipe.id.oid
+                if oid in ids_in_mealie or oid in failed_ids:
                     continue
                 recipe_name = (
                     localized_fallback(
@@ -508,11 +510,13 @@ def sync_with_mealie_result() -> SyncWithMealieResult:
                     # Conversion, validation and serialization failures are local to this
                     # recipe; keep processing the rest of the batch. Name collisions are
                     # failures too, not evidence that this recipe's identity was imported.
+                    failed_ids.add(oid)
                     reason = _describe_mealie_failure(exc)
                 else:
+                    ids_in_mealie.add(oid)
                     created_count += 1
                     continue
-                failure = MealieSyncFailure(recipe.id.oid, recipe_name, reason)
+                failure = MealieSyncFailure(oid, recipe_name, reason)
                 failed_recipes.append(failure)
                 _warn_best_effort(
                     "Failed to sync recipe %s (%s) with Mealie: %s",
