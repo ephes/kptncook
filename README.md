@@ -514,12 +514,13 @@ date at the start of the export. The output allowance counts the same UTF-8
 bytes written to staging. Images are downloaded into its sibling `assets/` directory
 with random filenames and relative references; copy that directory along with
 the notes. The downloaded byte signature determines the extension (`.jpg`,
-`.png`, or `.webp`). Markdown uses the final step image when it has a URL and
-otherwise uses the recipe cover if exactly one is available. The selected URL must pass
-the image-origin check. Authentication keys and signed image URLs appear only in
-download requests, never in the generated Markdown or asset filenames. Failed
-image downloads and unrecognized signatures leave the recipe text without
-image metadata or markup.
+`.png`, or `.webp`). Markdown tries the final step image first. If its URL is
+missing or disallowed, the download fails, or the signature is unrecognized,
+Markdown tries the recipe cover when exactly one is available and its URL is
+distinct. Both downloads share the batch asset allowance. Exhaustion stops
+the batch. If neither image is usable, the note contains the recipe text
+without image metadata or markup. Authentication keys and signed image URLs
+appear only in download requests and are omitted from notes and asset names.
 Library `render_recipe()` performs no image I/O and omits images unless passed
 an explicit local `image_path`. It defaults to the current local date unless an
 `export_date` is supplied. Image authentication preserves existing query

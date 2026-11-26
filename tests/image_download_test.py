@@ -137,6 +137,8 @@ def test_bounded_image_preserves_recipe(
             assert ("image.jpg" in archive.namelist()) == has_image
         assert payload["steps"][0]["instruction"] == "Mix synthetic ingredients"
     elif caller == "markdown":
+        # Exercise the single transfer with no fallback candidate.
+        recipe.image_list = []
         [path] = MarkdownExporter().export([recipe])
         text = path.read_text(encoding="utf-8")
         assert "Mix synthetic ingredients" in text

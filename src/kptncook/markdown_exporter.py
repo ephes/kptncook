@@ -20,6 +20,7 @@ from collections.abc import Iterable
 from datetime import date
 from itertools import islice
 from pathlib import Path
+from urllib.parse import urldefrag
 
 from pathvalidate import sanitize_filename
 
@@ -264,28 +265,35 @@ class MarkdownExporter:
     def _download_recipe_image(
         self, recipe: Recipe, *, budget: ExportBudget | None = None
     ) -> tuple[bytes, str] | None:
-        image = recipe.steps[-1].image if recipe.steps else None
-        if image is None or not image.url:
-            image = get_cover(recipe.image_list)
-        if image is None:
-            return None
-        try:
-            image = image.get_image_with_api_key_url(get_settings().kptncook_api_key)
-        except ImageOriginError:
-            logger.warning("Skipping Markdown image: not on an allowed image host")
-            return None
-        try:
-            image_bytes = download_image(image.url, budget=budget)
-        except httpx.HTTPError:
-            logger.warning(
-                "Skipping Markdown image: download failed or exceeded limits"
-            )
-            return None
-        extension = detect_image_extension(image_bytes)
-        if extension is None:
-            logger.warning("Skipping Markdown image: unsupported image format")
-            return None
-        return image_bytes, extension
+        step_image = recipe.steps[-1].image if recipe.steps else None
+        cover = get_cover(recipe.image_list)
+        api_key = get_settings().kptncook_api_key
+        attempted_urls: set[str] = set()
+        for image in (step_image, cover):
+            if image is None or not image.url:
+                continue
+            try:
+                url = image.get_image_with_api_key_url(api_key).url
+            except ImageOriginError:
+                logger.warning("Skipping Markdown image: not on an allowed image host")
+                continue
+            request_url = urldefrag(url).url
+            if request_url in attempted_urls:
+                continue
+            attempted_urls.add(request_url)
+            try:
+                image_bytes = download_image(url, budget=budget)
+            except httpx.HTTPError:
+                logger.warning(
+                    "Skipping Markdown image: download failed or exceeded limits"
+                )
+                continue
+            extension = detect_image_extension(image_bytes)
+            if extension is None:
+                logger.warning("Skipping Markdown image: unsupported image format")
+                continue
+            return image_bytes, extension
+        return None
 
     def render_recipe(
         self,

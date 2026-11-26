@@ -80,7 +80,7 @@ def test_markdown_images_are_local_private_and_optional(
     [path] = MarkdownExporter().export([recipe])
     text = path.read_text(encoding="utf-8")
     front = yaml.safe_load(text.split("---", 2)[1])
-    assert requests
+    assert len(requests) == 1
     assert "signature" not in text
     assert key not in text + caplog.text
     assert "kptnkey" not in text
@@ -102,15 +102,17 @@ def test_markdown_images_are_local_private_and_optional(
 
 
 @pytest.mark.parametrize(
-    ("step_url", "chosen_path"),
+    ("step_url", "step_result", "expected_paths"),
     [
-        ("", "/cover"),
-        ("https://example.test/step", "/step"),
-        ("https://off-list.invalid/step", None),
+        ("", "ok", ["/cover"]),
+        ("https://example.test/step", "ok", ["/step"]),
+        ("https://off-list.invalid/step", "ok", ["/cover"]),
+        ("https://example.test/step", "failed", ["/step", "/cover"]),
+        ("https://example.test/step", "unsupported", ["/step", "/cover"]),
     ],
 )
-def test_markdown_selects_cover_only_when_final_step_image_is_missing(
-    minimal, monkeypatch, step_url, chosen_path
+def test_markdown_prefers_final_step_and_falls_back_to_usable_cover(
+    minimal, monkeypatch, step_url, step_result, expected_paths
 ):
     minimal["steps"].append(
         {
@@ -123,25 +125,31 @@ def test_markdown_selects_cover_only_when_final_step_image_is_missing(
     ]
     recipe = Recipe.model_validate(minimal)
     downloaded = []
+    step_bytes = b"\xff\xd8\xffsynthetic step"
+    cover_bytes = b"\x89PNG\r\n\x1a\nsynthetic cover"
 
     def download(url, **kwargs):
-        downloaded.append(urlsplit(url).path)
-        return b"\xff\xd8\xffsynthetic image"
+        path = urlsplit(url).path
+        downloaded.append(path)
+        if path == "/cover":
+            return cover_bytes
+        if step_result == "failed":
+            raise httpx.ReadTimeout("Synthetic failed image")
+        if step_result == "unsupported":
+            return b"not an image"
+        return step_bytes
 
     monkeypatch.setattr("kptncook.markdown_exporter.download_image", download)
     [note] = MarkdownExporter().export([recipe])
     text = note.read_text(encoding="utf-8")
     front = yaml.safe_load(text.split("---", 2)[1])
-    if chosen_path is None:
-        assert downloaded == []
-        assert "image" not in front
-        assert list(note.parent.rglob("*.jpg")) == []
-    else:
-        assert downloaded == [chosen_path]
-        asset = note.parent / front["image"]
-        assert list(note.parent.rglob("*.jpg")) == [asset]
-        assert asset.read_bytes() == b"\xff\xd8\xffsynthetic image"
-        assert f"]({front['image']})" in text
+    assert downloaded == expected_paths
+    asset = note.parent / front["image"]
+    assert list((note.parent / "assets").iterdir()) == [asset]
+    assert asset.read_bytes() == (
+        step_bytes if expected_paths == ["/step"] else cover_bytes
+    )
+    assert f"]({front['image']})" in text
 
 
 def test_render_without_assets_has_no_remote_image(minimal):

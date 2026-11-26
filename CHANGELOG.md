@@ -6,6 +6,8 @@ Unreleased
   CVE-2026-97699, keeping the frozen runtime/development dependency audit clean.
 
 ### Fixes
+- Try the recipe cover when the final step image is unusable in Markdown
+  exports. Each distinct image is tried once within the shared batch allowance.
 - Use the downloaded JPEG, PNG or WebP signature for Markdown image filenames
   and omit images with unrecognized signatures.
 - Index Mealie organizer IDs per matching name to avoid repeated scans of large

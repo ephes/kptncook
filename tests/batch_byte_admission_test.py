@@ -121,6 +121,40 @@ def test_cumulative_assets_stop_with_receipts(batch, tmp_path, monkeypatch, kind
     assert list(scratch.iterdir()) == []
 
 
+@pytest.mark.parametrize("asset_limit", [3, 10])
+def test_markdown_cover_fallback_shares_asset_allowance(
+    minimal, monkeypatch, asset_limit
+):
+    monkeypatch.setattr(exporter_utils, "MAX_BATCH_ASSET_BYTES", asset_limit)
+    minimal["steps"][0]["image"]["url"] = "https://example.test/step"
+    minimal["imageList"][0]["url"] = "https://example.test/cover"
+    requests = []
+
+    class BrokenStepImage(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b"\xff\xd8\xff1"
+            raise httpx.ReadError("Synthetic interrupted step image")
+
+    def handle(request):
+        requests.append(request.url.path)
+        if request.url.path == "/step":
+            return httpx.Response(200, stream=BrokenStepImage())
+        return httpx.Response(200, content=b"\xff\xd8\xffcover")
+
+    client_class = httpx.AsyncClient
+    monkeypatch.setattr(
+        image_download.httpx,
+        "AsyncClient",
+        lambda **kw: client_class(transport=httpx.MockTransport(handle), **kw),
+    )
+    with pytest.raises(UserFacingError, match="asset.*allowance") as caught:
+        MarkdownExporter().export([Recipe.model_validate(minimal)])
+
+    assert requests == (["/step"] if asset_limit == 3 else ["/step", "/cover"])
+    assert caught.value.completed_paths == ()
+    assert not list((get_settings().root / "export_md").iterdir())
+
+
 @pytest.mark.parametrize("kind", ["paprika", "tandoor", "markdown"])
 def test_output_allowance_refuses_before_partial_final(
     batch, tmp_path, monkeypatch, kind
