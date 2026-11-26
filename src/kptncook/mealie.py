@@ -436,14 +436,17 @@ class MealieApiClient(BaseHttpClient):
             )
         return items, total_pages
 
-    def _get_all_items(self, endpoint_name):
-        all_items = []
+    def _get_all_items(
+        self, endpoint_name: str, *, deadline: float | None = None
+    ) -> list[dict[str, Any]]:
+        all_items: list[dict[str, Any]] = []
         seen = set()
         total_pages = None
         total = None
         page_num = 1
         remaining_bytes = MAX_INVENTORY_BYTES
-        deadline = monotonic() + self.inventory_timeout
+        if deadline is None:
+            deadline = monotonic() + self.inventory_timeout
         while total_pages is None or page_num <= total_pages:
             remaining = deadline - monotonic()
             if remaining <= 0:
@@ -911,8 +914,9 @@ class MealieApiClient(BaseHttpClient):
             validated_recipes.append(validated)
         return validated_recipes
 
-    def get_all_recipes(self):
-        return self.validate_recipes(self._get_all_items("recipes"))
+    def get_all_recipes(self, *, deadline: float | None = None) -> list[Recipe]:
+        """Read recipe pages under a caller-supplied absolute monotonic deadline."""
+        return self.validate_recipes(self._get_all_items("recipes", deadline=deadline))
 
     def delete_via_slug(self, slug):
         r = self.delete(_recipe_path(slug))

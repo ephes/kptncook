@@ -25,6 +25,7 @@ from kptncook.api import (
     _collect_recipe_identifiers,
     parse_id,
 )
+from kptncook import mealie
 from kptncook.auth import InvalidTokenError
 from kptncook.config import get_settings
 from kptncook.env import ENV_PATH
@@ -302,15 +303,15 @@ def _require_detail_matches_row(row: Any, detail: Any, position: int) -> None:
 
 def get_kptncook_recipes_from_mealie(client: MealieApiClient) -> list[Any]:
     try:
-        deadline = monotonic() + client.inventory_timeout
-        recipes = client.get_all_recipes()
-        if monotonic() >= deadline:
+        deadline = mealie.monotonic() + client.inventory_timeout
+        recipes = client.get_all_recipes(deadline=deadline)
+        if mealie.monotonic() >= deadline:
             raise MealieInventoryError(
                 "Incomplete Mealie inventory: acquisition deadline exceeded"
             )
         recipes_with_details = []
         for position, recipe in enumerate(recipes, start=1):
-            remaining = deadline - monotonic()
+            remaining = deadline - mealie.monotonic()
             if remaining <= 0:
                 raise MealieInventoryError(
                     "Incomplete Mealie inventory: acquisition deadline exceeded"
@@ -326,7 +327,7 @@ def get_kptncook_recipes_from_mealie(client: MealieApiClient) -> list[Any]:
                 raise MealieInventoryError(
                     f"Incomplete Mealie inventory: invalid detail at inventory position {position}"
                 ) from None
-            if monotonic() >= deadline:
+            if mealie.monotonic() >= deadline:
                 raise MealieInventoryError(
                     "Incomplete Mealie inventory: acquisition deadline exceeded"
                 )

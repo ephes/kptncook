@@ -437,8 +437,8 @@ with at most 64 MiB of response bodies across all pages of one inventory. A page
 that exceeds either byte limit or uses compression aborts that acquisition before
 it can be used for creates.
 An acquisition defaults to a 120-second elapsed budget, checked before and after each
-response and before returning an inventory. Sync shares that budget across the
-recipe listing and its detail reads. Request socket timeouts are capped by the
+response and before returning an inventory. Sync starts one deadline before pagination and shares it
+with every recipe page and detail read. Request socket timeouts are capped by the
 remaining budget; in-flight requests follow HTTPX's per-operation timeout rules.
 A successful reply observed after the deadline is discarded before any creates.
 Large libraries with sequential detail reads may need a larger budget: set

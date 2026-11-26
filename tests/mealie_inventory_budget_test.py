@@ -13,7 +13,6 @@ from kptncook.services.repository import RepositoryRecipesResult
 def test_elapsed_inventory_budget_prevents_sync_writes(monkeypatch, minimal, slow):
     now = [0.0]
     monkeypatch.setattr(mealie, "monotonic", lambda: now[0], raising=False)
-    monkeypatch.setattr(workflows, "monotonic", lambda: now[0], raising=False)
     writes = []
     rows = [
         {
@@ -122,7 +121,6 @@ def test_remaining_inventory_time_bounds_each_page_request(monkeypatch):
 def test_remaining_budget_also_bounds_detail_requests(monkeypatch):
     now = [0.0]
     monkeypatch.setattr(mealie, "monotonic", lambda: now[0])
-    monkeypatch.setattr(workflows, "monotonic", lambda: now[0])
     timeouts = []
 
     def handle(request):
@@ -194,7 +192,6 @@ def test_large_inventory_can_raise_the_finite_budget(monkeypatch, budget):
 
     now = [0.0]
     monkeypatch.setattr(mealie, "monotonic", lambda: now[0])
-    monkeypatch.setattr(workflows, "monotonic", lambda: now[0])
     monkeypatch.setenv("MEALIE_INVENTORY_TIMEOUT_SECONDS", str(budget))
     monkeypatch.setattr(settings, "mealie_api_token", "synthetic")
     rows = [{"slug": f"personal-{i}"} for i in range(4)]
@@ -265,3 +262,53 @@ def test_inventory_budget_accepts_the_documented_maximum(tmp_path):
             ).inventory_timeout
             == 86400
         )
+
+
+def test_delayed_paginator_uses_sync_deadline(monkeypatch, minimal):
+    now = [0.0]
+    monkeypatch.setattr(mealie, "monotonic", lambda: now[0])
+    monkeypatch.setattr(workflows, "monotonic", lambda: now[0])
+    requests = []
+
+    def handle(request):
+        requests.append(
+            (request.method, request.url.path, request.url.params.get("page"))
+        )
+        if request.url.path == "/api/app/about":
+            return httpx.Response(200, json={"version": "v3.28.0"})
+        assert request.method == "GET"
+        page = int(request.url.params["page"])
+        now[0] += 2
+        return httpx.Response(
+            200,
+            json={
+                "items": [{"slug": f"recipe-{page}"}],
+                "total_pages": 2,
+                "next": "/api/recipes?page=2" if page == 1 else None,
+            },
+        )
+
+    class DelayedClient(mealie.MealieApiClient):
+        def get_all_recipes(self, **kwargs):
+            now[0] += 4
+            return super().get_all_recipes(**kwargs)
+
+    with httpx.Client(transport=httpx.MockTransport(handle)) as http:
+        monkeypatch.setattr(
+            workflows,
+            "get_mealie_client",
+            lambda: DelayedClient(
+                "https://mealie.example/api", client=http, inventory_timeout=5
+            ),
+        )
+        monkeypatch.setattr(
+            workflows,
+            "load_kptncook_recipes_from_repository",
+            lambda: RepositoryRecipesResult([Recipe.model_validate(minimal)], []),
+        )
+        with pytest.raises(workflows.UserFacingError, match="inventory.*deadline"):
+            workflows.sync_with_mealie_result()
+
+    assert [item for item in requests if item[1] != "/api/app/about"] == [
+        ("GET", "/api/recipes", "1")
+    ]

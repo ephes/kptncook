@@ -98,7 +98,7 @@ def sync_process(
         def close(self):
             pass
 
-        def get_all_recipes(self):
+        def get_all_recipes(self, *, deadline):
             inventory_entered.set()
             rows = [json.loads(line) for line in Path(remote).read_text().splitlines()]
             if release is not None:
