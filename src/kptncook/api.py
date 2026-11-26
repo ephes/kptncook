@@ -167,8 +167,9 @@ def _extract_wrapper_payload(
 
     Each frame carries its active ancestors, so shared acyclic dictionaries are
     allowed. A favorites key whose nested dictionary has no list is invalid;
-    discovery skips empty nested lists when checking aliases and can continue
-    with sibling wrappers.
+    discovery skips empty nested lists when checking aliases, then searches the
+    dictionaries under the remaining aliases and can continue with sibling
+    wrappers.
     Lists of recipe records are leaves, not additional envelope work.
     """
     keys = _FAVORITES_KEYS if favorites else _DISCOVERY_KEYS
@@ -206,6 +207,7 @@ def _extract_wrapper_payload(
             )
         active = ancestors | {id(node)}
         handled = False
+        alias_wrappers: list[object] = []
         for key in keys:
             charge()
             if key not in node:
@@ -222,8 +224,14 @@ def _extract_wrapper_payload(
                 stack.append((iter((value,)), depth + 1, active, True, True))
                 handled = True
                 break
+            if isinstance(value, dict):
+                alias_wrappers.append(value)
         if not handled:
             stack.append((iter(node.values()), depth + 1, active, False, False))
+        elif not favorites and alias_wrappers:
+            # An empty nested alias list still lets later dictionary aliases
+            # supply recipes; other non-alias values stay unsearched.
+            stack.append((iter(alias_wrappers), depth + 1, active, False, False))
     return [], False, False
 
 
