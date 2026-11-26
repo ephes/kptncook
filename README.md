@@ -368,8 +368,10 @@ without IDs also stop the recipe before import.
 
 Units, foods and tags are listed once per sync, not once per recipe. The lookup
 is built only from a complete inventory and then updated with organizers this
-sync created (or found through an inventory refresh); each new sync,
-login or token change reads Mealie again. A recipe creation failure retires the
+sync created (or found through an inventory refresh). Each name's inventory
+matches stay in listing order, with repeated IDs counted once and each entry
+without an ID counted separately. Each new sync, login or token change reads
+Mealie again. A recipe creation failure retires the
 cached organizer inventories: the next independent recipe rereads them, allowing
 remotely removed/recreated organizers to recover. The failed recipe/import is
 never automatically replayed. If several existing organizers with

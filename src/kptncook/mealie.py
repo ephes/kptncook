@@ -510,12 +510,15 @@ class MealieApiClient(BaseHttpClient):
             self._get_all_items(endpoint_name)
         )
         index: dict[str, list[Any]] = {}
+        seen_ids: dict[str, set[uuid.UUID]] = {}
         for item in existing_items:
-            matches = index.setdefault(normalize_name(item.name), [])
-            # The same proven identity may appear once per key; distinct IDs
-            # for one key are kept so lookups can refuse to guess.
-            if item.id is None or all(match.id != item.id for match in matches):
-                matches.append(item)
+            key = normalize_name(item.name)
+            if item.id is not None:
+                ids = seen_ids.setdefault(key, set())
+                if item.id in ids:
+                    continue
+                ids.add(item.id)
+            index.setdefault(key, []).append(item)
         return index
 
     def _organizer_lookup_state(

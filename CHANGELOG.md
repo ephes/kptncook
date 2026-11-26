@@ -6,6 +6,8 @@ Unreleased
   CVE-2026-97699, keeping the frozen runtime/development dependency audit clean.
 
 ### Fixes
+- Index Mealie organizer IDs per matching name to avoid repeated scans of large
+  duplicate-name inventories.
 - Require a confirmed Mealie unit, food or tag ID before archive import. Check
   the inventory once if the create reply omits the ID.
 - Set the Mealie cover extension from the downloaded JPEG, PNG or WebP

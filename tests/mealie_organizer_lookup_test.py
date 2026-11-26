@@ -5,7 +5,7 @@ from collections import Counter
 from email.parser import BytesParser
 from email.policy import default
 from io import BytesIO
-from uuid import uuid4
+from uuid import UUID, uuid4
 from zipfile import ZipFile
 
 import httpx
@@ -109,6 +109,48 @@ def test_ambiguous_existing_tags_refuse_before_any_write(order):
         with pytest.raises(MealieOrganizerAmbiguityError, match="tag 'vegan'"):
             client.create_recipe(recipe)
     assert server.writes == []
+
+
+def test_organizer_index_bounds_identity_comparisons_per_name(monkeypatch):
+    ids = [str(UUID(int=i, version=4)) for i in range(512)]
+    rows = [
+        {"name": "VEGAN"},
+        *[{"name": "Vegan", "id": organizer_id} for organizer_id in ids],
+        {"name": "vegan", "id": ids[0]},
+        {"name": "vegan"},
+        {"name": "Dessert", "id": ids[0]},
+        {"name": "Idless"},
+    ]
+    comparisons = 0
+    original_eq = UUID.__eq__
+
+    def count_comparison(left, right):
+        nonlocal comparisons
+        comparisons += 1
+        return original_eq(left, right)
+
+    monkeypatch.setattr(UUID, "__eq__", count_comparison)
+    with httpx.Client(transport=httpx.MockTransport(FakeMealie().handle)) as http:
+        client = MealieApiClient("https://mealie.example/api", client=http)
+        monkeypatch.setattr(client, "_get_all_items", lambda endpoint: rows)
+        index = client._organizer_lookup_state(
+            "organizers/tags", RecipeTag, str.casefold
+        )
+
+        matches = index["vegan"]
+        assert [str(tag.id) if tag.id is not None else None for tag in matches] == [
+            None,
+            *ids,
+            None,
+        ]
+        assert matches[1].name == "Vegan"
+        assert str(index["dessert"][0].id) == ids[0]
+        with pytest.raises(MealieOrganizerAmbiguityError, match="514 entries"):
+            client.create_recipe(_recipe(tags=["vegan"]))
+        with pytest.raises(ValueError, match="has no organizer ID"):
+            client._existing_organizer(index, "organizers/tags", "idless", "Idless")
+
+    assert comparisons <= len(rows)
 
 
 def test_ambiguous_existing_foods_refuse_before_any_write():
