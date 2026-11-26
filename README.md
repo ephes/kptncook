@@ -582,8 +582,12 @@ an error asking you to move existing exports or choose another location. Existin
 files remain unchanged; publication and directory-sync rules also cover fallback
 names.
 Archives and Markdown notes are fully written and flushed in sibling staging
-before atomic no-clobber publication. Markdown assets are published completely
-and their directory synced before the note that references them. Directory entries
+before atomic no-clobber publication. Markdown checks the staged byte count
+of each image and note before publishing it. If a note write is incomplete,
+the exporter attempts to remove that recipe's published image and reports
+the failed recipe while preserving earlier exports. The exporter publishes
+each Markdown asset and syncs its directory before publishing the note that
+references it. Directory entries
 for newly created Markdown export/assets directories are synced before use;
 each final export directory is synced after its file is linked. Unsupported
 directory-sync operations retain the portability fallback; real I/O errors are

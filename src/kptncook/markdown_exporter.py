@@ -174,7 +174,10 @@ class MarkdownExporter:
                             staged_asset = staging / "image.jpg"
                             budget.charge_output(len(image_bytes))
                             with staged_asset.open("xb") as asset:
-                                asset.write(image_bytes)
+                                if asset.write(image_bytes) != len(image_bytes):
+                                    raise UserFacingError(
+                                        "Incomplete Markdown image staging write"
+                                    )
                             assets = out_dir / "assets"
                             assets.mkdir(exist_ok=True)
                             try:
@@ -203,7 +206,10 @@ class MarkdownExporter:
                         staged_note = staging / "note.md"
                         note_bytes = content.encode("utf-8")
                         budget.charge_output(len(note_bytes))
-                        staged_note.write_bytes(note_bytes)
+                        if staged_note.write_bytes(note_bytes) != len(note_bytes):
+                            raise UserFacingError(
+                                "Incomplete Markdown note staging write"
+                            )
                         out_path = move_to_free_target(
                             staged_note,
                             out_dir,

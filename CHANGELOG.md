@@ -8,6 +8,8 @@ Unreleased
 ### Fixes
 - Index Mealie organizer IDs per matching name to avoid repeated scans of large
   duplicate-name inventories.
+- Refuse short Markdown image and note staging writes, preserving completed
+  exports and cleaning up the failed recipe's image.
 - Require a confirmed Mealie unit, food or tag ID before archive import. Check
   the inventory once if the create reply omits the ID.
 - Set the Mealie cover extension from the downloaded JPEG, PNG or WebP

@@ -76,11 +76,11 @@ def test_markdown_note_absent_until_asset_complete(minimal, monkeypatch):
             self.handle.close()
 
         def write(self, data):
-            self.handle.write(data[:2])
+            first_count = self.handle.write(data[:2])
             self.handle.flush()
             observed.append(True)
             assert not list(out.glob("*.md"))
-            self.handle.write(data[2:])
+            return first_count + self.handle.write(data[2:])
 
     def observe(path, mode="r", *args, **kwargs):
         handle = original_open(path, mode, *args, **kwargs)
@@ -99,6 +99,62 @@ def test_markdown_note_absent_until_asset_complete(minimal, monkeypatch):
     assert asset.read_bytes() == b"synthetic image"
     assert f"assets/{asset.name}" in note.read_text(encoding="utf-8")
     assert sorted(p.name for p in out.iterdir()) == sorted(["assets", note.name])
+
+
+@pytest.mark.parametrize(
+    ("short_stage", "kind"), [("image.jpg", "image"), ("note.md", "note")]
+)
+def test_markdown_short_stage_preserves_completed_exports(
+    minimal, monkeypatch, short_stage, kind
+):
+    out = get_settings().root / "export_md"
+    assets = out / "assets"
+    assets.mkdir(parents=True)
+    existing_note = out / "Minimal Recipe.md"
+    existing_asset = assets / "existing.jpg"
+    existing_note.write_bytes(b"existing note")
+    existing_asset.write_bytes(b"existing image")
+    image = b"synthetic image"
+    monkeypatch.setattr(
+        "kptncook.markdown_exporter.download_image", lambda *args, **kwargs: image
+    )
+    original_open = Path.open
+    writes = 0
+
+    def open_with_short_write(path, mode="r", *args, **kwargs):
+        nonlocal writes
+        stream = original_open(path, mode, *args, **kwargs)
+        if path.name == short_stage and mode in {"xb", "wb"}:
+            writes += 1
+            if writes == 2:
+                complete_write = stream.write
+                stream.write = lambda data: complete_write(data[:-1])
+        return stream
+
+    monkeypatch.setattr(Path, "open", open_with_short_write)
+    recipes = [
+        Recipe.model_validate(dict(minimal, _id={"$oid": f"{i:024x}"}))
+        for i in range(1, 4)
+    ]
+
+    with pytest.raises(
+        BatchExportError, match=f"Incomplete Markdown {kind} staging write"
+    ) as caught:
+        MarkdownExporter().export(recipes)
+
+    error = caught.value
+    assert writes == 2
+    assert error.failed_recipe_id == recipes[1].id.oid
+    assert error.remaining_count == 1
+    assert error.retained_assets == ()
+    [note] = error.completed_paths
+    [asset] = error.completed_assets
+    assert asset.read_bytes() == image
+    assert f"assets/{asset.name}" in note.read_text(encoding="utf-8")
+    assert set(out.iterdir()) == {assets, note, existing_note}
+    assert set(assets.iterdir()) == {asset, existing_asset}
+    assert existing_note.read_bytes() == b"existing note"
+    assert existing_asset.read_bytes() == b"existing image"
 
 
 def test_paprika_releases_each_serialized_recipe(minimal, tmp_path, monkeypatch):
