@@ -26,7 +26,7 @@ from .config import Settings, get_settings
 from .http_errors import extract_mealie_detail_message
 from .auth import validate_token
 from .http_client import BaseHttpClient, DEFAULT_REQUEST_TIMEOUT
-from .image_download import download_image
+from .image_download import detect_image_extension, download_image
 from .image_origin import ImageOriginError, allowed_image_hosts, is_allowed_image_url
 from .ingredient_groups import iter_ingredient_groups
 from .models import (
@@ -362,13 +362,8 @@ class MealieApiClient(BaseHttpClient):
             _warn_media("Skipping cover image: not on an allowed image host")
             return
         image_bytes = download_image(recipe.image_url, follow_redirects=True)
-        if image_bytes.startswith(b"\xff\xd8\xff"):
-            extension = "jpg"
-        elif image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
-            extension = "png"
-        elif image_bytes.startswith(b"RIFF") and image_bytes[8:12] == b"WEBP":
-            extension = "webp"
-        else:
+        extension = detect_image_extension(image_bytes)
+        if extension is None:
             _warn_media("Skipping cover image: unsupported image format")
             return
         r = self.put(

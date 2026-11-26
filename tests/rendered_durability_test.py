@@ -88,8 +88,10 @@ def test_export_directory_sync_orders_assets_before_note(minimal, monkeypatch, f
     old_asset, old_note = assets / "old.jpg", out / "old.md"
     old_asset.write_bytes(b"old image")
     old_note.write_bytes(b"old note")
+    image_bytes = b"\xff\xd8\xffnew image"
     monkeypatch.setattr(
-        "kptncook.markdown_exporter.download_image", lambda url, **kw: b"new image"
+        "kptncook.markdown_exporter.download_image",
+        lambda url, **kw: image_bytes,
     )
     sync, link = os.fsync, os.link
     events = []
@@ -132,7 +134,7 @@ def test_export_directory_sync_orders_assets_before_note(minimal, monkeypatch, f
     assert old_note.read_bytes() == b"old note"
     new_assets = [p for p in assets.iterdir() if p != old_asset]
     assert len(new_assets) == 1
-    assert new_assets[0].read_bytes() == b"new image"
+    assert new_assets[0].read_bytes() == image_bytes
     new_notes = [p for p in out.glob("*.md") if p != old_note]
     assert len(new_notes) == (0 if failure == "asset" else 1)
     if new_notes:

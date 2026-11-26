@@ -91,12 +91,12 @@ def test_markdown_note_absent_until_asset_complete(minimal, monkeypatch):
     monkeypatch.setattr(Path, "open", observe)
     monkeypatch.setattr(
         "kptncook.markdown_exporter.download_image",
-        lambda url, **kw: b"synthetic image",
+        lambda url, **kw: b"\xff\xd8\xffsynthetic image",
     )
     [note] = MarkdownExporter().export([Recipe.model_validate(minimal)])
     assert observed
     [asset] = (out / "assets").iterdir()
-    assert asset.read_bytes() == b"synthetic image"
+    assert asset.read_bytes() == b"\xff\xd8\xffsynthetic image"
     assert f"assets/{asset.name}" in note.read_text(encoding="utf-8")
     assert sorted(p.name for p in out.iterdir()) == sorted(["assets", note.name])
 
@@ -114,7 +114,7 @@ def test_markdown_short_stage_preserves_completed_exports(
     existing_asset = assets / "existing.jpg"
     existing_note.write_bytes(b"existing note")
     existing_asset.write_bytes(b"existing image")
-    image = b"synthetic image"
+    image = b"\xff\xd8\xffsynthetic image"
     monkeypatch.setattr(
         "kptncook.markdown_exporter.download_image", lambda *args, **kwargs: image
     )
@@ -245,7 +245,8 @@ def test_failed_note_publication_removes_only_owned_asset(minimal, monkeypatch):
 
     monkeypatch.setattr(os, "link", fail_note)
     monkeypatch.setattr(
-        "kptncook.markdown_exporter.download_image", lambda url, **kw: b"synthetic"
+        "kptncook.markdown_exporter.download_image",
+        lambda url, **kw: b"\xff\xd8\xffsynthetic",
     )
     with pytest.raises(UserFacingError, match="synthetic publication failure"):
         MarkdownExporter().export([Recipe.model_validate(minimal)])
@@ -297,7 +298,8 @@ def test_markdown_refuses_unsupported_hard_links_through_cli(minimal, monkeypatc
     get_settings()
     recipe = Recipe.model_validate(minimal)
     monkeypatch.setattr(
-        "kptncook.markdown_exporter.download_image", lambda *a, **kw: b"synthetic"
+        "kptncook.markdown_exporter.download_image",
+        lambda *a, **kw: b"\xff\xd8\xffsynthetic",
     )
     monkeypatch.setattr(
         cli,
@@ -360,6 +362,7 @@ def test_other_link_failures_are_not_reported_as_missing_hard_links(
     "outcome", ["linked", "linked-exists", "competing", "unreadable"]
 )
 def test_markdown_reconciles_ambiguous_hard_link(minimal, monkeypatch, outcome):
+    image_bytes = b"\xff\xd8\xffsynthetic"
     out = get_settings().root / "export_md"
     note = out / "Minimal Recipe.md"
     link, lstat, sync = os.link, Path.lstat, exporter_utils.fsync_directory
@@ -388,7 +391,8 @@ def test_markdown_reconciles_ambiguous_hard_link(minimal, monkeypatch, outcome):
     monkeypatch.setattr(os, "link", lose_link_reply)
     monkeypatch.setattr(exporter_utils, "fsync_directory", record_sync)
     monkeypatch.setattr(
-        "kptncook.markdown_exporter.download_image", lambda *a, **kw: b"synthetic"
+        "kptncook.markdown_exporter.download_image",
+        lambda *a, **kw: image_bytes,
     )
     exporter = MarkdownExporter()
     recipe = Recipe.model_validate(minimal)
@@ -411,7 +415,7 @@ def test_markdown_reconciles_ambiguous_hard_link(minimal, monkeypatch, outcome):
         assert not assets
     else:
         [asset] = assets
-        assert asset.read_bytes() == b"synthetic"
+        assert asset.read_bytes() == image_bytes
         assert f"assets/{asset.name}" in note.read_text(encoding="utf-8")
         if outcome == "unreadable":
             assert caught.value.uncertain_paths == (note,)

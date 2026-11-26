@@ -288,6 +288,38 @@ def test_export_disambiguates_duplicate_titles():
     assert all(path.exists() for path in written)
 
 
+@pytest.mark.parametrize(
+    ("body", "suffix"),
+    [
+        (b"\xff\xd8\xffsynthetic JPEG", ".jpg"),
+        (b"\x89PNG\r\n\x1a\nsynthetic PNG", ".png"),
+        (b"RIFF\x00\x00\x00\x00WEBPsynthetic WebP", ".webp"),
+        (b"<html>Not an image</html>", None),
+    ],
+)
+def test_export_uses_downloaded_image_signature(
+    exporter, minimal, monkeypatch, body, suffix
+):
+    monkeypatch.setattr(
+        "kptncook.markdown_exporter.download_image", lambda *a, **kw: body
+    )
+
+    [note] = exporter.export([Recipe.model_validate(minimal)])
+    text = note.read_text(encoding="utf-8")
+    assets = note.parent / "assets"
+    if suffix is None:
+        assert not assets.exists()
+        assert "image:" not in text
+        assert "![" not in text
+    else:
+        [asset] = assets.iterdir()
+        assert asset.suffix == suffix
+        assert asset.read_bytes() == body
+        relative_path = asset.relative_to(note.parent).as_posix()
+        assert f'image: "{relative_path}"' in text
+        assert f"]({relative_path})" in text
+
+
 def test_export_handles_secondary_filename_collisions():
     get_settings()
     # "Title" + id "2" would naively become "Title-2", colliding with the first

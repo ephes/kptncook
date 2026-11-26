@@ -38,7 +38,7 @@ from .exporter_utils import (
     replace_timers_in_step,
     validate_export_id,
 )
-from .image_download import download_image
+from .image_download import detect_image_extension, download_image
 from .image_origin import ImageOriginError
 from .ingredient_groups import iter_ingredient_groups
 from .models import (
@@ -165,13 +165,15 @@ class MarkdownExporter:
                     or "recipe"
                 )
                 base = sanitize_filename(title)
-                image_bytes = self._download_recipe_image(recipe, budget=budget)
+                image = self._download_recipe_image(recipe, budget=budget)
                 scratch = tempfile.TemporaryDirectory(dir=out_dir, prefix=".kptncook-")
                 try:
                     staging = Path(scratch.name)
                     try:
-                        if image_bytes is not None:
-                            staged_asset = staging / "image.jpg"
+                        if image is not None:
+                            image_bytes, extension = image
+                            suffix = f".{extension}"
+                            staged_asset = staging / f"image{suffix}"
                             budget.charge_output(len(image_bytes))
                             with staged_asset.open("xb") as asset:
                                 if asset.write(image_bytes) != len(image_bytes):
@@ -192,7 +194,7 @@ class MarkdownExporter:
                                 staged_asset,
                                 assets,
                                 uuid.uuid4().hex,
-                                ".jpg",
+                                suffix,
                                 budget=budget,
                             )
                         image_path = (
@@ -261,7 +263,7 @@ class MarkdownExporter:
 
     def _download_recipe_image(
         self, recipe: Recipe, *, budget: ExportBudget | None = None
-    ) -> bytes | None:
+    ) -> tuple[bytes, str] | None:
         image = recipe.steps[-1].image if recipe.steps else None
         if image is None or not image.url:
             image = get_cover(recipe.image_list)
@@ -273,12 +275,17 @@ class MarkdownExporter:
             logger.warning("Skipping Markdown image: not on an allowed image host")
             return None
         try:
-            return download_image(image.url, budget=budget)
+            image_bytes = download_image(image.url, budget=budget)
         except httpx.HTTPError:
             logger.warning(
                 "Skipping Markdown image: download failed or exceeded limits"
             )
             return None
+        extension = detect_image_extension(image_bytes)
+        if extension is None:
+            logger.warning("Skipping Markdown image: unsupported image format")
+            return None
+        return image_bytes, extension
 
     def render_recipe(
         self,

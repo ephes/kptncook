@@ -72,7 +72,7 @@ def test_markdown_images_are_local_private_and_optional(
             )
         if failure == "timeout":
             raise httpx.ReadTimeout(f"private {key} {url}")
-        return b"synthetic-image-bytes"
+        return b"\xff\xd8\xffsynthetic-image-bytes"
 
     monkeypatch.setattr(
         "kptncook.markdown_exporter.download_image", download, raising=False
@@ -93,7 +93,9 @@ def test_markdown_images_are_local_private_and_optional(
     else:
         relative = Path(front["image"])
         assert not relative.is_absolute()
-        assert (path.parent / relative).read_bytes() == b"synthetic-image-bytes"
+        assert (
+            path.parent / relative
+        ).read_bytes() == b"\xff\xd8\xffsynthetic-image-bytes"
         assert f"]({relative.as_posix()})" in text
         assert relative.parts[0] == "assets"
     assert "###" in text
@@ -124,7 +126,7 @@ def test_markdown_selects_cover_only_when_final_step_image_is_missing(
 
     def download(url, **kwargs):
         downloaded.append(urlsplit(url).path)
-        return b"synthetic image"
+        return b"\xff\xd8\xffsynthetic image"
 
     monkeypatch.setattr("kptncook.markdown_exporter.download_image", download)
     [note] = MarkdownExporter().export([recipe])
@@ -138,7 +140,7 @@ def test_markdown_selects_cover_only_when_final_step_image_is_missing(
         assert downloaded == [chosen_path]
         asset = note.parent / front["image"]
         assert list(note.parent.rglob("*.jpg")) == [asset]
-        assert asset.read_bytes() == b"synthetic image"
+        assert asset.read_bytes() == b"\xff\xd8\xffsynthetic image"
         assert f"]({front['image']})" in text
 
 
@@ -150,7 +152,8 @@ def test_render_without_assets_has_no_remote_image(minimal):
 
 def test_failed_asset_write_cleans_only_owned_output(minimal, monkeypatch):
     monkeypatch.setattr(
-        "kptncook.markdown_exporter.download_image", lambda url, **kw: b"image"
+        "kptncook.markdown_exporter.download_image",
+        lambda url, **kw: b"\xff\xd8\xffimage",
     )
     output = get_settings().root / "export_md"
     assets = output / "assets"

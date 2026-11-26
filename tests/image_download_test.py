@@ -16,6 +16,9 @@ from kptncook.paprika import PaprikaExporter
 from kptncook.tandoor import TandoorExporter
 
 
+JPEG_CHUNK = b"\xff\xd8\xff1"
+
+
 class ImageStream(httpx.AsyncByteStream):
     def __init__(self, failure):
         self.failure = failure
@@ -27,7 +30,7 @@ class ImageStream(httpx.AsyncByteStream):
         try:
             for _ in range({"empty": 0, "short": 2}.get(self.failure, 3)):
                 self.chunks += 1
-                yield b"1234"
+                yield JPEG_CHUNK
             if self.failure in {"slow", "stalled"}:
                 while True:
                     self.chunks += 1
@@ -140,7 +143,7 @@ def test_bounded_image_preserves_recipe(
         assets = path.parent / "assets"
         if has_image:
             [image] = assets.glob("*.jpg")
-            assert image.read_bytes() == b"1234" * 3
+            assert image.read_bytes() == JPEG_CHUNK * 3
             assert f"](assets/{image.name})" in text
         else:
             assert not assets.exists()
@@ -252,7 +255,7 @@ def test_download_inside_running_loop(monkeypatch, outcome):
         else:
             assert (
                 image_download.download_image("https://images.example/step.jpg")
-                == b"1234" * 3
+                == JPEG_CHUNK * 3
             )
 
     asyncio.run(notebook())

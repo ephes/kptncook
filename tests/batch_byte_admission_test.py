@@ -56,6 +56,7 @@ def test_cumulative_assets_stop_with_receipts(batch, tmp_path, monkeypatch, kind
     sentinel = out / "old.zip"
     sentinel.write_bytes(b"keep")
     streams = []
+    jpeg_chunk = b"\xff\xd8\xff1"
 
     class Stream(httpx.AsyncByteStream):
         def __init__(self):
@@ -65,7 +66,7 @@ def test_cumulative_assets_stop_with_receipts(batch, tmp_path, monkeypatch, kind
         async def __aiter__(self):
             for _ in range(2):
                 self.chunks += 1
-                yield b"1234"
+                yield jpeg_chunk
 
         async def aclose(self):
             self.closed = True
@@ -107,7 +108,7 @@ def test_cumulative_assets_stop_with_receipts(batch, tmp_path, monkeypatch, kind
         assert error.completed_paths == (md / "Recipe 0.md",)
         assert len(error.completed_assets) == (0 if mode == "oversized" else 1)
         if error.completed_assets:
-            assert error.completed_assets[0].read_bytes() == b"12341234"
+            assert error.completed_assets[0].read_bytes() == jpeg_chunk * 2
         assert list(md.glob("*.md")) == list(error.completed_paths)
         assert list((md / "assets").glob("*.jpg")) == list(error.completed_assets)
         assert not list(md.glob(".kptncook-*"))

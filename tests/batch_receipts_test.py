@@ -126,7 +126,7 @@ def test_tandoor_batch_receipts_and_cli(recipes, tmp_path, monkeypatch, uncertai
 def test_markdown_batch_receipts(recipes, monkeypatch, failure):
     exporter = MarkdownExporter()
     monkeypatch.setattr(
-        exporter, "_download_recipe_image", lambda recipe, **kw: b"synthetic"
+        exporter, "_download_recipe_image", lambda recipe, **kw: (b"synthetic", "jpg")
     )
     out = get_settings().root / "export_md"
     render = exporter.render_recipe
@@ -205,7 +205,7 @@ def test_markdown_counts_published_pair_when_stage_cleanup_fails(
     def download(recipe, **kwargs):
         if later_failure and recipe is recipes[1]:
             raise UserFacingError("Synthetic second recipe failure.")
-        return b"synthetic"
+        return b"synthetic", "jpg"
 
     def fail_first_cleanup(directory):
         cleanup(directory)
@@ -253,7 +253,7 @@ def test_markdown_cleanup_logging_preserves_publication(
 ):
     exporter = MarkdownExporter()
     monkeypatch.setattr(
-        exporter, "_download_recipe_image", lambda recipe, **kw: b"synthetic"
+        exporter, "_download_recipe_image", lambda recipe, **kw: (b"synthetic", "jpg")
     )
     out = get_settings().root / "export_md"
     note = out / "Recipe 0.md"
@@ -318,7 +318,7 @@ def test_markdown_syncs_asset_removal_after_note_failure(
     fail_rollback_sync = rollback != "ok"
     exporter = MarkdownExporter()
     monkeypatch.setattr(
-        exporter, "_download_recipe_image", lambda recipe, **kw: b"synthetic"
+        exporter, "_download_recipe_image", lambda recipe, **kw: (b"synthetic", "jpg")
     )
     out = get_settings().root / "export_md"
     assets = out / "assets"

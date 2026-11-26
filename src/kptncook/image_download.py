@@ -18,6 +18,17 @@ IMAGE_DOWNLOAD_DEADLINE = 60.0
 IMAGE_DOWNLOAD_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
 
+def detect_image_extension(image_bytes: bytes) -> str | None:
+    """Return the extension without a dot for a supported image signature."""
+    if image_bytes.startswith(b"\xff\xd8\xff"):
+        return "jpg"
+    if image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if image_bytes.startswith(b"RIFF") and image_bytes[8:12] == b"WEBP":
+        return "webp"
+    return None
+
+
 async def _download_image(
     url: str, follow_redirects: bool, budget: ExportBudget | None = None
 ) -> bytes:

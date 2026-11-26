@@ -206,8 +206,10 @@ def test_exported_portions_scale_single_serving_quantities(
 
 
 def test_markdown_frontmatter_roundtrips_strings(synthetic_recipe, monkeypatch):
+    image_bytes = b"\xff\xd8\xffsynthetic"
     monkeypatch.setattr(
-        "kptncook.markdown_exporter.download_image", lambda *a, **kw: b"synthetic"
+        "kptncook.markdown_exporter.download_image",
+        lambda *a, **kw: image_bytes,
     )
     recipe = synthetic_recipe
     tags = [
@@ -239,7 +241,7 @@ def test_markdown_frontmatter_roundtrips_strings(synthetic_recipe, monkeypatch):
         payload["link"] == f"https://mobile.kptncook.com/recipe/pinterest/{recipe.uid}"
     )
     assert payload["image"].startswith("assets/")
-    assert (path.parent / payload["image"]).read_bytes() == b"synthetic"
+    assert (path.parent / payload["image"]).read_bytes() == image_bytes
     assert "test-key" not in frontmatter + body
     assert isinstance(payload["date"], date)
     assert payload["prepTime"] == "5m"

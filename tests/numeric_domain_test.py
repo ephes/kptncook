@@ -320,10 +320,9 @@ def test_finite_scaled_quantities_in_actual_export_payloads(
         ingredients=[ingredient(quantity)], fixedPortionCount=3, imageList=[]
     )
     minimal["steps"][0].update(ingredients=[ingredient(quantity)])
+    minimal["steps"][0]["image"]["url"] = ""
     recipe = Recipe.model_validate(minimal)
     monkeypatch.chdir(tmp_path)
-    for module in ("paprika", "tandoor", "markdown_exporter"):
-        monkeypatch.setattr(f"kptncook.{module}.download_image", lambda *a, **kw: None)
 
     def strict_json(raw):
         def refuse(value):
