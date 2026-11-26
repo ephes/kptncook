@@ -167,7 +167,8 @@ def _extract_wrapper_payload(
 
     Each frame carries its active ancestors, so shared acyclic dictionaries are
     allowed. A favorites key whose nested dictionary has no list is invalid;
-    discovery ignores empty nested results and continues with sibling wrappers.
+    discovery skips empty nested lists when checking aliases and can continue
+    with sibling wrappers.
     Lists of recipe records are leaves, not additional envelope work.
     """
     keys = _FAVORITES_KEYS if favorites else _DISCOVERY_KEYS
@@ -214,7 +215,7 @@ def _extract_wrapper_payload(
                 if favorites or value or depth == 0:
                     return value, True, False
                 handled = True
-                break
+                continue
             if favorites:
                 if not isinstance(value, dict):
                     return [], True, True

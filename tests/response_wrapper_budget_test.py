@@ -66,6 +66,12 @@ def test_envelope_precedence_and_empty_contract():
     ) == ([], True, False)
 
 
+def test_discovery_uses_next_alias_after_empty_nested_list():
+    assert _extract_discovery_list_payload(
+        {"wrapper": {"recipes": [], "items": ["nested"]}}
+    ) == ["nested"]
+
+
 @pytest.mark.parametrize("kind", ["cycle", "deep", "wide"])
 def test_wrapper_refusal_prevents_backup_and_resolution(monkeypatch, kind):
     payload = malformed(kind)

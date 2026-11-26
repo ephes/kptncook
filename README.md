@@ -207,7 +207,9 @@ levels and 4,096 work units per response (each visited value or supported-key
 probe costs one unit). Traversal is iterative, detects active dictionary cycles
 for library inputs and stops before resolving or saving a backup on refusal.
 Recipe lists are leaves, so this budget applies to finding the list, not its
-records. Supported key precedence and legitimate empty lists are preserved.
+records. For discovery-list endpoint responses, a top-level list selected by
+key precedence is accepted even when empty. In nested wrappers, the search
+continues through the remaining recognized aliases after an empty list.
 The `discovery-screen` presentation path also uses iterative traversal, limited
 to 16 dictionary levels and 4,096 visited-value/key-probe operations per list
 search (lists and quick search). Cycles, depth and work overflow produce a short
