@@ -3,7 +3,7 @@ from collections.abc import Iterator, Sequence
 from datetime import date
 from time import time
 from typing import Any, Literal
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import httpx
 
@@ -549,10 +549,37 @@ def looks_like_oid(token: str) -> bool:
     return re.fullmatch(r"[0-9a-fA-F]{24}", token) is not None
 
 
-def parse_id(text: str) -> tuple[Literal["oid", "uid"], str] | None:
+_RECIPE_SHARE_PATHS = {
+    "mobile.kptncook.com": re.compile(r"/(?:recipe/pinterest/(?:[^/]+/)?)?([^/]+)/?"),
+    "share.kptncook.com": re.compile(r"/(?:[^/]+/)?([^/]+)/?"),
+}
+
+
+def _parse_recipe_share_url(text: str) -> RecipeIdentifier | None:
+    try:
+        url = urlsplit(text)
+    except ValueError:
+        return None
+    route = _RECIPE_SHARE_PATHS.get(url.hostname or "")
+    if url.scheme not in ("http", "https") or route is None:
+        return None
+    match = route.fullmatch(url.path)
+    if match is not None:
+        leaf = match[1]
+        if looks_like_uid(leaf):
+            return "uid", leaf
+        if looks_like_oid(leaf):
+            return "oid", leaf
+    return None
+
+
+def parse_id(text: str) -> RecipeIdentifier | None:
     """
     Parse recipe id (uid or oid) from url/text.
     """
+    share_id = _parse_recipe_share_url(text)
+    if share_id is not None:
+        return share_id
     try:
         uid = next(part for part in re.split(r"[/?#]", text) if looks_like_uid(part))
         return "uid", uid

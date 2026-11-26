@@ -129,8 +129,10 @@ Commands:
 ```
 
 Recipe IDs can be short share UIDs or 24 ASCII hexadecimal characters (case
-insensitive). You can paste recipe URLs with query strings or fragments, or
-text containing an OID. Short UIDs take precedence when both are present.
+insensitive). Recognized KptnCook recipe share URLs use the UID or OID in the
+final path segment, with its original case. Query strings and fragments can
+accompany the link. In other pasted text, short UIDs take precedence over
+OIDs when both are present.
 Local single-recipe exports to Paprika, Tandoor and Markdown accept either the
 stored short UID or OID (including parsed recipe URLs). A missing selector
 match or multiple matching recipes produces an error; selection never fetches
