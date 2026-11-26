@@ -91,7 +91,9 @@ def test_step_patch_reply_cannot_replace_imported_identity(monkeypatch, caplog, 
             return httpx.Response(200, json=reply)
         return httpx.Response(200, json=stored)
 
-    monkeypatch.setattr("kptncook.mealie.download_image", lambda *a, **kw: b"synthetic")
+    monkeypatch.setattr(
+        "kptncook.mealie.download_image", lambda *a, **kw: b"\xff\xd8\xff\xe0synthetic"
+    )
     with httpx.Client(transport=httpx.MockTransport(handle)) as http:
         created = MealieApiClient(
             "https://example.test/api", client=http

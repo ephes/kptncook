@@ -6,6 +6,8 @@ Unreleased
   CVE-2026-97699, keeping the frozen runtime/development dependency audit clean.
 
 ### Fixes
+- Use downloaded image signatures for Mealie step asset extensions and
+  multipart filenames, skipping unsupported images with a warning.
 - Enforce Mealie inventory deadlines while streaming pages and sync details,
   closing expired responses before any sync writes.
 - Share one Mealie sync inventory deadline from the first recipe page through

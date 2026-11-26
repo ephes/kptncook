@@ -87,10 +87,16 @@ def _warn_media(message: str, *args: str) -> None:
         logger.warning(message, *args)
 
 
+class _UnsupportedStepImageFormat(ValueError):
+    """The download has no supported image signature."""
+
+
 def _media_failure_reason(exc: BaseException) -> str:
     """A log-safe reason for an optional media failure (never the URL)."""
     if isinstance(exc, httpx.HTTPStatusError):
         return f"HTTP {exc.response.status_code}"
+    if isinstance(exc, _UnsupportedStepImageFormat):
+        return "unsupported image format"
     return type(exc).__name__
 
 
@@ -332,19 +338,20 @@ class MealieApiClient(BaseHttpClient):
 
     def upload_asset(self, recipe_slug, image: Image):
         asset_path = _recipe_path(recipe_slug) + "/assets"
-        # download image
-        download = io.BytesIO(download_image(image.url, follow_redirects=True))
+        image_bytes = download_image(image.url, follow_redirects=True)
+        extension = detect_image_extension(image_bytes)
+        if extension is None:
+            raise _UnsupportedStepImageFormat("Unsupported step image format")
 
-        # upload to mealie
-        name = Path(image.name)
-        extension = name.suffix.lstrip(".")
-        stem = name.stem
+        stem = Path(image.name).stem or "step"
         data = {
             "name": stem,
             "icon": "mdi-file-image",
             "extension": extension,
         }
-        r = self.post(asset_path, data=data, files={"file": download})
+        r = self.post(
+            asset_path, data=data, files={"file": (f"{stem}.{extension}", image_bytes)}
+        )
         r.raise_for_status()
 
         return decode_control_json(r)

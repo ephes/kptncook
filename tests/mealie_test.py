@@ -87,7 +87,7 @@ def test_upload_asset_follows_redirects(monkeypatch):
 
     def fake_download(url, follow_redirects=False):
         seen["follow_redirects"] = follow_redirects
-        return b"image-bytes"
+        return b"\xff\xd8\xff\xe0synthetic"
 
     def fake_post(path, data=None, files=None, **kwargs):
         request = httpx.Request("POST", f"http://mealie.local/api{path}")

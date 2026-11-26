@@ -311,7 +311,9 @@ imported text recipe and server-assigned instruction fields.
 
 Cover and step images are best-effort follow-ups. The client keeps the core
 import receipt and continues eligible media work even when logging a warning
-fails. Step-image updates patch only the instructions.
+fails. Step uploads use the downloaded JPEG, PNG or WebP signature for both
+the Mealie extension and the multipart filename. Unsupported step images are
+skipped with a warning. Step-image updates patch only the instructions.
 Immediately before the instruction PATCH, the client re-reads recipe identity
 and the complete instruction list. Changes to text, IDs, order, references or
 other instruction fields during asset uploads skip enrichment with a warning.

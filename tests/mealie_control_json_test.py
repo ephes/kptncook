@@ -176,7 +176,7 @@ def test_duplicate_enrichment_response_does_not_retry_or_leak(
         return httpx.Response(200, json=stored)
 
     monkeypatch.setattr(
-        "kptncook.mealie.download_image", lambda *a, **kw: b"invented-image"
+        "kptncook.mealie.download_image", lambda *a, **kw: b"\xff\xd8\xff\xe0synthetic"
     )
     with httpx.Client(transport=httpx.MockTransport(handle)) as http:
         result = MealieApiClient("https://example.test/api", client=http).create_recipe(
@@ -239,7 +239,7 @@ def test_nonfinite_recipe_response_stops_enrichment(
         return httpx.Response(200, json=stored)
 
     monkeypatch.setattr(
-        "kptncook.mealie.download_image", lambda *a, **kw: b"invented-image"
+        "kptncook.mealie.download_image", lambda *a, **kw: b"\xff\xd8\xff\xe0synthetic"
     )
     source = RecipeWithImage(
         name="Invented",

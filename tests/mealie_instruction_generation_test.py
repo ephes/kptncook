@@ -73,7 +73,7 @@ def test_upload_window_edit_is_not_patched(monkeypatch, caplog, change):
         return httpx.Response(200, json=stored)
 
     monkeypatch.setattr(
-        "kptncook.mealie.download_image", lambda *a, **kw: b"invented-image"
+        "kptncook.mealie.download_image", lambda *a, **kw: b"\xff\xd8\xff\xe0synthetic"
     )
     with httpx.Client(transport=httpx.MockTransport(handle)) as http:
         MealieApiClient("https://example.test/api", client=http).create_recipe(source)

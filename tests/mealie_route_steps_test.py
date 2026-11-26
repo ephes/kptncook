@@ -180,7 +180,7 @@ def test_images_require_unique_exact_step_correspondence(monkeypatch, caplog, ch
         return httpx.Response(200, json=stored)
 
     monkeypatch.setattr(
-        "kptncook.mealie.download_image", lambda *a, **kw: b"synthetic-image"
+        "kptncook.mealie.download_image", lambda *a, **kw: b"\xff\xd8\xff\xe0synthetic"
     )
     with httpx.Client(transport=httpx.MockTransport(handle)) as http:
         created = MealieApiClient(

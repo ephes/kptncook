@@ -283,7 +283,14 @@ def test_media_failures_leave_core_import_successful(failed_operation):
                 if failed_operation == "unsupported-cover"
                 else b"\xff\xd8\xff\xe0synthetic"
             )
-            patch.setattr("kptncook.mealie.download_image", lambda *a, **kw: cover)
+            patch.setattr(
+                "kptncook.mealie.download_image",
+                lambda url, **kw: (
+                    cover
+                    if url.endswith("/cover.jpg")
+                    else b"\xff\xd8\xff\xe0synthetic"
+                ),
+            )
             result = client.create_recipe(recipe)
     assert result.slug == "test-1"
     assert result.extras["kptncook_id"] == "id"
@@ -456,3 +463,66 @@ def test_version_discovery_failure_does_not_mutate_entities(about_status, about)
         with pytest.raises((httpx.HTTPStatusError, KeyError)):
             client.create_recipe(recipe)
     assert writes == []
+
+
+@pytest.mark.parametrize(
+    "name, body, extension",
+    [
+        ("step.jpg", b"\x89PNG\r\n\x1a\nsynthetic", "png"),
+        ("step", b"RIFF\x04\x00\x00\x00WEBP", "webp"),
+        ("step.jpg", b"<html>synthetic</html>", None),
+    ],
+)
+def test_step_asset_upload_uses_downloaded_format(
+    monkeypatch, caplog, name, body, extension
+):
+    stored = {
+        "id": "ac49c559-a816-4a4e-95ca-bea4c21d71bc",
+        "slug": "synthetic",
+        "recipeInstructions": [{"text": "Mix"}],
+    }
+    uploads = []
+
+    def handle(request):
+        if request.url.path.endswith("/assets"):
+            uploads.append(request)
+            return httpx.Response(200, json={"fileName": f"step.{extension}"})
+        if request.method == "PATCH":
+            return httpx.Response(200, json=stored | json.loads(request.content))
+        return httpx.Response(200, json=stored)
+
+    source = RecipeWithImage(
+        recipe_instructions=[
+            RecipeStep(
+                text="Mix", image=Image(name=name, url="https://example.test/image")
+            )
+        ]
+    )
+    monkeypatch.setattr("kptncook.mealie.download_image", lambda *args, **kwargs: body)
+    with httpx.Client(transport=httpx.MockTransport(handle)) as http:
+        client = MealieApiClient("https://example.test/api", client=http)
+        monkeypatch.setattr(client, "_get_archive_endpoint", lambda: None)
+        monkeypatch.setattr(client, "_import_recipe_archive", lambda recipe: stored)
+        created = client.create_recipe(source)
+
+    if extension is None:
+        assert uploads == []
+        assert "unsupported image format" in caplog.text
+        assert created.recipe_instructions[0].text == "Mix"
+        return
+
+    (request,) = uploads
+    message = BytesParser(policy=default).parsebytes(
+        b"Content-Type: "
+        + request.headers["content-type"].encode()
+        + b"\r\n\r\n"
+        + request.content
+    )
+    parts = {
+        part.get_param("name", header="content-disposition"): part
+        for part in message.iter_parts()
+    }
+    assert parts["extension"].get_payload(decode=True) == extension.encode()
+    assert parts["name"].get_payload(decode=True) == b"step"
+    assert parts["file"].get_filename() == f"step.{extension}"
+    assert parts["file"].get_payload(decode=True) == body
