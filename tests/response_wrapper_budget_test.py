@@ -76,9 +76,12 @@ def test_discovery_descends_into_dict_alias_after_empty_nested_list():
     assert _extract_discovery_list_payload(
         {"wrapper": {"recipes": [], "data": {"items": ["nested"]}}}
     ) == ["nested"]
-    assert _extract_discovery_list_payload(
-        {"wrapper": {"recipes": [], "meta": {"items": ["ignored"]}}, "other": []}
-    ) == []
+    assert (
+        _extract_discovery_list_payload(
+            {"wrapper": {"recipes": [], "meta": {"items": ["ignored"]}}, "other": []}
+        )
+        == []
+    )
 
 
 @pytest.mark.parametrize("kind", ["cycle", "deep", "wide"])
