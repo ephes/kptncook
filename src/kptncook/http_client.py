@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from contextlib import suppress
+from contextlib import AbstractContextManager, suppress
 from enum import Enum
 from typing import Any
 
@@ -104,7 +104,28 @@ class BaseHttpClient:
         timeout: httpx.Timeout | float | object = httpx.USE_CLIENT_DEFAULT,
         **kwargs: Any,
     ) -> httpx.Response:
-        request_kwargs = dict(kwargs)
+        url, request_kwargs = self._request_options(path, headers, timeout, kwargs)
+        return self._client.request(method, url, **request_kwargs)
+
+    def stream(
+        self,
+        method: str,
+        path: str,
+        *,
+        headers: dict[str, str] | None = None,
+        timeout: httpx.Timeout | float | object = httpx.USE_CLIENT_DEFAULT,
+        **kwargs: Any,
+    ) -> AbstractContextManager[httpx.Response]:
+        url, request_kwargs = self._request_options(path, headers, timeout, kwargs)
+        return self._client.stream(method, url, **request_kwargs)
+
+    def _request_options(
+        self,
+        path: str,
+        headers: dict[str, str] | None,
+        timeout: httpx.Timeout | float | object,
+        request_kwargs: dict[str, Any],
+    ) -> tuple[str, dict[str, Any]]:
         if request_kwargs.get("follow_redirects"):
             raise ValueError("API clients do not support automatic redirects")
         # An injected pool may enable redirects; Token is not stripped by HTTPX
@@ -119,7 +140,7 @@ class BaseHttpClient:
             request_kwargs["timeout"] = timeout
         elif self._timeout is not _TimeoutDefault.UNSPECIFIED:
             request_kwargs["timeout"] = self._timeout
-        return self._client.request(method, url, **request_kwargs)
+        return url, request_kwargs
 
     def get(self, path: str, **kwargs: Any) -> httpx.Response:
         return self.request("GET", path, **kwargs)

@@ -25,7 +25,7 @@ from .control_json import decode_control_json
 from .config import Settings, get_settings
 from .http_errors import extract_mealie_detail_message
 from .auth import validate_token
-from .http_client import BaseHttpClient, DEFAULT_REQUEST_TIMEOUT
+from .http_client import BaseHttpClient
 from .image_download import detect_image_extension, download_image
 from .image_origin import ImageOriginError, allowed_image_hosts, is_allowed_image_url
 from .ingredient_groups import iter_ingredient_groups
@@ -42,6 +42,8 @@ logger = logging.getLogger(__name__)
 
 MAX_INVENTORY_PAGES = 1000
 MAX_INVENTORY_ITEMS = 50_000
+MAX_INVENTORY_PAGE_BYTES = 8 * 1024 * 1024
+MAX_INVENTORY_BYTES = 64 * 1024 * 1024
 DEFAULT_INVENTORY_TIMEOUT_SECONDS = 120.0
 
 
@@ -374,14 +376,37 @@ class MealieApiClient(BaseHttpClient):
         r.raise_for_status()
 
     def _get_page(
-        self, endpoint_name, page_num, per_page=50, *, timeout=DEFAULT_REQUEST_TIMEOUT
-    ):
-        r = self.get(
-            f"/{endpoint_name}?page={page_num}&perPage={per_page}", timeout=timeout
-        )
-        r.raise_for_status()
+        self,
+        endpoint_name: str,
+        page_num: int,
+        *,
+        byte_limit: int,
+        timeout: httpx.Timeout,
+    ) -> tuple[Any, int]:
+        body = bytearray()
+        with self.stream(
+            "GET",
+            f"/{endpoint_name}?page={page_num}&perPage=50",
+            headers={"Accept-Encoding": "identity"},
+            timeout=timeout,
+        ) as response:
+            response.raise_for_status()
+            # The byte limit applies before decoding, so refuse compressed bodies.
+            if (
+                response.headers.get("content-encoding", "identity").strip().lower()
+                != "identity"
+            ):
+                raise MealieInventoryError(
+                    "Invalid Mealie inventory: unsupported page content encoding"
+                )
+            for chunk in response.iter_bytes():
+                if len(body) + len(chunk) > byte_limit:
+                    raise MealieInventoryError(
+                        "Incomplete Mealie inventory: response byte budget exceeded"
+                    )
+                body.extend(chunk)
         try:
-            return decode_control_json(r)
+            return decode_control_json(body), len(body)
         except ValueError:
             raise MealieInventoryError(
                 "Invalid Mealie inventory: expected JSON"
@@ -417,6 +442,7 @@ class MealieApiClient(BaseHttpClient):
         total_pages = None
         total = None
         page_num = 1
+        remaining_bytes = MAX_INVENTORY_BYTES
         deadline = monotonic() + self.inventory_timeout
         while total_pages is None or page_num <= total_pages:
             remaining = deadline - monotonic()
@@ -424,13 +450,15 @@ class MealieApiClient(BaseHttpClient):
                 raise MealieInventoryError(
                     "Incomplete Mealie inventory: acquisition deadline exceeded"
                 )
-            payload = self._get_page(
+            payload, page_bytes = self._get_page(
                 endpoint_name,
                 page_num,
+                byte_limit=min(MAX_INVENTORY_PAGE_BYTES, remaining_bytes),
                 timeout=httpx.Timeout(
                     min(30.0, remaining), connect=min(10.0, remaining)
                 ),
             )
+            remaining_bytes -= page_bytes
             if monotonic() >= deadline:
                 raise MealieInventoryError(
                     "Incomplete Mealie inventory: acquisition deadline exceeded"

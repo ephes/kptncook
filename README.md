@@ -428,6 +428,10 @@ same server ID (when the row carries one) and the requested slug. A detail for a
 different recipe, or a recipe renamed while the inventory is read, stops the run
 before any write; run the sync again to read a consistent inventory.
 Recipe and organizer inventories allow at most 1,000 pages and 50,000 items.
+Listing pages are streamed as uncompressed JSON. Each page may use up to 8 MiB,
+with at most 64 MiB of response bodies across all pages of one inventory. A page
+that exceeds either byte limit or uses compression aborts that acquisition before
+it can be used for creates.
 An acquisition defaults to a 120-second elapsed budget, checked before and after each
 response and before returning an inventory. Sync shares that budget across the
 recipe listing and its detail reads. Request socket timeouts are capped by the

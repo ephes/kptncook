@@ -1,6 +1,8 @@
 """Strict decoding for JSON that controls Mealie follow-up requests."""
 
+import json
 import math
+from functools import partial
 from typing import Any
 
 import httpx
@@ -22,9 +24,14 @@ def _finite_float(value: str) -> float:
     return number
 
 
-def decode_control_json(response: httpx.Response) -> Any:
+def decode_control_json(response: httpx.Response | bytes | bytearray) -> Any:
+    decode = (
+        response.json
+        if isinstance(response, httpx.Response)
+        else partial(json.loads, response)
+    )
     try:
-        return response.json(
+        return decode(
             object_pairs_hook=_unique_object,
             parse_constant=_finite_float,
             parse_float=_finite_float,

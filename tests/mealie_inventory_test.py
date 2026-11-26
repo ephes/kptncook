@@ -1,8 +1,11 @@
 """Incomplete inventories must never drive remote creation."""
 
+import json
+
 import httpx
 import pytest
 
+from kptncook import mealie
 from kptncook.mealie import MealieApiClient, RecipeTag
 from kptncook.models import Recipe
 from kptncook.services import workflows
@@ -144,6 +147,81 @@ def test_complete_recipe_pages_keep_every_identity():
         ).get_all_recipes()
     assert [r.extras["kptncook_id"] for r in result] == ["id-1", "id-2", "id-3"]
     assert pages == [1, 2, 3]
+
+
+@pytest.mark.parametrize("limit_adjustment", [0, -1])
+def test_recipe_pages_share_a_streaming_byte_budget(
+    monkeypatch, minimal, limit_adjustment
+):
+    bodies = [
+        json.dumps(
+            {
+                "items": [{"slug": f"recipe-{page}", "extras": {}}],
+                "total_pages": 3,
+                "total": 3,
+            }
+        ).encode()
+        for page in range(1, 4)
+    ]
+    monkeypatch.setattr(
+        mealie,
+        "MAX_INVENTORY_BYTES",
+        sum(map(len, bodies)) + 3 + limit_adjustment,
+    )
+    monkeypatch.setattr(mealie, "MAX_INVENTORY_PAGE_BYTES", max(map(len, bodies)) + 2)
+    pages = []
+    closed = []
+    tail_reads = []
+    writes = []
+
+    class PageStream(httpx.SyncByteStream):
+        def __init__(self, page):
+            self.page = page
+
+        def __iter__(self):
+            yield bodies[self.page - 1]
+            yield b" "
+            tail_reads.append(self.page)
+
+        def close(self):
+            closed.append(self.page)
+
+    def handle(request):
+        assert request.headers["Accept-Encoding"] == "identity"
+        if request.method != "GET":
+            writes.append(request)
+            return httpx.Response(500)
+        if request.url.path == "/api/recipes":
+            page = int(request.url.params["page"])
+            pages.append(page)
+            return httpx.Response(200, stream=PageStream(page))
+        return httpx.Response(
+            200, json={"slug": request.url.path.rsplit("/", 1)[-1], "extras": {}}
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handle)) as http:
+        client = MealieApiClient("https://mealie.example/api", client=http)
+        monkeypatch.setattr(workflows, "get_mealie_client", lambda: client)
+        monkeypatch.setattr(
+            workflows,
+            "load_kptncook_recipes_from_repository",
+            lambda: RepositoryRecipesResult([Recipe.model_validate(minimal)], []),
+        )
+        monkeypatch.setattr(workflows, "kptncook_to_mealie", lambda recipe: recipe)
+        monkeypatch.setattr(
+            client, "create_recipe", lambda recipe: client.post("/recipes")
+        )
+        if limit_adjustment < 0:
+            with pytest.raises(
+                workflows.UserFacingError, match="inventory.*byte budget"
+            ):
+                workflows.sync_with_mealie_result()
+        else:
+            assert len(client.get_all_recipes()) == 3
+
+    assert pages == closed == [1, 2, 3]
+    assert tail_reads == ([1, 2] if limit_adjustment < 0 else [1, 2, 3])
+    assert writes == []
 
 
 def test_fractional_ratings_remain_in_complete_inventory(monkeypatch, minimal):

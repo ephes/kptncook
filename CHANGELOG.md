@@ -6,6 +6,8 @@ Unreleased
   CVE-2026-97699, keeping the frozen runtime/development dependency audit clean.
 
 ### Fixes
+- Stream Mealie inventory pages with per-page and cumulative byte limits,
+  refusing oversized listings before they can drive creates.
 - Refuse incomplete sibling staging copies before publishing recipe exports,
   preserving existing files.
 - Abort recipe archive export on incomplete ZIP writes, including exports
